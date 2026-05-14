@@ -1,80 +1,10 @@
+"use client";
 import { Fragment } from "react";
-import { Metadata } from "next";
-import { IconClock, IconCalendarOff, IconReceipt, IconChartPie } from "@tabler/icons-react";
-
-export const metadata: Metadata = {
-  title: "Employee Dashboard | Attendance & HR Management",
-  description: "Personal dashboard for employees to track attendance, leave, and salary.",
-};
+import { IconCalendarOff } from "@tabler/icons-react";
 
 const EmployeeDashboard = () => {
   return (
     <Fragment>
-      <div className="mb-6 d-flex align-items-center justify-content-between">
-        <div>
-          <h2 className="mb-0 fw-bold">Welcome back, John! 👋</h2>
-          <p className="text-secondary mb-0">Here is a summary of your recent activities.</p>
-        </div>
-      </div>
-      <div className="row g-6 mb-6">
-        <div className="col-xl-3 col-md-6">
-          <div className="card card-lg bg-gradient-primary">
-            <div className="card-body d-flex flex-column gap-8">
-              <div className="d-flex justify-content-between align-items-center">
-                <div className="fw-semibold">Total Attendance</div>
-                <div className="text-primary-emphasis"><IconClock size={24} strokeWidth={1.5} /></div>
-              </div>
-              <div className="lh-1 d-flex flex-column gap-3">
-                <div className="fs-1 fw-bold">184 days</div>
-                <p className="mb-0 text-secondary">This Year</p>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className="col-xl-3 col-md-6">
-          <div className="card card-lg bg-gradient-warning">
-            <div className="card-body d-flex flex-column gap-8">
-              <div className="d-flex justify-content-between align-items-center">
-                <div className="fw-semibold">Leave Balance</div>
-                <div className="text-warning-emphasis"><IconCalendarOff size={24} strokeWidth={1.5} /></div>
-              </div>
-              <div className="lh-1 d-flex flex-column gap-3">
-                <div className="fs-1 fw-bold">12 days</div>
-                <p className="mb-0 text-secondary">Remaining</p>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className="col-xl-3 col-md-6">
-          <div className="card card-lg bg-gradient-success">
-            <div className="card-body d-flex flex-column gap-8">
-              <div className="d-flex justify-content-between align-items-center">
-                <div className="fw-semibold">Next Salary</div>
-                <div className="text-success-emphasis"><IconReceipt size={24} strokeWidth={1.5} /></div>
-              </div>
-              <div className="lh-1 d-flex flex-column gap-3">
-                <div className="fs-1 fw-bold">In 5 days</div>
-                <p className="mb-0 text-secondary">Estimated</p>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className="col-xl-3 col-md-6">
-          <div className="card card-lg bg-gradient-info">
-            <div className="card-body d-flex flex-column gap-8">
-              <div className="d-flex justify-content-between align-items-center">
-                <div className="fw-semibold">Performance Score</div>
-                <div className="text-info-emphasis"><IconChartPie size={24} strokeWidth={1.5} /></div>
-              </div>
-              <div className="lh-1 d-flex flex-column gap-3">
-                <div className="fs-1 fw-bold">92%</div>
-                <p className="mb-0 text-secondary">Outstanding</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      
       <div className="row g-6 mb-6">
         <div className="col-xl-8">
           <div className="card h-100">

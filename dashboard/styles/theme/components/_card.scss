@@ -24,3 +24,17 @@
   border-radius: $border-radius-xl;
   border: 0px;
 }
+
+// Custom Stat Card Gradients
+.stat-card-gradient-primary {
+  background-image: radial-gradient(circle at 100% 0%, rgba($primary, 0.1) 0%, rgba($primary, 0) 50%);
+}
+.stat-card-gradient-success {
+  background-image: radial-gradient(circle at 100% 0%, rgba($success, 0.1) 0%, rgba($success, 0) 50%);
+}
+.stat-card-gradient-danger {
+  background-image: radial-gradient(circle at 100% 0%, rgba($danger, 0.1) 0%, rgba($danger, 0) 50%);
+}
+.stat-card-gradient-warning {
+  background-image: radial-gradient(circle at 100% 0%, rgba($warning, 0.1) 0%, rgba($warning, 0) 50%);
+}

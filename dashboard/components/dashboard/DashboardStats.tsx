@@ -1,13 +1,17 @@
 //import node modules libraries
 import { Col, Card, CardBody } from "react-bootstrap";
 
-//import required data files
-import { DashboardStatsData } from "data/DashboardData";
+//import custom types
+import { DashboardStatType } from "types/DashboardTypes";
 
-const DashboardStats = () => {
+interface DashboardStatsProps {
+    stats: DashboardStatType[];
+}
+
+const DashboardStats = ({ stats }: DashboardStatsProps) => {
   return (
     <>
-      {DashboardStatsData.map((stat) => (
+      {stats.map((stat) => (
         <Col xl={3} md={6} key={stat.id}>
           <Card className={`card-lg ${stat.bgColor}`}>
             <CardBody className="d-flex flex-column gap-8">

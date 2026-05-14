@@ -37,6 +37,7 @@ const Sidebar: React.FC<SidebarProps> = ({ hideLogo = false, containerId, curren
       <Link
         href={`${item.link}`}
         className={`nav-link ${isactive ? "active" : ""}`}>
+        {item.icon && <span className='nav-icon'>{item.icon}</span>}
         <span className='text'>{item.name}</span>
         {item.badge && (
           <Badge
@@ -47,6 +48,16 @@ const Sidebar: React.FC<SidebarProps> = ({ hideLogo = false, containerId, curren
         )}
       </Link>
     );
+  };
+
+  const getActiveMenuIndex = () => {
+    const activeMenu = DashboardMenu.findIndex((menu) => {
+      if (menu.children) {
+        return menu.children.some((child) => currentPath.startsWith(child.link || ''));
+      }
+      return false;
+    });
+    return activeMenu > -1 ? activeMenu.toString() : '0';
   };
 
   return (
@@ -68,7 +79,7 @@ const Sidebar: React.FC<SidebarProps> = ({ hideLogo = false, containerId, curren
 
         {/* Sidebar Dashboard Menu */}
         <Accordion
-          defaultActiveKey='0'
+          defaultActiveKey={getActiveMenuIndex()}
           as='ul'
           bsPrefix='navbar-nav flex-column'>
           {DashboardMenu.map(function (menu, index) {
@@ -202,17 +213,7 @@ const Sidebar: React.FC<SidebarProps> = ({ hideLogo = false, containerId, curren
                                 as='li'
                                 bsPrefix='nav-item'
                                 key={menuLevel1Index}>
-                                {/* first level menu items */}
-                                <Link
-                                  href={`/${menuLevel1Item?.link}`}
-                                  className={`nav-link ${
-                                    currentPath.startsWith(`/${menuLevel1Item.link}`)
-                                      ? "active"
-                                      : ""
-                                  }`}>
-                                  {menuLevel1Item.name}
-                                </Link>
-                                {/* end of first level menu items */}
+                                {generateLink(menuLevel1Item)}
                               </ListGroup.Item>
                             );
                           }

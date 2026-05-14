@@ -213,7 +213,25 @@ html.expanded #miniSidebar {
     box-shadow: none;
     background-color: transparent;
     .nav-link {
-      margin: 0.125rem 1.5rem;
+      margin: 0.125rem 1.5rem 0.125rem 2.5rem;
+      position: relative;
+      &::before {
+        content: "";
+        position: absolute;
+        left: -12px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        border: 1px solid var(--#{$prefix}gray-400);
+      }
+      &.active {
+        &::before {
+          background-color: var(--#{$prefix}primary);
+          border-color: var(--#{$prefix}primary);
+        }
+      }
     }
     .dropdown-submenu {
       .dropdown-item {

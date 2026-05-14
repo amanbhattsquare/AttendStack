@@ -8,7 +8,9 @@ import {
   IconCoin,
   IconLock,
   IconUser,
-  IconClock
+  IconClock,
+  IconCircleCheck,
+  IconListDetails
 } from "@tabler/icons-react";
 
 //import custom type
@@ -41,8 +43,21 @@ export const DashboardMenu: MenuItemType[] = [
   {
     id: uuid(),
     title: "Attendance",
-    link: "/attendance",
     icon: <IconClock size={20} strokeWidth={1.5} />,
+    children: [
+      {
+        id: uuid(),
+        name: "Today's Attendance",
+        link: "/attendance/today-attendance",
+        icon: <IconCircleCheck size={18} strokeWidth={1.5} />,
+      },
+      {
+        id: uuid(),
+        name: "Attendance Records",
+        link: "/attendance/records",
+        icon: <IconListDetails size={18} strokeWidth={1.5} />,
+      },
+    ],
   },
   {
     id: uuid(),

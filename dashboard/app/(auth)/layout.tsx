@@ -15,7 +15,7 @@ const AuthLayout = ({ children }: { children: React.ReactNode }) => {
         <Container>{children}</Container>
       </section>
       <div className='custom-container'>
-        <span className='me-1'>© All rights reserved by <a href="https://codescandy.com/" target="_blank">Codescandy</a>. Distributed by <a href="https://themewagon.com/" target="_blank">ThemeWagon</a>.</span>
+        <p className="mb-0">© 2024 AttendStack. A <a href="https://bhattsquare.com" target="_blank" rel="noopener noreferrer">Bhatt Square</a> Project.</p>
       </div>
     </Flex>
   );

@@ -26,16 +26,17 @@ import { DashboardMenu } from "routes/DashboardRoute";
 interface SidebarProps {
   hideLogo: boolean;
   containerId?: string;
+  currentPath: string;
 }
-const Sidebar: React.FC<SidebarProps> = ({ hideLogo = false, containerId }) => {
-  const location = usePathname();
+const Sidebar: React.FC<SidebarProps> = ({ hideLogo = false, containerId, currentPath }) => {
 
   //Generate Link
   const generateLink = (item: MenuItemType) => {
+    const isactive = currentPath.startsWith(item.link || '');
     return (
       <Link
         href={`${item.link}`}
-        className={`nav-link ${location === `/${item.link}` ? "active" : ""}`}>
+        className={`nav-link ${isactive ? "active" : ""}`}>
         <span className='text'>{item.name}</span>
         {item.badge && (
           <Badge
@@ -60,7 +61,7 @@ const Sidebar: React.FC<SidebarProps> = ({ hideLogo = false, containerId }) => {
                 src={getAssetPath("/images/brand/logo/logo-icon.svg")}
                 alt=''
               />
-              <span className='fw-bold fs-4 site-logo-text'>AttendEase HR</span>
+              <span className='fw-bold fs-4 site-logo-text'>AttendStack</span>
             </Link>
           </div>
         )}
@@ -158,8 +159,7 @@ const Sidebar: React.FC<SidebarProps> = ({ hideLogo = false, containerId }) => {
                                                                 `/${menuLevel3Item.link}`
                                                               }
                                                               className={`nav-link ${
-                                                                location ===
-                                                                `/${menuLevel3Item.link}`
+                                                                currentPath.startsWith(menuLevel3Item.link || '')
                                                                   ? "active"
                                                                   : ""
                                                               }`}>
@@ -206,7 +206,7 @@ const Sidebar: React.FC<SidebarProps> = ({ hideLogo = false, containerId }) => {
                                 <Link
                                   href={`/${menuLevel1Item?.link}`}
                                   className={`nav-link ${
-                                    location === `/${menuLevel1Item.link}`
+                                    currentPath.startsWith(`/${menuLevel1Item.link}`)
                                       ? "active"
                                       : ""
                                   }`}>
@@ -228,7 +228,7 @@ const Sidebar: React.FC<SidebarProps> = ({ hideLogo = false, containerId }) => {
                     <Link
                       href={menu.link ? `${menu.link}` : "#"}
                       className={`nav-link ${
-                        location === menu.link ? "active" : ""
+                        currentPath.startsWith(menu.link || '') ? "active" : ""
                       }`}>
                       <span className='nav-icon'>{menu.icon}</span>
                       <span className='text'>{menu.title}</span>

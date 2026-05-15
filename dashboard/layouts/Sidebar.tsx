@@ -75,7 +75,7 @@ const Sidebar: React.FC<SidebarProps> = ({ hideLogo = false, containerId, curren
   const getActiveMenuIndex = () => {
     const activeMenu = menuItems.findIndex((menu) => {
       if (menu.children) {
-        return menu.children.some((child) => currentPath.startsWith(child.link || ''));
+        return menu.children.some((child) => child && typeof currentPath === 'string' && currentPath.startsWith(child.link || ''));
       }
       return false;
     });

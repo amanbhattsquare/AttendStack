@@ -11,9 +11,10 @@ interface DashboardProps {
 
 const DashboardLayout: React.FC<DashboardProps> = ({ children }) => {
   const pathname = usePathname();
+  const isEmployee = pathname.startsWith("/employee-dashboard");
   return (
     <div>
-      <Sidebar hideLogo={false} containerId='miniSidebar' currentPath={pathname} />
+      <Sidebar hideLogo={false} containerId='miniSidebar' currentPath={pathname} isEmployee={isEmployee} />
       <div id='content' className='position-relative h-100 d-flex flex-column'>
         <Header />
         <div className='custom-container' style={{ flex: '1 0 auto' }}>

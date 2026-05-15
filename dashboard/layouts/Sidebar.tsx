@@ -22,17 +22,21 @@ import CustomToggle, { CustomToggleLevel2 } from "./SidebarMenuToggle";
 // import required routes
 import { getAssetPath } from "helper/assetPath";
 import { DashboardMenu } from "routes/DashboardRoute";
+import { EmployeeDashboardMenu } from "routes/EmployeeDashboardRoute";
 
 interface SidebarProps {
   hideLogo: boolean;
+  isEmployee?: boolean;
   containerId?: string;
   currentPath: string;
 }
-const Sidebar: React.FC<SidebarProps> = ({ hideLogo = false, containerId, currentPath }) => {
+const Sidebar: React.FC<SidebarProps> = ({ hideLogo = false, containerId, currentPath, isEmployee }) => {
+  const menuItems = isEmployee ? EmployeeDashboardMenu : DashboardMenu;
+
 
   //Generate Link
   const generateLink = (item: MenuItemType) => {
-    const isactive = currentPath.startsWith(item.link || '');
+    const isactive = currentPath === item.link;
     return (
       <Link
         href={`${item.link}`}
@@ -51,7 +55,7 @@ const Sidebar: React.FC<SidebarProps> = ({ hideLogo = false, containerId, curren
   };
 
   const getActiveMenuIndex = () => {
-    const activeMenu = DashboardMenu.findIndex((menu) => {
+    const activeMenu = menuItems.findIndex((menu) => {
       if (menu.children) {
         return menu.children.some((child) => currentPath.startsWith(child.link || ''));
       }
@@ -82,7 +86,7 @@ const Sidebar: React.FC<SidebarProps> = ({ hideLogo = false, containerId, curren
           defaultActiveKey={getActiveMenuIndex()}
           as='ul'
           bsPrefix='navbar-nav flex-column'>
-          {DashboardMenu.map(function (menu, index) {
+          {menuItems.map(function (menu, index) {
             if (menu.grouptitle) {
               return (
                 // Group Title
@@ -170,7 +174,7 @@ const Sidebar: React.FC<SidebarProps> = ({ hideLogo = false, containerId, curren
                                                                 `/${menuLevel3Item.link}`
                                                               }
                                                               className={`nav-link ${
-                                                                currentPath.startsWith(menuLevel3Item.link || '')
+                                                                currentPath === menuLevel3Item.link
                                                                   ? "active"
                                                                   : ""
                                                               }`}>
@@ -229,7 +233,7 @@ const Sidebar: React.FC<SidebarProps> = ({ hideLogo = false, containerId, curren
                     <Link
                       href={menu.link ? `${menu.link}` : "#"}
                       className={`nav-link ${
-                        currentPath.startsWith(menu.link || '') ? "active" : ""
+                        currentPath === menu.link ? "active" : ""
                       }`}>
                       <span className='nav-icon'>{menu.icon}</span>
                       <span className='text'>{menu.title}</span>

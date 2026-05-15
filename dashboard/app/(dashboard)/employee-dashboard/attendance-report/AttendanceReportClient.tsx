@@ -7,45 +7,78 @@ import {
   Col,
   Form,
   Button,
+  Pagination,
 } from "react-bootstrap";
+import { useState } from "react";
+
+import CustomPagination from "../../../../components/shared/CustomPagination";
 
 const AttendanceReportClient = () => {
+  const [currentPage, setCurrentPage] = useState(1);
+  const recordsPerPage = 5;
+
   // Dummy data for attendance records
   const attendanceRecords = [
     {
       date: "2024-05-13",
       checkIn: "09:05 AM",
       checkOut: "06:10 PM",
-      totalHours: "9h 5m",
       status: "Present",
     },
     {
       date: "2024-05-12",
       checkIn: "09:15 AM",
       checkOut: "06:00 PM",
-      totalHours: "8h 45m",
       status: "Late Entry",
     },
     {
       date: "2024-05-11",
       checkIn: "--:--",
       checkOut: "--:--",
-      totalHours: "0h 0m",
       status: "Absent",
     },
     {
       date: "2024-05-10",
       checkIn: "10:00 AM",
       checkOut: "02:00 PM",
-      totalHours: "4h 0m",
       status: "Half-day",
     },
     {
       date: "2024-05-09",
       checkIn: "--:--",
       checkOut: "--:--",
-      totalHours: "0h 0m",
       status: "On Leave",
+    },
+    // Add more records to test pagination
+    {
+      date: "2024-05-08",
+      checkIn: "09:00 AM",
+      checkOut: "06:00 PM",
+      status: "Present",
+    },
+    {
+      date: "2024-05-07",
+      checkIn: "09:05 AM",
+      checkOut: "06:05 PM",
+      status: "Present",
+    },
+    {
+      date: "2024-05-06",
+      checkIn: "09:10 AM",
+      checkOut: "06:00 PM",
+      status: "Late Entry",
+    },
+    {
+      date: "2024-05-05",
+      checkIn: "--:--",
+      checkOut: "--:--",
+      status: "Absent",
+    },
+    {
+      date: "2024-05-04",
+      checkIn: "10:00 AM",
+      checkOut: "02:00 PM",
+      status: "Half-day",
     },
   ];
 
@@ -64,6 +97,19 @@ const AttendanceReportClient = () => {
       default:
         return "light";
     }
+  };
+
+  const indexOfLastRecord = currentPage * recordsPerPage;
+  const indexOfFirstRecord = indexOfLastRecord - recordsPerPage;
+  const currentRecords = attendanceRecords.slice(
+    indexOfFirstRecord,
+    indexOfLastRecord
+  );
+
+  const totalPages = Math.ceil(attendanceRecords.length / recordsPerPage);
+
+  const handlePageChange = (pageNumber) => {
+    setCurrentPage(pageNumber);
   };
 
   return (
@@ -96,20 +142,20 @@ const AttendanceReportClient = () => {
         <Table hover responsive className="text-nowrap">
           <thead className="table-light">
             <tr>
+              <th>Sr. No.</th>
               <th>Date</th>
               <th>Check In</th>
               <th>Check Out</th>
-              <th>Total Hours</th>
               <th>Status</th>
             </tr>
           </thead>
           <tbody>
-            {attendanceRecords.map((record, index) => (
+            {currentRecords.map((record, index) => (
               <tr key={index}>
+                <td>{indexOfFirstRecord + index + 1}</td>
                 <td>{record.date}</td>
                 <td>{record.checkIn}</td>
                 <td>{record.checkOut}</td>
-                <td>{record.totalHours}</td>
                 <td>
                   <Badge bg={getStatusBadge(record.status)}>
                     {record.status}
@@ -119,6 +165,11 @@ const AttendanceReportClient = () => {
             ))}
           </tbody>
         </Table>
+        <CustomPagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={handlePageChange}
+        />
       </Card.Body>
     </Card>
   );

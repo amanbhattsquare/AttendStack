@@ -1,4 +1,3 @@
-"use client";
 import MyAttendanceClient from "./MyAttendanceClient";
 
 const AttendancePage = () => {

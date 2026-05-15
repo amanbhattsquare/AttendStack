@@ -6,7 +6,7 @@ import {
   IconCalendarEvent,
   IconBeach,
   IconCoin,
-  IconLock,
+  IconLogout,
   IconUser,
   IconClock,
   IconCircleCheck,
@@ -76,8 +76,9 @@ export const DashboardMenu: MenuItemType[] = [
   },
   {
     id: uuid(),
-    title: "Auth",
+    title: "Logout",
     link: "/sign-in",
-    icon: <IconLock size={20} strokeWidth={1.5} />,
+    icon: <IconLogout size={20} strokeWidth={1.5} />,
+    logout: true,
   },
 ];

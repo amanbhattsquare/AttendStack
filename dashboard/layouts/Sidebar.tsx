@@ -37,16 +37,34 @@ const Sidebar: React.FC<SidebarProps> = ({ hideLogo = false, containerId, curren
   //Generate Link
   const generateLink = (item: MenuItemType) => {
     const isactive = currentPath === item.link;
+    if (item.logout) {
+      const handleLogout = () => {
+        localStorage.removeItem("authToken");
+        localStorage.removeItem("user");
+        window.location.href = item.link || "/sign-in";
+      };
+      return (
+        <button
+          onClick={handleLogout}
+          className={`nav-link ${isactive ? "active" : ""}`}
+        >
+          {item.icon && <span className="nav-icon">{item.icon}</span>}
+          <span className="text">{item.name}</span>
+        </button>
+      );
+    }
     return (
       <Link
         href={`${item.link}`}
-        className={`nav-link ${isactive ? "active" : ""}`}>
-        {item.icon && <span className='nav-icon'>{item.icon}</span>}
-        <span className='text'>{item.name}</span>
+        className={`nav-link ${isactive ? "active" : ""}`}
+      >
+        {item.icon && <span className="nav-icon">{item.icon}</span>}
+        <span className="text">{item.name}</span>
         {item.badge && (
           <Badge
-            className='ms-1'
-            bg={item.badgecolor ? item.badgecolor : "primary"}>
+            className="ms-1"
+            bg={item.badgecolor ? item.badgecolor : "primary"}
+          >
             {item.badge}
           </Badge>
         )}

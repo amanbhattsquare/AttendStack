@@ -5,6 +5,7 @@ import Offcanvas from "react-bootstrap/Offcanvas";
 import OffcanvasBody from "react-bootstrap/OffcanvasBody";
 import OffcanvasHeader from "react-bootstrap/OffcanvasHeader";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 //import custom components
 import Sidebar from "./Sidebar";
@@ -15,6 +16,8 @@ import { getAssetPath } from "helper/assetPath";
 
 const OffcanvasSidebar = () => {
   const { showMenu, toggleMenuHandler } = useMenu();
+  const pathname = usePathname();
+  const isEmployee = pathname.startsWith("/employee-dashboard");
 
   return (
     <Offcanvas
@@ -31,7 +34,7 @@ const OffcanvasSidebar = () => {
         </Link>
       </OffcanvasHeader>
       <OffcanvasBody className="p-0 ">
-        <Sidebar hideLogo />
+        <Sidebar hideLogo currentPath={pathname} isEmployee={isEmployee} />
       </OffcanvasBody>
     </Offcanvas>
   );

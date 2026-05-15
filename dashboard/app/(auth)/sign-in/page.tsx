@@ -32,7 +32,8 @@ const SignInPage = () => {
       if (response.data && response.data.access) {
         localStorage.setItem("authToken", response.data.access);
         localStorage.setItem("user", JSON.stringify(response.data.user));
-        router.push("/");
+        const role = response.data.user?.role;
+        router.push(role === "EMPLOYEE" ? "/employee-dashboard" : "/");
       } else {
         setError("Login failed. Please check your credentials.");
       }

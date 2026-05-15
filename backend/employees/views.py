@@ -1,6 +1,8 @@
 from rest_framework import filters, viewsets
 from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.exceptions import NotFound
 
 from accounts.permissions import IsAdminOrHR
 from django.contrib.auth import get_user_model
@@ -21,6 +23,11 @@ class EmployeeViewSet(viewsets.ModelViewSet):
     ordering_fields = ["full_name", "joining_date", "department", "created_at"]
     ordering = ["full_name"]
 
+    def get_permissions(self):
+        if self.action == "me":
+            return [IsAuthenticated()]
+        return super().get_permissions()
+
     def get_queryset(self):
         queryset = super().get_queryset().annotate(
             account_exists_annotation=Exists(
@@ -36,6 +43,27 @@ class EmployeeViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(status=status_filter.upper())
 
         return queryset
+
+    @action(detail=False, methods=["get"], url_path="me")
+    def me(self, request):
+        employee = (
+            self.get_queryset()
+            .filter(email__iexact=request.user.email)
+            .first()
+        )
+
+        if employee is None and request.user.employee_id:
+            employee = (
+                self.get_queryset()
+                .filter(employee_id=request.user.employee_id)
+                .first()
+            )
+
+        if employee is None:
+            raise NotFound("No employee profile is linked to this login account.")
+
+        serializer = self.get_serializer(employee)
+        return Response(serializer.data)
 
     @action(detail=True, methods=["post"], url_path="create-password")
     def create_password(self, request, pk=None):

@@ -14,5 +14,6 @@ export interface MenuItemType {
   grouptitle?: boolean;
   badge?: string;
   badgecolor?: string;
+  logout?: boolean;
   children?: MenuItemType[];
 }

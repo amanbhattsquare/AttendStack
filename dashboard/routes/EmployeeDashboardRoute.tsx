@@ -1,6 +1,8 @@
 //import node modules libraries
 import { v4 as uuid } from "uuid";
 import {
+  IconLayoutDashboard,
+  IconLogout,
   IconUser,
   IconBeach,
   IconFingerprint,
@@ -12,6 +14,12 @@ import {
 import { MenuItemType } from "types/menuTypes";
 
 export const EmployeeDashboardMenu: MenuItemType[] = [
+      {
+        id: uuid(),
+        title: "Employee Dashboard",
+        link: "/employee-dashboard",
+        icon: <IconLayoutDashboard size={18} strokeWidth={1.5} />,
+      },
       {
         id: uuid(),
         title: "My Profile",
@@ -41,5 +49,12 @@ export const EmployeeDashboardMenu: MenuItemType[] = [
         title: "My Salary",
         link: "/employee-dashboard/salary",
         icon: <IconWallet size={18} strokeWidth={1.5} />,
+      },
+      {
+        id: uuid(),
+        title: "Logout",
+        link: "/sign-in",
+        icon: <IconLogout size={18} strokeWidth={1.5} />,
+        logout: true,
       },
 ];

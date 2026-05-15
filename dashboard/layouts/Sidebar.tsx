@@ -49,7 +49,7 @@ const Sidebar: React.FC<SidebarProps> = ({ hideLogo = false, containerId, curren
           className={`nav-link ${isactive ? "active" : ""}`}
         >
           {item.icon && <span className="nav-icon">{item.icon}</span>}
-          <span className="text">{item.name}</span>
+          <span className="text">{item.name || item.title}</span>
         </button>
       );
     }
@@ -59,7 +59,7 @@ const Sidebar: React.FC<SidebarProps> = ({ hideLogo = false, containerId, curren
         className={`nav-link ${isactive ? "active" : ""}`}
       >
         {item.icon && <span className="nav-icon">{item.icon}</span>}
-        <span className="text">{item.name}</span>
+        <span className="text">{item.name || item.title}</span>
         {item.badge && (
           <Badge
             className="ms-1"
@@ -248,14 +248,7 @@ const Sidebar: React.FC<SidebarProps> = ({ hideLogo = false, containerId, curren
               } else {
                 return (
                   <Nav.Item as='li' key={index}>
-                    <Link
-                      href={menu.link ? `${menu.link}` : "#"}
-                      className={`nav-link ${
-                        currentPath === menu.link ? "active" : ""
-                      }`}>
-                      <span className='nav-icon'>{menu.icon}</span>
-                      <span className='text'>{menu.title}</span>
-                    </Link>
+                    {generateLink(menu)}
                   </Nav.Item>
                 );
               }

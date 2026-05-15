@@ -1,83 +1,207 @@
 "use client";
 
-import { Fragment, useState, useMemo } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { IconFilter, IconPlus, IconSearch } from "@tabler/icons-react";
-import { Dropdown } from "react-bootstrap";
-import AddEmployeeModal from "./AddEmployeeModal";
+import {
+  IconDotsVertical,
+  IconEdit,
+  IconEye,
+  IconFilter,
+  IconKey,
+  IconPlus,
+  IconRefresh,
+  IconSearch,
+  IconTrash,
+} from "@tabler/icons-react";
+import { Alert, Button, Dropdown, Modal } from "react-bootstrap";
 import Link from "next/link";
 
-// Dummy data with UUIDs
-const employees = [
-  {
-    uuid: "d2a6c9c8-3a75-4d89-9a15-3f57a9f7b2e1",
-    name: "John Doe",
-    email: "john@example.com",
-    avatar: "/images/avatar/avatar-1.jpg",
-    id: "#EMP-001",
-    department: "Engineering",
-    designation: "Senior Developer",
-    joinDate: "Jan 15, 2021",
-    status: "Active",
-  },
-  {
-    uuid: "f8b8e3c8-6d54-4f8b-8e3c-8d54f8b8e3c8",
-    name: "Jane Smith",
-    email: "jane@example.com",
-    avatar: "/images/avatar/avatar-2.jpg",
-    id: "#EMP-002",
-    department: "Design",
-    designation: "UI/UX Designer",
-    joinDate: "Feb 20, 2022",
-    status: "Active",
-  },
-  {
-    uuid: "a1b2c3d4-e5f6-7890-1234-567890abcdef",
-    name: "Peter Jones",
-    email: "peter@example.com",
-    avatar: "/images/avatar/avatar-3.jpg",
-    id: "#EMP-003",
-    department: "Engineering",
-    designation: "Junior Developer",
-    joinDate: "Mar 10, 2023",
-    status: "Inactive",
-  }
-];
+type Employee = {
+  id: string;
+  employee_id: string;
+  full_name: string;
+  email: string;
+  profile_photo_url: string | null;
+  department: string;
+  designation: string;
+  joining_date: string;
+  account_exists: boolean;
+  status: "ACTIVE" | "INACTIVE" | "ON_LEAVE" | "TERMINATED";
+  status_label: string;
+};
+
+type EmployeeListResponse = Employee[] | {
+  results: Employee[];
+};
+
+type PasswordActionResponse = {
+  detail: string;
+  employee_id: string;
+  email: string;
+  temporary_password: string;
+};
+
+const API_URL = "http://127.0.0.1:8000/api/v1/employees/";
+
+const statusBadgeClass: Record<Employee["status"], string> = {
+  ACTIVE: "bg-success-subtle text-success",
+  INACTIVE: "bg-secondary-subtle text-secondary",
+  ON_LEAVE: "bg-warning-subtle text-warning",
+  TERMINATED: "bg-danger-subtle text-danger",
+};
+
+const formatDate = (value: string) => {
+  if (!value) return "-";
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(value));
+};
 
 const EmployeePageClient = () => {
-  const [showAddModal, setShowAddModal] = useState(false);
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
+  const [actionLoadingKey, setActionLoadingKey] = useState<string | null>(null);
+  const [passwordResult, setPasswordResult] = useState<PasswordActionResponse | null>(null);
+  const [copyLabel, setCopyLabel] = useState("Copy");
   const router = useRouter();
+
+  const loadEmployees = async () => {
+    setIsLoading(true);
+    setError("");
+
+    try {
+      const token = localStorage.getItem("authToken");
+      const response = await fetch(API_URL, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+
+      if (!response.ok) {
+        throw new Error("Unable to load employees from the backend.");
+      }
+
+      const data = (await response.json()) as EmployeeListResponse;
+      setEmployees(Array.isArray(data) ? data : data.results);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "Unable to load employees.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadEmployees();
+  }, []);
 
   const handleRowClick = (employeeUuid: string) => {
     router.push(`/employees/${employeeUuid}`);
   };
 
+  const handleDelete = async (employeeId: string) => {
+    const shouldDelete = window.confirm("Delete this employee record?");
+    if (!shouldDelete) return;
+
+    try {
+      setError("");
+      setSuccessMessage("");
+      setActionLoadingKey(`${employeeId}:delete`);
+      const token = localStorage.getItem("authToken");
+      const response = await fetch(`${API_URL}${employeeId}/`, {
+        method: "DELETE",
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+
+      if (!response.ok) {
+        throw new Error("Unable to delete employee.");
+      }
+
+      setEmployees((prev) => prev.filter((employee) => employee.id !== employeeId));
+      setSuccessMessage("Employee deleted successfully.");
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "Unable to delete employee.");
+    } finally {
+      setActionLoadingKey(null);
+    }
+  };
+
+  const parseApiError = async (response: Response) => {
+    const errorBody = await response.json().catch(() => null);
+    if (!errorBody) return "Request failed. Please try again.";
+    if (typeof errorBody.detail === "string") return errorBody.detail;
+    return Object.values(errorBody).flat().join(" ");
+  };
+
+  const handlePasswordAction = async (employee: Employee, action: "create-password" | "reset-password") => {
+    const isReset = action === "reset-password";
+    if (isReset) {
+      const shouldReset = window.confirm(`Reset password for ${employee.full_name}?`);
+      if (!shouldReset) return;
+    }
+
+    try {
+      setError("");
+      setSuccessMessage("");
+      setPasswordResult(null);
+      setCopyLabel("Copy");
+      setActionLoadingKey(`${employee.id}:${action}`);
+
+      const token = localStorage.getItem("authToken");
+      const response = await fetch(`${API_URL}${employee.id}/${action}/`, {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+
+      if (!response.ok) {
+        throw new Error(await parseApiError(response));
+      }
+
+      const data = (await response.json()) as PasswordActionResponse;
+      setPasswordResult(data);
+      setSuccessMessage(data.detail);
+      setEmployees((prev) =>
+        prev.map((item) =>
+          item.id === employee.id ? { ...item, account_exists: true } : item
+        )
+      );
+    } catch (passwordError) {
+      setError(passwordError instanceof Error ? passwordError.message : "Unable to complete password action.");
+    } finally {
+      setActionLoadingKey(null);
+    }
+  };
+
+  const handleCopyPassword = async () => {
+    if (!passwordResult?.temporary_password) return;
+    try {
+      await navigator.clipboard.writeText(passwordResult.temporary_password);
+      setCopyLabel("Copied");
+    } catch {
+      setCopyLabel("Copy failed");
+    }
+  };
+
   const filteredEmployees = useMemo(() => {
-    let result = employees;
+    return employees.filter((employee) => {
+      const query = searchQuery.toLowerCase();
+      const matchesSearch =
+        !query ||
+        employee.full_name.toLowerCase().includes(query) ||
+        employee.email.toLowerCase().includes(query) ||
+        employee.employee_id.toLowerCase().includes(query);
+      const matchesDepartment = !departmentFilter || employee.department === departmentFilter;
+      const matchesStatus = !statusFilter || employee.status === statusFilter;
 
-    if (searchQuery) {
-      result = result.filter((employee) =>
-        employee.name.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-    }
+      return matchesSearch && matchesDepartment && matchesStatus;
+    });
+  }, [employees, searchQuery, departmentFilter, statusFilter]);
 
-    if (departmentFilter) {
-      result = result.filter(
-        (employee) => employee.department === departmentFilter
-      );
-    }
-
-    if (statusFilter) {
-      result = result.filter((employee) => employee.status === statusFilter);
-    }
-
-    return result;
-  }, [searchQuery, departmentFilter, statusFilter]);
-
-  const uniqueDepartments = [...new Set(employees.map(emp => emp.department))];
+  const uniqueDepartments = [...new Set(employees.map((employee) => employee.department).filter(Boolean))];
 
   return (
     <Fragment>
@@ -99,33 +223,44 @@ const EmployeePageClient = () => {
                 <span className="input-group-text bg-transparent border-end-0">
                   <IconSearch size={18} className="text-muted" />
                 </span>
-                <input type="text" className="form-control border-start-0 ps-0" placeholder="Search employees by name..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+                <input
+                  type="text"
+                  className="form-control border-start-0 ps-0"
+                  placeholder="Search employees..."
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                />
               </div>
             </div>
             <div className="col-md-8 d-flex justify-content-md-end">
-                <Dropdown>
-                  <Dropdown.Toggle variant="outline-secondary" id="dropdown-filter" className="d-flex align-items-center gap-2">
-                    <IconFilter size={18} /> Filter
-                  </Dropdown.Toggle>
+              <Dropdown>
+                <Dropdown.Toggle variant="outline-secondary" id="dropdown-filter" className="d-flex align-items-center gap-2">
+                  <IconFilter size={18} /> Filter
+                </Dropdown.Toggle>
 
-                  <Dropdown.Menu>
-                    <Dropdown.Header>Department</Dropdown.Header>
-                    <Dropdown.Item onClick={() => setDepartmentFilter("")}>All Departments</Dropdown.Item>
-                    {uniqueDepartments.map(dep => (
-                      <Dropdown.Item key={dep} onClick={() => setDepartmentFilter(dep)}>{dep}</Dropdown.Item>
-                    ))}
-                    <Dropdown.Divider />
-                    <Dropdown.Header>Status</Dropdown.Header>
-                    <Dropdown.Item onClick={() => setStatusFilter("")}>All Statuses</Dropdown.Item>
-                    <Dropdown.Item onClick={() => setStatusFilter("Active")}>Active</Dropdown.Item>
-                    <Dropdown.Item onClick={() => setStatusFilter("Inactive")}>Inactive</Dropdown.Item>
-                  </Dropdown.Menu>
-                </Dropdown>
-              </div>
+                <Dropdown.Menu>
+                  <Dropdown.Header>Department</Dropdown.Header>
+                  <Dropdown.Item onClick={() => setDepartmentFilter("")}>All Departments</Dropdown.Item>
+                  {uniqueDepartments.map((department) => (
+                    <Dropdown.Item key={department} onClick={() => setDepartmentFilter(department)}>{department}</Dropdown.Item>
+                  ))}
+                  <Dropdown.Divider />
+                  <Dropdown.Header>Status</Dropdown.Header>
+                  <Dropdown.Item onClick={() => setStatusFilter("")}>All Statuses</Dropdown.Item>
+                  <Dropdown.Item onClick={() => setStatusFilter("ACTIVE")}>Active</Dropdown.Item>
+                  <Dropdown.Item onClick={() => setStatusFilter("INACTIVE")}>Inactive</Dropdown.Item>
+                  <Dropdown.Item onClick={() => setStatusFilter("ON_LEAVE")}>On Leave</Dropdown.Item>
+                  <Dropdown.Item onClick={() => setStatusFilter("TERMINATED")}>Terminated</Dropdown.Item>
+                </Dropdown.Menu>
+              </Dropdown>
+            </div>
           </div>
         </div>
         <div className="card-body">
-          <div className="table-responsive">
+          {error && <div className="alert alert-danger">{error}</div>}
+          {successMessage && <div className="alert alert-success">{successMessage}</div>}
+
+          <div className="table-responsive employee-table-responsive">
             <table className="table align-middle table-hover text-nowrap">
               <thead className="table-light">
                 <tr>
@@ -135,31 +270,94 @@ const EmployeePageClient = () => {
                   <th>Designation</th>
                   <th>Join Date</th>
                   <th>Status</th>
-                  <th>Action</th>
+                  <th className="text-center employee-action-column">Action</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredEmployees.map((employee) => (
-                  <tr key={employee.uuid} style={{ cursor: 'pointer' }} onClick={() => handleRowClick(employee.uuid)}>
+                {isLoading && (
+                  <tr>
+                    <td colSpan={7} className="text-center py-5 text-secondary">Loading employees...</td>
+                  </tr>
+                )}
+
+                {!isLoading && filteredEmployees.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="text-center py-5 text-secondary">No employees found.</td>
+                  </tr>
+                )}
+
+                {!isLoading && filteredEmployees.map((employee) => (
+                  <tr key={employee.id} style={{ cursor: "pointer" }} onClick={() => handleRowClick(employee.id)}>
                     <td>
                       <div className="d-flex align-items-center">
-                        <img src={employee.avatar} alt={employee.name} className="avatar avatar-sm rounded-circle me-3" />
+                        <img
+                          src={employee.profile_photo_url || "/images/avatar/avatar-fallback.jpg"}
+                          alt={employee.full_name}
+                          className="avatar avatar-sm rounded-circle me-3"
+                        />
                         <div>
-                          <h6 className="mb-0">{employee.name}</h6>
+                          <h6 className="mb-0">{employee.full_name}</h6>
                           <small className="text-muted">{employee.email}</small>
                         </div>
                       </div>
                     </td>
-                    <td>{employee.id}</td>
+                    <td>{employee.employee_id}</td>
                     <td>{employee.department}</td>
                     <td>{employee.designation}</td>
-                    <td>{employee.joinDate}</td>
+                    <td>{formatDate(employee.joining_date)}</td>
                     <td>
-                      <span className={`badge ${employee.status === 'Active' ? 'bg-success-subtle text-success' : 'bg-danger-subtle text-danger'}`}>{employee.status}</span>
+                      <span className={`badge ${statusBadgeClass[employee.status] || "bg-secondary-subtle text-secondary"}`}>
+                        {employee.status_label}
+                      </span>
                     </td>
-                    <td>
-                      <button className="btn btn-light btn-sm me-2" onClick={(e) => e.stopPropagation()}>Edit</button>
-                      <button className="btn btn-outline-danger btn-sm" onClick={(e) => e.stopPropagation()}>Delete</button>
+                    <td className="text-center employee-action-column">
+                      <Dropdown
+                        align="end"
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        <Dropdown.Toggle
+                          variant="light"
+                          size="sm"
+                          className="btn-icon employee-action-toggle"
+                          aria-label={`Actions for ${employee.full_name}`}
+                        >
+                          <IconDotsVertical size={18} />
+                        </Dropdown.Toggle>
+                        <Dropdown.Menu
+                          className="employee-action-menu shadow border-0"
+                          popperConfig={{ strategy: "fixed" }}
+                        >
+                          <Dropdown.Item onClick={() => handleRowClick(employee.id)} className="d-flex align-items-center gap-2">
+                            <IconEye size={16} /> View Profile
+                          </Dropdown.Item>
+                          <Dropdown.Item onClick={() => handleRowClick(employee.id)} className="d-flex align-items-center gap-2">
+                            <IconEdit size={16} /> Edit Employee
+                          </Dropdown.Item>
+                          <Dropdown.Divider />
+                          <Dropdown.Item
+                            disabled={employee.account_exists || actionLoadingKey === `${employee.id}:create-password`}
+                            onClick={() => handlePasswordAction(employee, "create-password")}
+                            className="d-flex align-items-center gap-2"
+                          >
+                            <IconKey size={16} /> {actionLoadingKey === `${employee.id}:create-password` ? "Creating..." : "Create Password"}
+                          </Dropdown.Item>
+                          <Dropdown.Item
+                            disabled={!employee.account_exists || actionLoadingKey === `${employee.id}:reset-password`}
+                            onClick={() => handlePasswordAction(employee, "reset-password")}
+                            className="d-flex align-items-center gap-2"
+                          >
+                            <IconRefresh size={16} /> {actionLoadingKey === `${employee.id}:reset-password` ? "Resetting..." : "Reset Password"}
+                          </Dropdown.Item>
+                          <Dropdown.Divider />
+                          <Dropdown.Item
+                            disabled={actionLoadingKey === `${employee.id}:delete`}
+                            onClick={() => handleDelete(employee.id)}
+                            className="d-flex align-items-center gap-2 text-danger"
+                          >
+                            <IconTrash size={16} /> {actionLoadingKey === `${employee.id}:delete` ? "Deleting..." : "Delete"}
+                          </Dropdown.Item>
+                        </Dropdown.Menu>
+                      </Dropdown>
                     </td>
                   </tr>
                 ))}
@@ -168,7 +366,99 @@ const EmployeePageClient = () => {
           </div>
         </div>
       </div>
-      <AddEmployeeModal show={showAddModal} onHide={() => setShowAddModal(false)} />
+
+      <Modal show={Boolean(passwordResult)} onHide={() => setPasswordResult(null)} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>Temporary Password</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <Alert variant="warning" className="mb-3">
+            Share this temporary password securely. It will not be shown again after this modal is closed.
+          </Alert>
+          <div className="mb-3">
+            <div className="text-secondary small">Employee</div>
+            <div className="fw-semibold">{passwordResult?.email}</div>
+          </div>
+          <label htmlFor="temporaryPassword" className="form-label">Temporary Password</label>
+          <div className="input-group">
+            <input
+              id="temporaryPassword"
+              type="text"
+              readOnly
+              className="form-control font-monospace"
+              value={passwordResult?.temporary_password || ""}
+            />
+            <Button variant="outline-secondary" onClick={handleCopyPassword}>
+              {copyLabel}
+            </Button>
+          </div>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="primary" onClick={() => setPasswordResult(null)}>Done</Button>
+        </Modal.Footer>
+      </Modal>
+
+      <style jsx global>{`
+        .employee-table-responsive {
+          overflow: visible;
+        }
+
+        .employee-action-column {
+          width: 112px;
+          min-width: 112px;
+        }
+
+        .employee-action-toggle {
+          width: 34px;
+          height: 34px;
+          padding: 0;
+          border: 1px solid #d8e0e7;
+          border-radius: 8px;
+          background: #fff;
+          color: #526273;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+        }
+
+        .employee-action-toggle::after {
+          display: none;
+        }
+
+        .employee-action-toggle:hover,
+        .employee-action-toggle:focus,
+        .employee-action-toggle.show {
+          background: #f5f8fb;
+          border-color: #bac7d5;
+          color: #0f172a;
+        }
+
+        .employee-action-menu {
+          min-width: 210px;
+          padding: 8px;
+          border-radius: 8px;
+          z-index: 1080;
+        }
+
+        .employee-action-menu .dropdown-item {
+          border-radius: 6px;
+          padding: 8px 10px;
+          font-size: 14px;
+        }
+
+        .employee-action-menu .dropdown-item:active {
+          background-color: #e9f7f1;
+          color: #0f172a;
+        }
+
+        @media (max-width: 991.98px) {
+          .employee-table-responsive {
+            overflow-x: auto;
+            padding-bottom: 180px;
+          }
+        }
+      `}</style>
     </Fragment>
   );
 };

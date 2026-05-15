@@ -57,16 +57,7 @@ const EmployeeProfilePage = async ({ params }: EmployeeProfilePageProps) => {
 
   return (
     <Fragment>
-      <DasherBreadcrumb
-        title={employeeData.fullName}
-        subtext={`Details for employee ID: ${employeeData.employmentDetails.employeeId}`}
-        items={[
-          { label: "Dashboard", link: "/" },
-          { label: "Employees", link: "/employees" },
-          { label: "Profile", link: "#" },
-        ]}
-      />
-      {/* The client component will handle the interactive parts like tabs */}
+      <DasherBreadcrumb />
       <EmployeeProfileClient employee={employeeData} />
     </Fragment>
   );

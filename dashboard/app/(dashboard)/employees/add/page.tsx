@@ -10,15 +10,7 @@ export const metadata: Metadata = {
 const AddEmployeePage = () => {
   return (
     <Fragment>
-        <DasherBreadcrumb
-        title="Add New Employee"
-        subtext="Follow the steps to add a new employee to your workforce."
-        items={[
-          { label: "Dashboard", link: "/" },
-          { label: "Employees", link: "/employees" },
-          { label: "Add New Employee", link: "/employees/add" },
-        ]}
-      />
+      <DasherBreadcrumb />
       <AddEmployeeWizard />
     </Fragment>
   );

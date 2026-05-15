@@ -8,67 +8,78 @@ const MyAttendanceClient = () => {
   const [checkOutTime, setCheckOutTime] = useState<Date | null>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [currentPage, setCurrentPage] = useState(1);
+  const [attendanceRecords, setAttendanceRecords] = useState<any[]>([]);
   const recordsPerPage = 5;
+  const userId = "user_123"; // Hardcoded for now
 
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
     }, 1000);
+
+    const fetchAttendance = async () => {
+      try {
+        const response = await fetch(`/api/attendance?userId=${userId}`);
+        if (response.ok) {
+          const data = await response.json();
+          setAttendanceRecords(data);
+          // Logic to set checkInTime and checkOutTime from the latest record
+          if (data.length > 0) {
+            const lastRecord = data[data.length - 1];
+            if (lastRecord.action === 'check-in') {
+              setCheckInTime(new Date(lastRecord.timestamp));
+            } else if (lastRecord.action === 'check-out') {
+              const checkInRecord = data.find(rec => rec.action === 'check-in');
+              if (checkInRecord) {
+                setCheckInTime(new Date(checkInRecord.timestamp));
+              }
+              setCheckOutTime(new Date(lastRecord.timestamp));
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Failed to fetch attendance", error);
+      }
+    };
+
+    fetchAttendance();
+
     return () => clearInterval(timer);
-  }, []);
+  }, [userId]);
 
-  const handleCheckIn = () => {
-    setCheckInTime(new Date());
+  const handleCheckIn = async () => {
+    try {
+      const response = await fetch('/api/attendance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, action: 'check-in' }),
+      });
+      if (response.ok) {
+        const { record } = await response.json();
+        setCheckInTime(new Date(record.timestamp));
+        setAttendanceRecords(prev => [...prev, record]);
+      }
+    } catch (error) {
+      console.error("Failed to check in", error);
+    }
   };
 
-  const handleCheckOut = () => {
-    setCheckOutTime(new Date());
+  const handleCheckOut = async () => {
+    try {
+      const response = await fetch('/api/attendance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, action: 'check-out' }),
+      });
+      if (response.ok) {
+        const { record } = await response.json();
+        setCheckOutTime(new Date(record.timestamp));
+        setAttendanceRecords(prev => [...prev, record]);
+      }
+    } catch (error) {
+      console.error("Failed to check out", error);
+    }
   };
-  // Dummy data for attendance records
-  const attendanceRecords = [
-    {
-      date: "2024-05-13",
-      checkIn: "09:05 AM",
-      checkOut: "06:10 PM",
-      status: "Present",
-    },
-    {
-      date: "2024-05-12",
-      checkIn: "09:15 AM",
-      checkOut: "06:00 PM",
-      status: "Late Entry",
-    },
-    {
-      date: "2024-05-11",
-      checkIn: "--:--",
-      checkOut: "--:--",
-      status: "Absent",
-    },
-    {
-      date: "2024-05-10",
-      checkIn: "10:00 AM",
-      checkOut: "02:00 PM",
-      status: "Half-day",
-    },
-    {
-      date: "2024-05-09",
-      checkIn: "--:--",
-      checkOut: "--:--",
-      status: "On Leave",
-    },
-    {
-      date: "2024-05-08",
-      checkIn: "09:00 AM",
-      checkOut: "06:00 PM",
-      status: "Present",
-    },
-    {
-      date: "2024-05-07",
-      checkIn: "09:05 AM",
-      checkOut: "06:05 PM",
-      status: "Present",
-    },
-  ];
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -188,12 +199,12 @@ const MyAttendanceClient = () => {
               {currentRecords.map((record, index) => (
                 <tr key={index}>
                   <td>{indexOfFirstRecord + index + 1}</td>
-                  <td>{record.date}</td>
-                  <td>{record.checkIn}</td>
-                  <td>{record.checkOut}</td>
+                  <td>{new Date(record.timestamp).toLocaleDateString()}</td>
+                  <td>{record.action === 'check-in' ? new Date(record.timestamp).toLocaleTimeString() : '--:--'}</td>
+                  <td>{record.action === 'check-out' ? new Date(record.timestamp).toLocaleTimeString() : '--:--'}</td>
                   <td>
-                    <Badge bg={getStatusBadge(record.status)}>
-                      {record.status}
+                    <Badge bg={getStatusBadge("Present")}>
+                      Present
                     </Badge>
                   </td>
                 </tr>

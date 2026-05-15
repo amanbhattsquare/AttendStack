@@ -1,126 +1,121 @@
-//import node modules libraries
-import { Fragment } from "react";
-import Feedback from "react-bootstrap/Feedback";
-import {
-  Row,
-  Col,
-  Image,
-  Card,
-  CardBody,
-  Form,
-  FormLabel,
-  FormControl,
-  FormCheck,
-  Button,
-} from "react-bootstrap";
-import { Metadata } from "next";
+"use client";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { Container, Row, Col, Card, Form, Button, Alert, Spinner } from "react-bootstrap";
+import axios from "axios";
 import Link from "next/link";
-import {
-  IconBrandFacebookFilled,
-  IconBrandGoogleFilled,
-  IconEyeOff,
-} from "@tabler/icons-react";
 
-//import custom components
-import Flex from "components/common/Flex";
-import { getAssetPath } from "helper/assetPath";
+const SignInPage = () => {
+  const [email, setEmail] = useState("admin@attendstack.com");
+  const [password, setPassword] = useState("admin123");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const router = useRouter();
 
-export const metadata: Metadata = {
-  title: "Sign In | Dasher - Responsive Bootstrap 5 Admin Dashboard",
-  description: "Dasher - Responsive Bootstrap 5 Admin Dashboard",
-};
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
 
-const SignIn = () => {
+    if (!email || !password) {
+      setError("Email and password are required.");
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const response = await axios.post("http://127.0.0.1:8000/api/v1/accounts/login/", {
+        email,
+        password,
+      });
+
+      if (response.data && response.data.access) {
+        localStorage.setItem("authToken", response.data.access);
+        localStorage.setItem("user", JSON.stringify(response.data.user));
+        router.push("/");
+      } else {
+        setError("Login failed. Please check your credentials.");
+      }
+    } catch (err: any) {
+      if (err.response && err.response.data && err.response.data.detail) {
+        setError(err.response.data.detail);
+      } else {
+        setError("An unexpected error occurred. Please try again.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <Fragment>
-      <Row className="mb-8">
-        <Col xl={{ span: 4, offset: 4 }} md={12}>
-          <div className="text-center">
-            <Link
-              href="/"
-              className="fs-2 fw-bold d-flex align-items-center gap-2 justify-content-center mb-6"
-            >
-              <Image src={getAssetPath("/images/brand/logo/logo-icon.svg")} alt="Dasher" />
-              <span>Dasher</span>
-            </Link>
-            <h1 className="mb-1">Welcome Back</h1>
-            <p className="mb-0">
-              Don’t have an account yet?
-              <Link href="#" className="text-primary ms-1">
-                Register here
-              </Link>
-            </p>
-          </div>
-        </Col>
-      </Row>
+    <Container fluid className="vh-100 d-flex align-items-center justify-content-center bg-light">
+      <Row>
+        <Col md={12}>
+          <Card style={{ width: '25rem' }} className="p-4 shadow-sm">
+            <Card.Body>
+              <div className="text-center mb-4">
+                <h2 className="fw-bold">AttendStack</h2>
+                <p className="text-muted">Sign in to your account</p>
+              </div>
+              
+              {error && <Alert variant="danger">{error}</Alert>}
 
-      {/* Form Start */}
-      <Row className="justify-content-center">
-        <Col xl={5} lg={6} md={8}>
-          <Card className="card-lg mb-6">
-            <CardBody className="p-6">
-              <Form className="mb-6">
-                <div className="mb-3">
-                  <FormLabel htmlFor="signinEmailInput">
-                    Email <span className="text-danger">*</span>
-                  </FormLabel>
-                  <FormControl type="email" id="signinEmailInput" />
-                  <Feedback type="invalid">Please enter email.</Feedback>
+              <Form onSubmit={handleSubmit}>
+                <Form.Group className="mb-3" controlId="formBasicEmail">
+                  <Form.Label>Email address</Form.Label>
+                  <Form.Control
+                    type="email"
+                    placeholder="Enter email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                  />
+                </Form.Group>
+
+                <Form.Group className="mb-3" controlId="formBasicPassword">
+                  <Form.Label>Password</Form.Label>
+                  <Form.Control
+                    type="password"
+                    placeholder="Password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                  />
+                </Form.Group>
+
+                <div className="d-flex justify-content-between align-items-center mb-3">
+                  <Form.Check type="checkbox" label="Remember me" />
+                  <Link href="/forgot-password">Forgot password?</Link>
                 </div>
-                <div className="mb-3">
-                  <FormLabel htmlFor="formSignUpPassword">Password</FormLabel>
-                  <div className="password-field position-relative">
-                    <FormControl
-                      type="password"
-                      id="formSignUpPassword"
-                      className="fakePassword"
-                    />
-                    <span>
-                      <IconEyeOff className="passwordToggler" size={16} />
-                    </span>
-                  </div>
-                  <Feedback type="invalid">Please enter password.</Feedback>
-                </div>
-                <Flex
-                  className="mb-4"
-                  alignItems="center"
-                  justifyContent="between"
-                >
-                  <FormCheck label="Remember me" type="checkbox" />
-                  <div>
-                    <Link href="" className="text-primary">
-                      Forgot Password
-                    </Link>
-                  </div>
-                </Flex>
-                <div className="d-grid">
-                  <Button variant="primary" type="button">
-                    Sign In
-                  </Button>
-                </div>
+
+                <Button variant="primary" type="submit" className="w-100" disabled={loading}>
+                  {loading ? (
+                    <>
+                      <Spinner
+                        as="span"
+                        animation="border"
+                        size="sm"
+                        role="status"
+                        aria-hidden="true"
+                      />
+                      <span className="ms-2">Signing In...</span>
+                    </>
+                  ) : (
+                    "Sign In"
+                  )}
+                </Button>
               </Form>
-
-              <span>Sign in with your social network.</span>
-              <Flex justifyContent="between" className="mt-3 d-flex gap-2">
-                <Button href="#" variant="google" className="w-100">
-                  <span className="me-3">
-                    <IconBrandGoogleFilled size={18} />
-                  </span>
-                  Continue with Google
-                </Button>
-                <Button href="#" variant="facebook" className="w-100">
-                  <span className="me-3">
-                    <IconBrandFacebookFilled size={18} />
-                  </span>
-                  Continue with Facebook
-                </Button>
-              </Flex>
-            </CardBody>
+              <div className="text-center mt-3">
+                <p className="text-muted">
+                  Don't have an account? <Link href="/sign-up">Sign up</Link>
+                </p>
+              </div>
+            </Card.Body>
           </Card>
         </Col>
       </Row>
-    </Fragment>
+    </Container>
   );
 };
 
-export default SignIn;
+export default SignInPage;

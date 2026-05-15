@@ -1,309 +1,250 @@
 "use client";
-// import node module libraries
-import {
-  Card,
-  CardBody,
-  CardHeader,
-  Table,
-  Button,
-  Form,
-  Col,
-  Row,
-  Badge,
-  Pagination,
-} from "react-bootstrap";
-import { Fragment, useState, useMemo } from "react";
-import { IconSearch, IconRefresh } from "@tabler/icons-react";
-import Image from "next/image";
-import { v4 as uuid } from "uuid";
 
-// Helper function to generate more realistic dummy data for a full year
-const generateDummyData = () => {
-  const employees = [
-    { name: "Aniruddh Bhatt", employeeId: "EMP001", avatar: "/images/avatar/avatar-1.jpg" },
-    { name: "Jane Smith", employeeId: "EMP002", avatar: "/images/avatar/avatar-2.jpg" },
-    { name: "Peter Jones", employeeId: "EMP003", avatar: "/images/avatar/avatar-3.jpg" },
-    { name: "Maria Garcia", employeeId: "EMP004", avatar: "/images/avatar/avatar-4.jpg" },
-  ];
-  const records = [];
-  const currentYear = new Date().getFullYear();
-  const statuses = ["Present", "Absent", "Half-day", "On Leave", "Paid Leave"];
+import { Fragment, useEffect, useMemo, useState } from "react";
+import { Badge, Button, Card, CardBody, CardHeader, Col, Form, Row, Table } from "react-bootstrap";
+import { IconRefresh } from "@tabler/icons-react";
+import CustomPagination from "components/shared/CustomPagination";
 
-  for (let month = 0; month < 12; month++) {
-    const daysInMonth = new Date(currentYear, month + 1, 0).getDate();
-    for (let day = 1; day <= daysInMonth; day++) {
-      for (const emp of employees) {
-        const date = `${currentYear}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-        const status = statuses[Math.floor(Math.random() * statuses.length)];
-        let clockIn = "-";
-        let clockOut = "-";
-        let totalHours = "-";
-
-        if (status === "Present" || status === "Half-day") {
-          const clockInHour = status === "Present" ? 9 : 10;
-          const clockInTime = new Date(0, 0, 0, clockInHour, Math.floor(Math.random() * 15));
-          clockIn = clockInTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
-
-          const clockOutHour = status === "Present" ? 18 : 14;
-          const clockOutTime = new Date(0, 0, 0, clockOutHour, Math.floor(Math.random() * 15));
-          clockOut = clockOutTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
-          
-          const hours = (clockOutTime.getTime() - clockInTime.getTime()) / (1000 * 60 * 60);
-          totalHours = `${Math.floor(hours)}h ${Math.floor((hours % 1) * 60)}m`;
-        }
-
-        records.push({
-          id: uuid(),
-          date,
-          name: emp.name,
-          employeeId: emp.employeeId,
-          avatar: emp.avatar,
-          clockIn,
-          clockOut,
-          totalHours,
-          status,
-        });
-      }
-    }
-  }
-  return records;
+type AttendanceRecord = {
+  id: number;
+  employee_id: string;
+  employee_name: string;
+  employee_email: string;
+  employee_department: string;
+  employee_avatar_url: string | null;
+  date: string;
+  check_in: string | null;
+  check_out: string | null;
+  total_hours: string | null;
+  status: string;
+  status_label: string;
+  live_status: string;
 };
 
-const allDummyRecords = generateDummyData();
+type AttendanceListResponse = AttendanceRecord[] | {
+  results: AttendanceRecord[];
+};
+
+type EmployeeSummary = {
+  id: string;
+  name: string;
+  email: string;
+  avatar: string | null;
+  present: number;
+  late: number;
+  absent: number;
+  halfDay: number;
+};
+
+const API_URL = "http://127.0.0.1:8000/api/v1/attendance/";
+const recordsPerPage = 20;
+
+const authHeaders = (): HeadersInit => {
+  const token = localStorage.getItem("authToken");
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
+
+const formatDate = (value: string) =>
+  new Intl.DateTimeFormat("en-IN", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(value));
+
+const formatTime = (value?: string | null) =>
+  value ? new Intl.DateTimeFormat("en-IN", { hour: "2-digit", minute: "2-digit" }).format(new Date(value)) : "--";
+
+const getStatusBadge = (status: string) => {
+  switch (status) {
+    case "PRESENT":
+      return "success";
+    case "LATE":
+      return "warning";
+    case "HALF_DAY":
+      return "info";
+    case "ABSENT":
+      return "danger";
+    case "ON_LEAVE":
+      return "secondary";
+    default:
+      return "light";
+  }
+};
+
+const monthOptions = [
+  { value: 1, name: "January" },
+  { value: 2, name: "February" },
+  { value: 3, name: "March" },
+  { value: 4, name: "April" },
+  { value: 5, name: "May" },
+  { value: 6, name: "June" },
+  { value: 7, name: "July" },
+  { value: 8, name: "August" },
+  { value: 9, name: "September" },
+  { value: 10, name: "October" },
+  { value: 11, name: "November" },
+  { value: 12, name: "December" },
+];
 
 const AttendanceRecordsClient = () => {
+  const today = new Date();
+  const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [nameQuery, setNameQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
-  const [selectedDay, setSelectedDay] = useState('All');
+  const [selectedYear, setSelectedYear] = useState(today.getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState(today.getMonth() + 1);
+  const [selectedDay, setSelectedDay] = useState("All");
   const [currentPage, setCurrentPage] = useState(1);
-  const recordsPerPage = 31;
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  const handleResetFilters = () => {
-    setNameQuery("");
-    setStatusFilter("All");
-    setSelectedYear(new Date().getFullYear());
-    setSelectedMonth(new Date().getMonth() + 1);
-    setSelectedDay('All');
-    setCurrentPage(1);
+  const loadRecords = async () => {
+    setIsLoading(true);
+    setError("");
+
+    try {
+      const params = new URLSearchParams({
+        year: String(selectedYear),
+        month: String(selectedMonth),
+      });
+      if (selectedDay !== "All") params.set("day", selectedDay);
+      if (statusFilter !== "All") params.set("status", statusFilter);
+      if (nameQuery.trim()) params.set("search", nameQuery.trim());
+
+      const response = await fetch(`${API_URL}?${params.toString()}`, { headers: authHeaders() });
+      if (!response.ok) throw new Error("Unable to load attendance records.");
+
+      const data = (await response.json()) as AttendanceListResponse;
+      setRecords(Array.isArray(data) ? data : data.results);
+      setCurrentPage(1);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "Unable to load attendance records.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
+  useEffect(() => {
+    loadRecords();
+  }, [selectedYear, selectedMonth, selectedDay, statusFilter]);
 
-
-  // Memoize records for the selected month and year
-  const monthlyRecords = useMemo(() => {
-    return allDummyRecords.filter(record => {
-      const recordDate = new Date(record.date);
-      return recordDate.getFullYear() === selectedYear && recordDate.getMonth() + 1 === selectedMonth;
-    });
-  }, [selectedYear, selectedMonth]);
-
-  // Memoize filtered records for table display
-  const filteredRecords = useMemo(() => {
-    let result = monthlyRecords;
-
-    if (nameQuery) {
-      result = result.filter((record) =>
-        record.name.toLowerCase().includes(nameQuery.toLowerCase()) ||
-        record.employeeId.toLowerCase().includes(nameQuery.toLowerCase())
-      );
-    }
-
-    if (statusFilter !== "All") {
-      result = result.filter((record) => record.status === statusFilter);
-    }
-
-    if (selectedDay !== 'All') {
-      result = result.filter(record => new Date(record.date).getDate() === parseInt(selectedDay));
-    }
-
-    return result;
-  }, [monthlyRecords, nameQuery, statusFilter, selectedDay]);
-
-  // Paginate records
-  const indexOfLastRecord = currentPage * recordsPerPage;
-  const indexOfFirstRecord = indexOfLastRecord - recordsPerPage;
-  const currentRecords = filteredRecords.slice(indexOfFirstRecord, indexOfLastRecord);
-  const totalPages = Math.ceil(filteredRecords.length / recordsPerPage);
-
-
-  // Memoize summary stats for each employee
   const employeeSummary = useMemo(() => {
-    const summary = {};
-    monthlyRecords.forEach(record => {
-      if (!summary[record.employeeId]) {
-        summary[record.employeeId] = {
-          id: record.employeeId,
-          name: record.name,
-          avatar: record.avatar,
+    const summary: Record<string, EmployeeSummary> = {};
+    records.forEach((record) => {
+      if (!summary[record.employee_id]) {
+        summary[record.employee_id] = {
+          id: record.employee_id,
+          name: record.employee_name,
+          email: record.employee_email,
+          avatar: record.employee_avatar_url,
           present: 0,
+          late: 0,
           absent: 0,
           halfDay: 0,
-          onLeave: 0,
-          paidLeave: 0,
         };
       }
-      switch (record.status) {
-        case 'Present':
-          summary[record.employeeId].present++;
-          break;
-        case 'Absent':
-          summary[record.employeeId].absent++;
-          break;
-        case 'Half-day':
-          summary[record.employeeId].halfDay++;
-          break;
-        case 'On Leave':
-          summary[record.employeeId].onLeave++;
-          break;
-        case 'Paid Leave':
-          summary[record.employeeId].paidLeave++;
-          break;
-        default:
-          break;
-      }
+      if (record.status === "PRESENT") summary[record.employee_id].present += 1;
+      if (record.status === "LATE") summary[record.employee_id].late += 1;
+      if (record.status === "ABSENT") summary[record.employee_id].absent += 1;
+      if (record.status === "HALF_DAY") summary[record.employee_id].halfDay += 1;
     });
     return Object.values(summary);
-  }, [monthlyRecords]);
+  }, [records]);
 
-  const getStatusBadge = (status) => {
-    switch (status) {
-      case "Present":
-        return "success";
-      case "Absent":
-        return "danger";
-      case "Half-day":
-        return "warning";
-      case "On Leave":
-        return "info";
-      case "Paid Leave":
-        return "primary";
-      default:
-        return "secondary";
-    }
-  };
+  const currentRecords = useMemo(() => {
+    const first = (currentPage - 1) * recordsPerPage;
+    return records.slice(first, first + recordsPerPage);
+  }, [currentPage, records]);
 
-  const years = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i);
-  const months = [
-    { value: 1, name: 'January' }, { value: 2, name: 'February' }, { value: 3, name: 'March' },
-    { value: 4, name: 'April' }, { value: 5, name: 'May' }, { value: 6, name: 'June' },
-    { value: 7, name: 'July' }, { value: 8, name: 'August' }, { value: 9, name: 'September' },
-    { value: 10, name: 'October' }, { value: 11, name: 'November' }, { value: 12, name: 'December' }
-  ];
-
+  const years = Array.from({ length: 5 }, (_, index) => today.getFullYear() - index);
   const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
-  const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+  const days = Array.from({ length: daysInMonth }, (_, index) => index + 1);
+  const totalPages = Math.ceil(records.length / recordsPerPage);
 
   return (
     <Fragment>
-      <Card className="mb-4">
+      <Card className="border-0 shadow-sm mb-4">
         <CardBody>
-          <Row className="align-items-end">
-            <Col md={2} xs={12} className="mb-2 mb-md-0">
+          <Row className="align-items-end g-3">
+            <Col md={2}>
               <Form.Group controlId="yearFilter">
                 <Form.Label>Year</Form.Label>
-                <Form.Select value={selectedYear} onChange={(e) => setSelectedYear(parseInt(e.target.value))}>
-                  {years.map(year => <option key={year} value={year}>{year}</option>)}
+                <Form.Select value={selectedYear} onChange={(event) => setSelectedYear(Number(event.target.value))}>
+                  {years.map((year) => <option key={year} value={year}>{year}</option>)}
                 </Form.Select>
               </Form.Group>
             </Col>
-            <Col md={2} xs={12} className="mb-2 mb-md-0">
+            <Col md={2}>
               <Form.Group controlId="monthFilter">
                 <Form.Label>Month</Form.Label>
-                <Form.Select value={selectedMonth} onChange={(e) => setSelectedMonth(parseInt(e.target.value))}>
-                  {months.map(month => <option key={month.value} value={month.value}>{month.name}</option>)}
+                <Form.Select value={selectedMonth} onChange={(event) => setSelectedMonth(Number(event.target.value))}>
+                  {monthOptions.map((month) => <option key={month.value} value={month.value}>{month.name}</option>)}
                 </Form.Select>
               </Form.Group>
             </Col>
-            <Col md={2} xs={12} className="mb-2 mb-md-0">
+            <Col md={2}>
               <Form.Group controlId="dayFilter">
                 <Form.Label>Day</Form.Label>
-                <Form.Select value={selectedDay} onChange={(e) => setSelectedDay(e.target.value)}>
+                <Form.Select value={selectedDay} onChange={(event) => setSelectedDay(event.target.value)}>
                   <option value="All">All</option>
-                  {days.map(day => <option key={day} value={day}>{day}</option>)}
+                  {days.map((day) => <option key={day} value={day}>{day}</option>)}
                 </Form.Select>
               </Form.Group>
             </Col>
-            <Col md={3} xs={12} className="mb-2 mb-md-0">
-              <Form.Group controlId="employeeName">
-                <Form.Label>Search by Employee</Form.Label>
-                <Form.Control
-                  type="text"
-                  placeholder="Name or ID"
-                  value={nameQuery}
-                  onChange={(e) => setNameQuery(e.target.value)}
-                />
+            <Col md={3}>
+              <Form.Group controlId="employeeSearch">
+                <Form.Label>Employee</Form.Label>
+                <Form.Control value={nameQuery} onChange={(event) => setNameQuery(event.target.value)} placeholder="Name, ID, or email" />
               </Form.Group>
             </Col>
-            <Col md={2} xs={12} className="mb-2 mb-md-0">
+            <Col md={2}>
               <Form.Group controlId="statusFilter">
-                <Form.Label>Filter by Status</Form.Label>
-                <Form.Select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                >
+                <Form.Label>Status</Form.Label>
+                <Form.Select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
                   <option value="All">All</option>
-                  <option value="Present">Present</option>
-                  <option value="Absent">Absent</option>
-                  <option value="Half-day">Half-day</option>
-                  <option value="On Leave">On Leave</option>
-                  <option value="Paid Leave">Paid Leave</option>
+                  <option value="PRESENT">Present</option>
+                  <option value="LATE">Late Entry</option>
+                  <option value="HALF_DAY">Half-day</option>
+                  <option value="ABSENT">Absent</option>
+                  <option value="ON_LEAVE">On Leave</option>
                 </Form.Select>
               </Form.Group>
             </Col>
-            <Col md={1} xs={12} className="text-end">
-              <Button variant="primary" onClick={handleResetFilters}>
-                <IconRefresh size={20} />
-              </Button>
+            <Col md={1} className="d-grid">
+              <Button variant="primary" onClick={loadRecords}><IconRefresh size={20} /></Button>
             </Col>
           </Row>
         </CardBody>
       </Card>
 
-      <Card className="mb-4">
-        <CardHeader>
-          <h4 className="mb-0">
-            Employee Monthly Summary for {months.find(m => m.value === selectedMonth)?.name} {selectedYear}
-          </h4>
+      <Card className="border-0 shadow-sm mb-4">
+        <CardHeader className="bg-white">
+          <h4 className="mb-0">Monthly Employee Summary</h4>
         </CardHeader>
         <CardBody>
-          <Table hover responsive className="text-nowrap">
+          <Table hover responsive className="text-nowrap align-middle">
             <thead className="table-light">
               <tr>
-                <th>Sr. No.</th>
                 <th>Employee</th>
-                <th className="text-center">Total Present</th>
-                <th className="text-center">Total Absent</th>
+                <th className="text-center">Present</th>
+                <th className="text-center">Late</th>
                 <th className="text-center">Half Days</th>
-                <th className="text-center">On Leave</th>
-                <th className="text-center">Paid Leaves</th>
+                <th className="text-center">Absent</th>
               </tr>
             </thead>
             <tbody>
-              {employeeSummary.map((summary, index) => (
+              {employeeSummary.length === 0 && <tr><td colSpan={5} className="text-center py-4 text-secondary">No summary available for selected filters.</td></tr>}
+              {employeeSummary.map((summary) => (
                 <tr key={summary.id}>
-                  <td>{index + 1}</td>
                   <td>
                     <div className="d-flex align-items-center">
-                      <Image
-                        src={summary.avatar}
-                        alt=""
-                        width={40}
-                        height={40}
-                        className="rounded-circle"
-                      />
-                      <div className="ms-3">
-                        <h5 className="mb-0">{summary.name}</h5>
-                        <span className="text-muted">{summary.id}</span>
+                      <img src={summary.avatar || "/images/avatar/avatar-fallback.jpg"} alt={summary.name} className="avatar avatar-sm rounded-circle me-3" />
+                      <div>
+                        <div className="fw-semibold">{summary.name}</div>
+                        <small className="text-muted">{summary.id} - {summary.email}</small>
                       </div>
                     </div>
                   </td>
                   <td className="text-center">{summary.present}</td>
-                  <td className="text-center">{summary.absent}</td>
+                  <td className="text-center">{summary.late}</td>
                   <td className="text-center">{summary.halfDay}</td>
-                  <td className="text-center">{summary.onLeave}</td>
-                  <td className="text-center">{summary.paidLeave}</td>
+                  <td className="text-center">{summary.absent}</td>
                 </tr>
               ))}
             </tbody>
@@ -311,69 +252,49 @@ const AttendanceRecordsClient = () => {
         </CardBody>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <h4 className="mb-0">
-            Detailed Daily Log for {months.find(m => m.value === selectedMonth)?.name} {selectedYear}
-          </h4>
+      <Card className="border-0 shadow-sm">
+        <CardHeader className="bg-white">
+          <h4 className="mb-0">Detailed Daily Log</h4>
         </CardHeader>
         <CardBody>
-          <Table hover responsive className="text-nowrap">
+          {error && <div className="alert alert-danger">{error}</div>}
+          <Table hover responsive className="text-nowrap align-middle">
             <thead className="table-light">
               <tr>
-                <th>Sr. No.</th>
                 <th>Date</th>
                 <th>Employee</th>
-                <th>Clock In</th>
-                <th>Clock Out</th>
+                <th>Department</th>
+                <th>Check In</th>
+                <th>Check Out</th>
+                <th>Total Hours</th>
                 <th>Status</th>
               </tr>
             </thead>
             <tbody>
-              {currentRecords.map((record, index) => (
+              {isLoading && <tr><td colSpan={7} className="text-center py-4 text-secondary">Loading records...</td></tr>}
+              {!isLoading && currentRecords.length === 0 && <tr><td colSpan={7} className="text-center py-4 text-secondary">No attendance records found.</td></tr>}
+              {!isLoading && currentRecords.map((record) => (
                 <tr key={record.id}>
-                  <td>{indexOfFirstRecord + index + 1}</td>
-                  <td>{new Date(record.date).toLocaleDateString('en-GB')}</td>
+                  <td>{formatDate(record.date)}</td>
                   <td>
                     <div className="d-flex align-items-center">
-                      <Image
-                        src={record.avatar}
-                        alt=""
-                        width={40}
-                        height={40}
-                        className="rounded-circle"
-                      />
-                      <div className="ms-3">
-                        <h5 className="mb-0">{record.name}</h5>
-                        <span className="text-muted">{record.employeeId}</span>
+                      <img src={record.employee_avatar_url || "/images/avatar/avatar-fallback.jpg"} alt={record.employee_name} className="avatar avatar-sm rounded-circle me-3" />
+                      <div>
+                        <div className="fw-semibold">{record.employee_name}</div>
+                        <small className="text-muted">{record.employee_id}</small>
                       </div>
                     </div>
                   </td>
-                  <td>{record.clockIn}</td>
-                  <td>{record.clockOut}</td>
-                  <td>
-                    <Badge
-                      bg={getStatusBadge(record.status)}
-                      className="bg-opacity-10 text-dark"
-                    >
-                      {record.status}
-                    </Badge>
-                  </td>
+                  <td>{record.employee_department}</td>
+                  <td>{formatTime(record.check_in)}</td>
+                  <td>{formatTime(record.check_out)}</td>
+                  <td>{record.total_hours || "-"}</td>
+                  <td><Badge bg={getStatusBadge(record.status)}>{record.status_label}</Badge></td>
                 </tr>
               ))}
             </tbody>
           </Table>
-          <Pagination className="justify-content-end">
-            <Pagination.First onClick={() => setCurrentPage(1)} disabled={currentPage === 1} />
-            <Pagination.Prev onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} disabled={currentPage === 1} />
-            {[...Array(totalPages).keys()].map(number => (
-              <Pagination.Item key={number + 1} active={number + 1 === currentPage} onClick={() => setCurrentPage(number + 1)}>
-                {number + 1}
-              </Pagination.Item>
-            ))}
-            <Pagination.Next onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages} />
-            <Pagination.Last onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages} />
-          </Pagination>
+          <CustomPagination currentPage={currentPage} totalPages={totalPages || 1} onPageChange={setCurrentPage} />
         </CardBody>
       </Card>
     </Fragment>

@@ -29,7 +29,17 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         return super().get_permissions()
 
     def get_queryset(self):
-        queryset = super().get_queryset().annotate(
+        user = self.request.user
+        queryset = super().get_queryset()
+
+        if not user.is_superuser:
+            try:
+                employee = Employee.objects.get(email=user.email)
+                queryset = queryset.filter(organization=employee.organization)
+            except Employee.DoesNotExist:
+                return queryset.none()
+
+        queryset = queryset.annotate(
             account_exists_annotation=Exists(
                 User.objects.filter(email__iexact=OuterRef("email"))
             )
@@ -43,6 +53,17 @@ class EmployeeViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(status=status_filter.upper())
 
         return queryset
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        organization = None
+        if not user.is_superuser:
+            try:
+                employee = Employee.objects.get(email=user.email)
+                organization = employee.organization
+            except Employee.DoesNotExist:
+                pass
+        serializer.save(organization=organization)
 
     @action(detail=False, methods=["get"], url_path="me")
     def me(self, request):

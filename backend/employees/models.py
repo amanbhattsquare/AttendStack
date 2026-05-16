@@ -4,6 +4,9 @@ from django.core.validators import RegexValidator
 from django.db import models
 from django.utils import timezone
 
+from organizations.models import Organization
+
+
 
 class EmployeeStatus(models.TextChoices):
     ACTIVE = "ACTIVE", "Active"
@@ -27,6 +30,9 @@ class PayFrequency(models.TextChoices):
 
 class Employee(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    organization = models.ForeignKey(
+        Organization, on_delete=models.CASCADE, related_name="employees", null=True
+    )
     employee_id = models.CharField(max_length=30, unique=True, db_index=True)
 
     full_name = models.CharField(max_length=150)

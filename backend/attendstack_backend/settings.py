@@ -38,6 +38,7 @@ THIRD_PARTY_APPS = [
 
 LOCAL_APPS = [
     "accounts",
+    "organizations",
     "employees",
     "attendance",
     "holidays",

@@ -2,7 +2,7 @@
 //import node module libraries
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import React, { Fragment } from "react";
+import React, { Fragment, useState, useEffect } from "react";
 import {
   Accordion,
   Badge,
@@ -32,6 +32,15 @@ interface SidebarProps {
 }
 const Sidebar: React.FC<SidebarProps> = ({ hideLogo = false, containerId, currentPath, isEmployee }) => {
   const menuItems = isEmployee ? EmployeeDashboardMenu : DashboardMenu;
+  const [user, setUser] = useState<{ full_name: string; designation: string } | null>(null);
+
+  useEffect(() => {
+    const userData = localStorage.getItem("user");
+    if (userData) {
+      const parsedUser = JSON.parse(userData);
+      setUser(parsedUser);
+    }
+  }, []);
 
 
   //Generate Link
@@ -195,7 +204,8 @@ const Sidebar: React.FC<SidebarProps> = ({ hideLogo = false, containerId, curren
                                                                 currentPath === menuLevel3Item.link
                                                                   ? "active"
                                                                   : ""
-                                                              }`}>
+                                                              }`}
+                                                            >
                                                               {
                                                                 menuLevel3Item.name
                                                               }
@@ -259,13 +269,14 @@ const Sidebar: React.FC<SidebarProps> = ({ hideLogo = false, containerId, curren
               <div>
                 <Avatar
                   type='image'
-                  src={getAssetPath("/images/avatar/avatar-1.jpg")}
+                  src={getAssetPath("/images/brand/logo/logo-icon.svg")}
                   size='md'
                   className='rounded-circle'
                 />
                 <div className='my-3'>
-                  <h5 className='mb-1 fs-6'>Jitu Chauhan</h5>
-                  <span className='text-secondary'>HR Administrator</span>
+                  <h5 className='mb-1 fs-6'>AttendStack</h5>
+                  <span className='d-block text-secondary'>{user ? user.full_name : 'Jitu Chauhan'}</span>
+                  <span className='text-secondary'>{user ? user.designation : 'HR Administrator'}</span>
                 </div>
               </div>
             </div>

@@ -37,7 +37,21 @@ class AttendanceRecordSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
-        read_only_fields = fields
+        read_only_fields = [
+            "id",
+            "employee_uuid",
+            "employee_id",
+            "employee_name",
+            "employee_email",
+            "employee_department",
+            "employee_designation",
+            "employee_avatar_url",
+            "total_hours",
+            "status_label",
+            "live_status",
+            "created_at",
+            "updated_at",
+        ]
 
     def get_employee_avatar_url(self, obj):
         if not obj.employee.profile_photo:

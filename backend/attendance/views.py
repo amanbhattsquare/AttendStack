@@ -9,18 +9,16 @@ from rest_framework.response import Response
 from accounts.permissions import IsAdminOrHR
 from employees.models import Employee, EmployeeStatus
 from .models import AttendanceRecord, AttendanceStatus
+from .permissions import IsAdminOrReadOnly
 from .serializers import AttendanceRecordSerializer, TodayAttendanceSerializer
 
 
-class AttendanceRecordViewSet(viewsets.ReadOnlyModelViewSet):
+class AttendanceRecordViewSet(viewsets.ModelViewSet):
     serializer_class = AttendanceRecordSerializer
-    permission_classes = [IsAdminOrHR]
+    permission_classes = [IsAdminOrReadOnly]
     queryset = AttendanceRecord.objects.select_related("employee").all()
 
-    def get_permissions(self):
-        if self.action in ["me", "me_today", "check_in", "check_out"]:
-            return [IsAuthenticated()]
-        return super().get_permissions()
+
 
     def get_queryset(self):
         queryset = super().get_queryset()

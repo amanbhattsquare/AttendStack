@@ -31,6 +31,11 @@ export default function Home() {
                   Employee Login
                 </Button>
               </Link>
+              <Link href="/admin/sign-in" passHref>
+                <Button variant="outline-light" size="lg" className="px-4">
+                  Administrator Login
+                </Button>
+              </Link>
             </div>
           </div>
         </Col>
@@ -40,9 +45,7 @@ export default function Home() {
           <p className="mb-0">
             &copy; {new Date().getFullYear()} AttendStack. All Rights Reserved.
           </p>
-          <Link href="/admin/sign-in" className="text-white">
-            Administrator Login
-          </Link>
+
         </Container>
       </footer>
     </Container>

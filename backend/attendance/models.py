@@ -77,7 +77,7 @@ class AttendanceRecord(models.Model):
             return
 
         local_check_in = timezone.localtime(self.check_in)
-        late_cutoff = local_check_in.replace(hour=9, minute=30, second=0, microsecond=0)
+        late_cutoff = local_check_in.replace(hour=10, minute=0, second=0, microsecond=0)
         self.status = AttendanceStatus.LATE if local_check_in > late_cutoff else AttendanceStatus.PRESENT
 
         if self.check_out and self.total_duration and self.total_duration < timedelta(hours=4):

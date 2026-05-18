@@ -87,10 +87,21 @@ const AttendanceRecordsClient = () => {
   const today = new Date();
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [nameQuery, setNameQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
+  const [filterMode, setFilterMode] = useState<"month" | "range">("month");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [selectedYear, setSelectedYear] = useState(today.getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(today.getMonth() + 1);
   const [selectedDay, setSelectedDay] = useState("All");
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(nameQuery);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [nameQuery]);
   const [currentPage, setCurrentPage] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
@@ -202,13 +213,17 @@ const AttendanceRecordsClient = () => {
     setError("");
 
     try {
-      const params = new URLSearchParams({
-        year: String(selectedYear),
-        month: String(selectedMonth),
-      });
-      if (selectedDay !== "All") params.set("day", selectedDay);
+      const params = new URLSearchParams();
+      if (filterMode === "month") {
+        params.set("year", String(selectedYear));
+        params.set("month", String(selectedMonth));
+        if (selectedDay !== "All") params.set("day", selectedDay);
+      } else {
+        if (startDate) params.set("date_from", startDate);
+        if (endDate) params.set("date_to", endDate);
+      }
       if (statusFilter !== "All") params.set("status", statusFilter);
-      if (nameQuery.trim()) params.set("search", nameQuery.trim());
+      if (debouncedSearch.trim()) params.set("search", debouncedSearch.trim());
 
       const response = await fetch(`${API_URL}?${params.toString()}`, { headers: authHeaders() });
       if (!response.ok) throw new Error("Unable to load attendance records.");
@@ -225,7 +240,7 @@ const AttendanceRecordsClient = () => {
 
   useEffect(() => {
     loadRecords();
-  }, [selectedYear, selectedMonth, selectedDay, statusFilter]);
+  }, [selectedYear, selectedMonth, selectedDay, statusFilter, debouncedSearch, filterMode, startDate, endDate]);
 
   const employeeSummary = useMemo(() => {
     const summary: Record<string, EmployeeSummary> = {};
@@ -275,32 +290,70 @@ const AttendanceRecordsClient = () => {
     <Fragment>
       <Card className="border-0 shadow-sm mb-4">
         <CardBody>
+          <div className="d-flex justify-content-between align-items-center mb-3">
+            <h5 className="mb-0 text-muted small text-uppercase fw-bold">Filter Options</h5>
+            <div className="btn-group btn-group-sm shadow-sm" role="group">
+              <button 
+                type="button" 
+                className={`btn btn-outline-primary px-3 ${filterMode === "month" ? "active" : ""}`}
+                onClick={() => setFilterMode("month")}
+              >
+                Month View
+              </button>
+              <button 
+                type="button" 
+                className={`btn btn-outline-primary px-3 ${filterMode === "range" ? "active" : ""}`}
+                onClick={() => setFilterMode("range")}
+              >
+                Custom Range
+              </button>
+            </div>
+          </div>
           <Row className="align-items-end g-3">
-            <Col md={2}>
-              <Form.Group controlId="yearFilter">
-                <Form.Label>Year</Form.Label>
-                <Form.Select value={selectedYear} onChange={(event) => setSelectedYear(Number(event.target.value))}>
-                  {years.map((year) => <option key={year} value={year}>{year}</option>)}
-                </Form.Select>
-              </Form.Group>
-            </Col>
-            <Col md={2}>
-              <Form.Group controlId="monthFilter">
-                <Form.Label>Month</Form.Label>
-                <Form.Select value={selectedMonth} onChange={(event) => setSelectedMonth(Number(event.target.value))}>
-                  {monthOptions.map((month) => <option key={month.value} value={month.value}>{month.name}</option>)}
-                </Form.Select>
-              </Form.Group>
-            </Col>
-            <Col md={2}>
-              <Form.Group controlId="dayFilter">
-                <Form.Label>Day</Form.Label>
-                <Form.Select value={selectedDay} onChange={(event) => setSelectedDay(event.target.value)}>
-                  <option value="All">All</option>
-                  {days.map((day) => <option key={day} value={day}>{day}</option>)}
-                </Form.Select>
-              </Form.Group>
-            </Col>
+            {filterMode === "month" ? (
+              <Fragment>
+                <Col md={2}>
+                  <Form.Group controlId="yearFilter">
+                    <Form.Label>Year</Form.Label>
+                    <Form.Select value={selectedYear} onChange={(event) => setSelectedYear(Number(event.target.value))}>
+                      {years.map((year) => <option key={year} value={year}>{year}</option>)}
+                    </Form.Select>
+                  </Form.Group>
+                </Col>
+                <Col md={2}>
+                  <Form.Group controlId="monthFilter">
+                    <Form.Label>Month</Form.Label>
+                    <Form.Select value={selectedMonth} onChange={(event) => setSelectedMonth(Number(event.target.value))}>
+                      {monthOptions.map((month) => <option key={month.value} value={month.value}>{month.name}</option>)}
+                    </Form.Select>
+                  </Form.Group>
+                </Col>
+                <Col md={2}>
+                  <Form.Group controlId="dayFilter">
+                    <Form.Label>Day</Form.Label>
+                    <Form.Select value={selectedDay} onChange={(event) => setSelectedDay(event.target.value)}>
+                      <option value="All">All</option>
+                      {days.map((day) => <option key={day} value={day}>{day}</option>)}
+                    </Form.Select>
+                  </Form.Group>
+                </Col>
+              </Fragment>
+            ) : (
+              <Fragment>
+                <Col md={3}>
+                  <Form.Group controlId="startDateFilter">
+                    <Form.Label>Start Date</Form.Label>
+                    <Form.Control type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
+                  </Form.Group>
+                </Col>
+                <Col md={3}>
+                  <Form.Group controlId="endDateFilter">
+                    <Form.Label>End Date</Form.Label>
+                    <Form.Control type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
+                  </Form.Group>
+                </Col>
+              </Fragment>
+            )}
             <Col md={3}>
               <Form.Group controlId="employeeSearch">
                 <Form.Label>Employee</Form.Label>
@@ -464,7 +517,7 @@ const AttendanceRecordsClient = () => {
               </Form.Group>
               <Form.Group className="mb-3" controlId="formCheckIn">
                 <Form.Label>Check In</Form.Label>
-                <Form.Control name="checkin" type="time" defaultValue="09:00" />
+                <Form.Control name="checkin" type="time" defaultValue="10:00" />
               </Form.Group>
               <Form.Group className="mb-3" controlId="formCheckOut">
                 <Form.Label>Check Out</Form.Label>

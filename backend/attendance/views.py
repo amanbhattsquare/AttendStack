@@ -102,7 +102,7 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
     def today(self, request):
         today = timezone.localdate()
         records = {
-            record.employee_id: record
+            record.employee.id: record
             for record in AttendanceRecord.objects.select_related("employee").filter(date=today)
         }
         employees = Employee.objects.filter(status=EmployeeStatus.ACTIVE).order_by("full_name")

@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useState } from "react";
-import { Badge, Button, Card, CardBody, Col, Form, Row, Table } from "react-bootstrap";
+import { Badge, Button, Card, CardBody, Col, Form, Row, Table, Modal } from "react-bootstrap";
 import { IconRefresh, IconUserCheck, IconUserExclamation, IconUserOff, IconUsers } from "@tabler/icons-react";
 import DashboardStats from "components/dashboard/DashboardStats";
 
@@ -20,9 +20,11 @@ type TodayAttendance = {
   status: string;
   status_label: string;
   live_status: string;
+  record_id: number | null;
 };
 
 const API_URL = "http://127.0.0.1:8000/api/v1/attendance/today/";
+const BASE_API_URL = "http://127.0.0.1:8000/api/v1/attendance/";
 
 const authHeaders = (): HeadersInit => {
   const token = localStorage.getItem("authToken");
@@ -53,6 +55,7 @@ const TodaysAttendanceClient = () => {
   const [statusFilter, setStatusFilter] = useState("All");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
+  const [editingRecord, setEditingRecord] = useState<TodayAttendance | null>(null);
 
   const loadToday = async () => {
     setIsLoading(true);
@@ -72,6 +75,47 @@ const TodaysAttendanceClient = () => {
   useEffect(() => {
     loadToday();
   }, []);
+
+  const handleSaveChanges = async (updated: { check_in: string | null; check_out: string | null; status: string }) => {
+    if (!editingRecord) return;
+    setError("");
+    try {
+      const isNew = !editingRecord.record_id;
+      const url = isNew ? BASE_API_URL : `${BASE_API_URL}${editingRecord.record_id}/`;
+      const method = isNew ? "POST" : "PATCH";
+      const body = isNew ? {
+        employee: editingRecord.employee_uuid,
+        date: editingRecord.date,
+        check_in: updated.check_in,
+        check_out: updated.check_out,
+        status: updated.status,
+      } : {
+        check_in: updated.check_in,
+        check_out: updated.check_out,
+        status: updated.status,
+      };
+
+      const response = await fetch(url, {
+        method,
+        headers: {
+          ...authHeaders(),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok) {
+        const errData = await response.json();
+        const errMsg = errData.detail || Object.values(errData).flat().join(" ") || "Failed to save changes.";
+        throw new Error(errMsg);
+      }
+
+      setEditingRecord(null);
+      loadToday();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "An unknown error occurred.");
+    }
+  };
 
   const summaryStats = useMemo(() => {
     const total = records.length;
@@ -149,7 +193,7 @@ const TodaysAttendanceClient = () => {
                 <th>Status</th>
                 <th>Check In</th>
                 <th>Check Out</th>
-                <th>Total Hours</th>
+                <th className="text-end">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -170,13 +214,74 @@ const TodaysAttendanceClient = () => {
                   <td><Badge bg={badgeClass(record.live_status)}>{record.live_status}</Badge></td>
                   <td>{formatTime(record.check_in)}</td>
                   <td>{formatTime(record.check_out)}</td>
-                  <td>{record.total_hours || "-"}</td>
+                  <td className="text-end">
+                    <Button variant="outline-primary" size="sm" onClick={() => setEditingRecord(record)}>
+                      Edit
+                    </Button>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </Table>
         </CardBody>
       </Card>
+
+      {editingRecord && (
+        <Modal show={!!editingRecord} onHide={() => setEditingRecord(null)}>
+          <Modal.Header closeButton>
+            <Modal.Title>Edit Attendance – {editingRecord.employee_name}</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            <Form id="edit-today-attendance-form">
+              <Form.Group className="mb-3" controlId="formCheckIn">
+                <Form.Label>Check In</Form.Label>
+                <Form.Control 
+                  name="checkin" 
+                  type="time" 
+                  defaultValue={editingRecord.check_in ? new Date(editingRecord.check_in).toTimeString().slice(0, 5) : "10:00"} 
+                />
+              </Form.Group>
+              <Form.Group className="mb-3" controlId="formCheckOut">
+                <Form.Label>Check Out</Form.Label>
+                <Form.Control 
+                  name="checkout" 
+                  type="time" 
+                  defaultValue={editingRecord.check_out ? new Date(editingRecord.check_out).toTimeString().slice(0, 5) : "18:00"} 
+                />
+              </Form.Group>
+              <Form.Group className="mb-3" controlId="formStatus">
+                <Form.Label>Status</Form.Label>
+                <Form.Select name="status" defaultValue={editingRecord.status || "PRESENT"}>
+                  <option value="PRESENT">Present</option>
+                  <option value="LATE">Late Entry</option>
+                  <option value="HALF_DAY">Half-day</option>
+                  <option value="ABSENT">Absent</option>
+                  <option value="ON_LEAVE">On Leave</option>
+                </Form.Select>
+              </Form.Group>
+            </Form>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button variant="secondary" onClick={() => setEditingRecord(null)}>
+              Close
+            </Button>
+            <Button variant="primary" onClick={() => {
+              const form = document.querySelector("#edit-today-attendance-form") as HTMLFormElement;
+              const checkInInput = form.elements.namedItem("checkin") as HTMLInputElement;
+              const checkOutInput = form.elements.namedItem("checkout") as HTMLInputElement;
+              const statusSelect = form.elements.namedItem("status") as HTMLSelectElement;
+
+              handleSaveChanges({
+                check_in: checkInInput?.value || null,
+                check_out: checkOutInput?.value || null,
+                status: statusSelect?.value || "PRESENT",
+              });
+            }}>
+              Save Changes
+            </Button>
+          </Modal.Footer>
+        </Modal>
+      )}
     </Fragment>
   );
 };

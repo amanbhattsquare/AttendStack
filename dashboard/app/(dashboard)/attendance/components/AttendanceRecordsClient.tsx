@@ -5,6 +5,7 @@ import { Badge, Button, Card, CardBody, CardHeader, Col, Form, Modal, Row, Table
 import { IconCalendar, IconList, IconPencil, IconRefresh, IconTrash } from "@tabler/icons-react";
 import CustomPagination from "components/shared/CustomPagination";
 import AttendanceCalendar from "./AttendanceCalendar";
+import Swal from "sweetalert2";
 
 type AttendanceRecord = {
   id: number;
@@ -553,11 +554,21 @@ const AttendanceRecordsClient = () => {
               const notesInput = form.elements.namedItem("notes") as HTMLTextAreaElement;
 
               if (!employeeSelect.value) {
-                alert("Please select an employee.");
+                Swal.fire({
+                  title: "Required Field",
+                  text: "Please select an employee.",
+                  icon: "warning",
+                  confirmButtonColor: "#ffc107",
+                });
                 return;
               }
               if (!dateInput.value) {
-                alert("Please select a date.");
+                Swal.fire({
+                  title: "Required Field",
+                  text: "Please select a date.",
+                  icon: "warning",
+                  confirmButtonColor: "#ffc107",
+                });
                 return;
               }
 

@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import Swal from "sweetalert2";
 import {
   IconDotsVertical,
   IconEdit,
@@ -104,8 +105,17 @@ const EmployeePageClient = () => {
   };
 
   const handleDelete = async (employeeId: string) => {
-    const shouldDelete = window.confirm("Delete this employee record?");
-    if (!shouldDelete) return;
+    const result = await Swal.fire({
+      title: "Delete Employee?",
+      text: "Are you sure you want to permanently delete this employee record?",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#dc3545",
+      cancelButtonColor: "#6c757d",
+      confirmButtonText: "Yes, Delete It",
+      cancelButtonText: "Cancel",
+    });
+    if (!result.isConfirmed) return;
 
     try {
       setError("");
@@ -122,9 +132,20 @@ const EmployeePageClient = () => {
       }
 
       setEmployees((prev) => prev.filter((employee) => employee.id !== employeeId));
-      setSuccessMessage("Employee deleted successfully.");
+      Swal.fire({
+        title: "Deleted!",
+        text: "Employee deleted successfully.",
+        icon: "success",
+        timer: 1500,
+        showConfirmButton: false,
+      });
     } catch (deleteError) {
-      setError(deleteError instanceof Error ? deleteError.message : "Unable to delete employee.");
+      Swal.fire({
+        title: "Delete Failed",
+        text: deleteError instanceof Error ? deleteError.message : "Unable to delete employee.",
+        icon: "error",
+        confirmButtonColor: "#dc3545",
+      });
     } finally {
       setActionLoadingKey(null);
     }
@@ -140,8 +161,17 @@ const EmployeePageClient = () => {
   const handlePasswordAction = async (employee: Employee, action: "create-password" | "reset-password") => {
     const isReset = action === "reset-password";
     if (isReset) {
-      const shouldReset = window.confirm(`Reset password for ${employee.full_name}?`);
-      if (!shouldReset) return;
+      const confirmReset = await Swal.fire({
+        title: "Confirm Password Reset",
+        text: `Are you sure you want to reset the password for ${employee.full_name}?`,
+        icon: "question",
+        showCancelButton: true,
+        confirmButtonColor: "#3085d6",
+        cancelButtonColor: "#6c757d",
+        confirmButtonText: "Yes, Reset It",
+        cancelButtonText: "Cancel",
+      });
+      if (!confirmReset.isConfirmed) return;
     }
 
     try {
@@ -163,14 +193,24 @@ const EmployeePageClient = () => {
 
       const data = (await response.json()) as PasswordActionResponse;
       setPasswordResult(data);
-      setSuccessMessage(data.detail);
+      Swal.fire({
+        title: "Success",
+        text: data.detail,
+        icon: "success",
+        confirmButtonColor: "#198754",
+      });
       setEmployees((prev) =>
         prev.map((item) =>
           item.id === employee.id ? { ...item, account_exists: true } : item
         )
       );
     } catch (passwordError) {
-      setError(passwordError instanceof Error ? passwordError.message : "Unable to complete password action.");
+      Swal.fire({
+        title: "Action Failed",
+        text: passwordError instanceof Error ? passwordError.message : "Unable to complete password action.",
+        icon: "error",
+        confirmButtonColor: "#dc3545",
+      });
     } finally {
       setActionLoadingKey(null);
     }

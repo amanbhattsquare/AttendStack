@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { Container, Row, Col, Card, Form, Button, InputGroup } from 'react-bootstrap';
 import { useRouter } from 'next/navigation';
+import Swal from 'sweetalert2';
 
 const AddOrganizationPage = () => {
   const router = useRouter();
@@ -37,15 +38,26 @@ const AddOrganizationPage = () => {
   const handleCreateOrganization = (e: React.FormEvent) => {
     e.preventDefault();
     if (newOrg.adminPassword !== newOrg.confirmPassword) {
-      alert("Passwords do not match!");
+      Swal.fire({
+        title: "Validation Error",
+        text: "Passwords do not match!",
+        icon: "warning",
+        confirmButtonColor: "#ffc107",
+      });
       return;
     }
     // Add logic to send data to the backend API
     console.log('Creating new industry-ready organization:', newOrg);
     
     // After successful creation, redirect to the organizations list
-    alert('Organization created successfully! (Check console for data)');
-    router.push('/admin/organizations');
+    Swal.fire({
+      title: "Created Successfully",
+      text: "Organization created successfully!",
+      icon: "success",
+      confirmButtonColor: "#198754",
+    }).then(() => {
+      router.push('/admin/organizations');
+    });
   };
 
   return (

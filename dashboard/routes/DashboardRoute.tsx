@@ -22,25 +22,61 @@ import { MenuItemType } from "types/menuTypes";
 export const DashboardMenu: MenuItemType[] = [
   {
     id: uuid(),
-    title: "Dashboard",
-    link: "/admin",
+    title: "Admin Dashboard",
+    link: "/admin/dashboard",
     icon: <IconLayoutDashboard size={20} strokeWidth={1.5} />,
   },
   {
     id: uuid(),
-    title: "Organizations",
-    link: "/admin/organizations",
+    title: "HR MANAGEMENT",
+    grouptitle: true,
+  },
+  {
+    id: uuid(),
+    title: "Employees",
+    link: "/employees",
     icon: <IconUsers size={20} strokeWidth={1.5} />,
   },
   {
     id: uuid(),
-    title: "System",
+    title: "Attendance",
+    icon: <IconCalendarEvent size={20} strokeWidth={1.5} />,
+    children: [
+      {
+        id: uuid(),
+        title: "Today's Attendance",
+        link: "/attendance/today-attendance",
+        icon: <IconCircleCheck size={20} strokeWidth={1.5} />,
+      },
+      {
+        id: uuid(),
+        title: "Attendance Records",
+        link: "/attendance/records",
+        icon: <IconListDetails size={20} strokeWidth={1.5} />,
+      },
+    ],
+  },
+  {
+    id: uuid(),
+    title: "Holidays",
+    link: "/holidays",
+    icon: <IconBeach size={20} strokeWidth={1.5} />,
+  },
+  {
+    id: uuid(),
+    title: "Salary & Payroll",
+    link: "/salary",
+    icon: <IconCoin size={20} strokeWidth={1.5} />,
+  },
+  {
+    id: uuid(),
+    title: "SYSTEM",
     grouptitle: true,
   },
   {
     id: uuid(),
     title: "Logout",
-    link: "/admin/login",
+    link: "/sign-in",
     icon: <IconLogout size={20} strokeWidth={1.5} />,
     logout: true,
   },

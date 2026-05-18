@@ -1,8 +1,8 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useState } from "react";
-import { Badge, Button, Card, CardBody, CardHeader, Col, Form, Row, Table } from "react-bootstrap";
-import { IconRefresh } from "@tabler/icons-react";
+import { Badge, Button, Card, CardBody, CardHeader, Col, Form, Modal, Row, Table } from "react-bootstrap";
+import { IconPencil, IconRefresh, IconTrash } from "@tabler/icons-react";
 import CustomPagination from "components/shared/CustomPagination";
 
 type AttendanceRecord = {
@@ -93,6 +93,64 @@ const AttendanceRecordsClient = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
+  const [editingRecord, setEditingRecord] = useState<AttendanceRecord | null>(null);
+  const [deletingRecord, setDeletingRecord] = useState<AttendanceRecord | null>(null);
+
+  const handleUpdateRecord = async (updatedRecord: AttendanceRecord) => {
+    try {
+      const response = await fetch(`${API_URL}${updatedRecord.id}/`, {
+        method: "PUT",
+        headers: {
+          ...authHeaders(),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(updatedRecord),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to update the record.");
+      }
+
+      setEditingRecord(null);
+      loadRecords();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "An unknown error occurred.");
+    }
+  };
+
+  const handleSaveChanges = () => {
+    if (!editingRecord) return;
+
+    const form = document.querySelector("#edit-attendance-form") as HTMLFormElement;
+    const updatedRecord: AttendanceRecord = {
+      ...editingRecord,
+      check_in: form.checkin.value,
+      check_out: form.checkout.value,
+      status: form.status.value,
+    };
+
+    handleUpdateRecord(updatedRecord);
+  };
+
+  const handleDeleteRecord = async () => {
+    if (!deletingRecord) return;
+
+    try {
+      const response = await fetch(`${API_URL}${deletingRecord.id}/`, {
+        method: "DELETE",
+        headers: authHeaders(),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to delete the record.");
+      }
+
+      setDeletingRecord(null);
+      loadRecords();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "An unknown error occurred.");
+    }
+  };
 
   const loadRecords = async () => {
     setIsLoading(true);
@@ -253,8 +311,9 @@ const AttendanceRecordsClient = () => {
       </Card>
 
       <Card className="border-0 shadow-sm">
-        <CardHeader className="bg-white">
+        <CardHeader className="bg-white d-flex justify-content-between align-items-center">
           <h4 className="mb-0">Detailed Daily Log</h4>
+          <Button variant="primary" size="sm">Mark Attendance</Button>
         </CardHeader>
         <CardBody>
           {error && <div className="alert alert-danger">{error}</div>}
@@ -266,13 +325,13 @@ const AttendanceRecordsClient = () => {
                 <th>Department</th>
                 <th>Check In</th>
                 <th>Check Out</th>
-                <th>Total Hours</th>
                 <th>Status</th>
+                <th className="text-end">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {isLoading && <tr><td colSpan={7} className="text-center py-4 text-secondary">Loading records...</td></tr>}
-              {!isLoading && currentRecords.length === 0 && <tr><td colSpan={7} className="text-center py-4 text-secondary">No attendance records found.</td></tr>}
+              {isLoading && <tr><td colSpan={8} className="text-center py-4 text-secondary">Loading records...</td></tr>}
+              {!isLoading && currentRecords.length === 0 && <tr><td colSpan={8} className="text-center py-4 text-secondary">No attendance records found.</td></tr>}
               {!isLoading && currentRecords.map((record) => (
                 <tr key={record.id}>
                   <td>{formatDate(record.date)}</td>
@@ -288,8 +347,15 @@ const AttendanceRecordsClient = () => {
                   <td>{record.employee_department}</td>
                   <td>{formatTime(record.check_in)}</td>
                   <td>{formatTime(record.check_out)}</td>
-                  <td>{record.total_hours || "-"}</td>
                   <td><Badge bg={getStatusBadge(record.status)}>{record.status_label}</Badge></td>
+                  <td className="text-end">
+                    <Button variant="white" size="sm" className="btn-icon" onClick={() => setEditingRecord(record)}>
+                      <IconPencil size={16} />
+                    </Button>
+                    <Button variant="white" size="sm" className="btn-icon" onClick={() => setDeletingRecord(record)}>
+                      <IconTrash size={16} />
+                    </Button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -297,6 +363,63 @@ const AttendanceRecordsClient = () => {
           <CustomPagination currentPage={currentPage} totalPages={totalPages || 1} onPageChange={setCurrentPage} />
         </CardBody>
       </Card>
+
+      {editingRecord && (
+        <Modal show={!!editingRecord} onHide={() => setEditingRecord(null)}>
+          <Modal.Header closeButton>
+            <Modal.Title>Edit Attendance</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            <Form id="edit-attendance-form">
+              <Form.Group className="mb-3" controlId="formCheckIn">
+                <Form.Label>Check In</Form.Label>
+                <Form.Control name="checkin" type="time" defaultValue={editingRecord.check_in ? new Date(editingRecord.check_in).toTimeString().slice(0, 5) : ""} />
+              </Form.Group>
+              <Form.Group className="mb-3" controlId="formCheckOut">
+                <Form.Label>Check Out</Form.Label>
+                <Form.Control name="checkout" type="time" defaultValue={editingRecord.check_out ? new Date(editingRecord.check_out).toTimeString().slice(0, 5) : ""} />
+              </Form.Group>
+              <Form.Group className="mb-3" controlId="formStatus">
+                <Form.Label>Status</Form.Label>
+                <Form.Select name="status" defaultValue={editingRecord.status}>
+                  <option value="PRESENT">Present</option>
+                  <option value="LATE">Late Entry</option>
+                  <option value="HALF_DAY">Half-day</option>
+                  <option value="ABSENT">Absent</option>
+                  <option value="ON_LEAVE">On Leave</option>
+                </Form.Select>
+              </Form.Group>
+            </Form>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button variant="secondary" onClick={() => setEditingRecord(null)}>
+              Close
+            </Button>
+            <Button variant="primary" onClick={handleSaveChanges}>
+              Save Changes
+            </Button>
+          </Modal.Footer>
+        </Modal>
+      )}
+
+      {deletingRecord && (
+        <Modal show={!!deletingRecord} onHide={() => setDeletingRecord(null)}>
+          <Modal.Header closeButton>
+            <Modal.Title>Delete Attendance</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            <p>Are you sure you want to delete this attendance record?</p>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button variant="secondary" onClick={() => setDeletingRecord(null)}>
+              Cancel
+            </Button>
+            <Button variant="danger" onClick={handleDeleteRecord}>
+              Delete
+            </Button>
+          </Modal.Footer>
+        </Modal>
+      )}
     </Fragment>
   );
 };

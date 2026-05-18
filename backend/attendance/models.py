@@ -82,3 +82,7 @@ class AttendanceRecord(models.Model):
 
         if self.check_out and self.total_duration and self.total_duration < timedelta(hours=4):
             self.status = AttendanceStatus.HALF_DAY
+
+    def save(self, *args, **kwargs):
+        self.refresh_status()
+        super().save(*args, **kwargs)

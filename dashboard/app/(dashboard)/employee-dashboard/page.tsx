@@ -10,8 +10,13 @@ import {
   IconPhone,
   IconUser,
   IconWallet,
+  IconBuilding,
+  IconBriefcase,
+  IconClock,
+  IconShield,
 } from "@tabler/icons-react";
 import { useCurrentEmployee } from "./useCurrentEmployee";
+import { Spinner, Alert, Badge } from "react-bootstrap";
 
 const formatDate = (value?: string | null) => {
   if (!value) return "Not provided";
@@ -22,7 +27,7 @@ const formatDate = (value?: string | null) => {
   }).format(new Date(value));
 };
 
-const formatCurrency = (value?: string | null) => {
+const formatCurrency = (value?: string | number | null) => {
   if (!value) return "Not provided";
   return new Intl.NumberFormat("en-IN", {
     style: "currency",
@@ -34,33 +39,43 @@ const formatCurrency = (value?: string | null) => {
 const quickActions = [
   {
     title: "My Profile",
-    text: "View your personal, job, and bank details.",
+    text: "Review personal details, bank records, and official documents.",
     href: "/employee-dashboard/profile",
-    icon: <IconUser size={22} />,
+    icon: <IconUser size={24} />,
+    color: "#4f46e5", // Indigo
+    bgColor: "#eeebff",
   },
   {
-    title: "My Attendance",
-    text: "Mark or review your attendance activity.",
+    title: "Clock-In & Attendance",
+    text: "Mark your daily presence, log lunch breaks, and review live logs.",
     href: "/employee-dashboard/attendance",
-    icon: <IconFingerprint size={22} />,
+    icon: <IconFingerprint size={24} />,
+    color: "#0ea5e9", // Sky
+    bgColor: "#e0f2fe",
   },
   {
-    title: "Attendance Report",
-    text: "Check monthly summaries and status.",
+    title: "Monthly Reports",
+    text: "Track your working hours, check-in averages, and present ratios.",
     href: "/employee-dashboard/attendance-report",
-    icon: <IconChartBar size={22} />,
+    icon: <IconChartBar size={24} />,
+    color: "#10b981", // Emerald
+    bgColor: "#ecfdf5",
   },
   {
-    title: "My Salary",
-    text: "View payroll and salary information.",
+    title: "My Paychecks",
+    text: "Download print-ready monthly payslips and inspect salary breakdowns.",
     href: "/employee-dashboard/salary",
-    icon: <IconWallet size={22} />,
+    icon: <IconWallet size={24} />,
+    color: "#f59e0b", // Amber
+    bgColor: "#fef3c7",
   },
   {
-    title: "Holidays",
-    text: "See upcoming company holidays.",
+    title: "Holiday Calendar",
+    text: "Browse upcoming company holidays and festival calendars.",
     href: "/employee-dashboard/holidays",
-    icon: <IconBeach size={22} />,
+    icon: <IconBeach size={24} />,
+    color: "#ec4899", // Pink
+    bgColor: "#fdf2f8",
   },
 ];
 
@@ -68,127 +83,269 @@ const EmployeeDashboard = () => {
   const { employee, isLoading, error } = useCurrentEmployee();
 
   if (isLoading) {
-    return <div className="card border-0 shadow-sm"><div className="card-body py-5 text-center text-secondary">Loading your dashboard...</div></div>;
+    return (
+      <div className="d-flex justify-content-center align-items-center py-6 min-vh-50">
+        <div className="text-center">
+          <Spinner animation="border" variant="primary" role="status" className="mb-3">
+            <span className="visually-hidden">Loading Dashboard...</span>
+          </Spinner>
+          <p className="text-secondary">Assembling your personal workspace...</p>
+        </div>
+      </div>
+    );
   }
 
   if (error || !employee) {
-    return <div className="alert alert-danger">{error || "Unable to load your dashboard."}</div>;
+    return (
+      <Alert variant="danger" className="border-0 shadow-sm p-4">
+        <h5 className="fw-bold mb-2">Workspace Unreachable</h5>
+        <p className="mb-0">{error || "Unable to fetch your personal employee credentials. Please log in again."}</p>
+      </Alert>
+    );
   }
 
+  const monthlySalary = Number(employee.annual_salary) / 12;
+
   return (
-    <div>
-      <div className="employee-self-hero mb-4">
-        <div className="d-flex flex-column flex-lg-row align-items-lg-center gap-4">
-          <img
-            src={employee.profile_photo_url || "/images/avatar/avatar-fallback.jpg"}
-            alt={employee.full_name}
-            className="employee-self-avatar"
-          />
-          <div className="flex-grow-1">
-            <div className="d-flex flex-wrap align-items-center gap-2 mb-2">
-              <h2 className="mb-0">Welcome, {employee.full_name}</h2>
-              <span className="badge bg-success-subtle text-success">{employee.status_label}</span>
+    <div className="employee-dashboard-container py-3">
+      {/* Welcome Hero Banner */}
+      <div className="card border-0 shadow-sm mb-5 overflow-hidden position-relative welcome-hero-card">
+        <div className="radial-glow"></div>
+        <div className="card-body p-4 p-lg-5 position-relative">
+          <div className="d-flex flex-column flex-lg-row align-items-lg-center gap-4">
+            <div className="avatar-wrapper position-relative">
+              <img
+                src={employee.profile_photo_url || "/images/avatar/avatar-fallback.jpg"}
+                alt={employee.full_name}
+                className="rounded-circle border border-4 border-white shadow-sm employee-avatar"
+              />
+              <span className={`status-dot ${employee.status === "ACTIVE" ? "bg-success" : "bg-warning"}`}></span>
             </div>
-            <p className="text-secondary mb-3">{employee.designation} - {employee.department}</p>
-            <div className="d-flex flex-wrap gap-3 text-secondary small">
-              <span className="d-inline-flex align-items-center gap-1"><IconMail size={16} /> {employee.email}</span>
-              <span className="d-inline-flex align-items-center gap-1"><IconPhone size={16} /> {employee.phone}</span>
-              <span className="d-inline-flex align-items-center gap-1"><IconCalendarCheck size={16} /> Joined {formatDate(employee.joining_date)}</span>
+            <div className="flex-grow-1 text-white-container">
+              <div className="d-flex flex-wrap align-items-center gap-2 mb-2">
+                <h1 className="fw-bold mb-0 text-dark heading-welcome">Welcome back, {employee.full_name.split(" ")[0]}!</h1>
+                <Badge bg="success" className="px-3 py-2 bg-success-subtle text-success border border-success-subtle font-monospace rounded-pill">
+                  {employee.status_label}
+                </Badge>
+              </div>
+              <p className="text-secondary fw-medium mb-3 fs-5">
+                {employee.designation} <span className="mx-1 text-muted">•</span> {employee.department}
+              </p>
+              
+              <div className="d-flex flex-wrap gap-4 text-muted small mt-2">
+                <span className="d-inline-flex align-items-center gap-2">
+                  <IconMail size={18} className="text-secondary" /> {employee.email}
+                </span>
+                <span className="d-inline-flex align-items-center gap-2">
+                  <IconPhone size={18} className="text-secondary" /> {employee.phone}
+                </span>
+                <span className="d-inline-flex align-items-center gap-2">
+                  <IconCalendarCheck size={18} className="text-secondary" /> Joined {formatDate(employee.joining_date)}
+                </span>
+              </div>
+            </div>
+            <div className="ms-lg-auto">
+              <Link href="/employee-dashboard/profile" className="btn btn-primary btn-lg shadow-sm px-4 fw-semibold text-white">
+                View Official Profile
+              </Link>
             </div>
           </div>
-          <Link href="/employee-dashboard/profile" className="btn btn-primary">Open My Profile</Link>
         </div>
       </div>
 
-      <div className="row g-4 mb-4">
+      {/* Helpful Tip Banner */}
+      <div className="alert alert-primary border-0 shadow-sm d-flex align-items-center gap-3 mb-5 p-3 px-4">
+        <IconClock size={24} className="text-primary flex-shrink-0 animate-pulse" />
+        <div>
+          <strong className="text-primary-emphasis">Shift Schedule:</strong> 
+          <span className="text-secondary ms-1">Standard office timing is **10:00 AM to 06:00 PM**. Please check in and check out daily from your portal to track working hours accurately.</span>
+        </div>
+      </div>
+
+      {/* Key Metrics grid */}
+      <div className="row g-4 mb-5">
         <div className="col-md-4">
-          <div className="employee-self-stat">
-            <div className="text-secondary small">Employee ID</div>
-            <div className="fw-bold fs-5">{employee.employee_id}</div>
+          <div className="card border-0 shadow-sm h-100 metric-card position-relative overflow-hidden">
+            <div className="metric-glow bg-primary-subtle"></div>
+            <div className="card-body p-4 position-relative d-flex align-items-center gap-3">
+              <div className="metric-icon-box bg-primary-subtle text-primary">
+                <IconBriefcase size={24} />
+              </div>
+              <div>
+                <span className="text-muted d-block small fw-semibold text-uppercase">Corporate ID</span>
+                <strong className="fs-4 fw-bold text-dark">{employee.employee_id}</strong>
+                <span className="d-block text-secondary small mt-1">{employee.employment_type_label || "Permanent"} Employee</span>
+              </div>
+            </div>
           </div>
         </div>
+
         <div className="col-md-4">
-          <div className="employee-self-stat">
-            <div className="text-secondary small">Annual Salary</div>
-            <div className="fw-bold fs-5">{formatCurrency(employee.annual_salary)}</div>
+          <div className="card border-0 shadow-sm h-100 metric-card position-relative overflow-hidden">
+            <div className="metric-glow bg-success-subtle"></div>
+            <div className="card-body p-4 position-relative d-flex align-items-center gap-3">
+              <div className="metric-icon-box bg-success-subtle text-success">
+                <IconWallet size={24} />
+              </div>
+              <div>
+                <span className="text-muted d-block small fw-semibold text-uppercase">Monthly Salary Est.</span>
+                <strong className="fs-4 fw-bold text-success">{formatCurrency(monthlySalary)}</strong>
+                <span className="d-block text-secondary small mt-1">CTC: {formatCurrency(employee.annual_salary)} / yr</span>
+              </div>
+            </div>
           </div>
         </div>
+
         <div className="col-md-4">
-          <div className="employee-self-stat">
-            <div className="text-secondary small">Reporting Manager</div>
-            <div className="fw-bold fs-5">{employee.reporting_manager || "Not assigned"}</div>
+          <div className="card border-0 shadow-sm h-100 metric-card position-relative overflow-hidden">
+            <div className="metric-glow bg-info-subtle"></div>
+            <div className="card-body p-4 position-relative d-flex align-items-center gap-3">
+              <div className="metric-icon-box bg-info-subtle text-info">
+                <IconBuilding size={24} />
+              </div>
+              <div>
+                <span className="text-muted d-block small fw-semibold text-uppercase">Reporting Officer</span>
+                <strong className="fs-5 fw-bold text-dark">{employee.reporting_manager || "Admin Desk"}</strong>
+                <span className="d-block text-secondary small mt-1">Department: {employee.department}</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
+      {/* Quick Action Navigation Grid */}
+      <h4 className="fw-bold mb-4 text-dark d-flex align-items-center gap-2">
+        <IconShield size={22} className="text-primary" /> Core Workspaces & Actions
+      </h4>
+      
       <div className="row g-4">
         {quickActions.map((action) => (
           <div className="col-md-6 col-xl-4" key={action.href}>
-            <Link href={action.href} className="employee-self-action">
-              <span className="employee-self-action-icon">{action.icon}</span>
-              <span>
-                <span className="d-block fw-semibold">{action.title}</span>
-                <span className="text-secondary small">{action.text}</span>
-              </span>
+            <Link href={action.href} className="card h-100 border-0 shadow-sm quick-action-card text-decoration-none">
+              <div className="card-body p-4 d-flex gap-3">
+                <div 
+                  className="action-icon-wrapper d-flex align-items-center justify-content-center flex-shrink-0"
+                  style={{ backgroundColor: action.bgColor, color: action.color }}
+                >
+                  {action.icon}
+                </div>
+                <div>
+                  <h6 className="fw-bold text-dark mb-1 card-title-action">{action.title}</h6>
+                  <p className="text-secondary small mb-0">{action.text}</p>
+                </div>
+              </div>
             </Link>
           </div>
         ))}
       </div>
 
       <style jsx global>{`
-        .employee-self-hero,
-        .employee-self-stat,
-        .employee-self-action {
-          background: #fff;
-          border: 1px solid #edf1f5;
-          border-radius: 10px;
-          box-shadow: 0 2px 8px rgba(16, 24, 40, 0.04);
+        .employee-dashboard-container {
+          font-family: 'Inter', sans-serif;
         }
 
-        .employee-self-hero {
-          padding: 24px;
+        .welcome-hero-card {
+          background: #ffffff;
+          border: 1px solid #eef2f6 !important;
+          border-radius: 16px;
         }
 
-        .employee-self-avatar {
-          width: 104px;
-          height: 104px;
-          border-radius: 50%;
+        .radial-glow {
+          position: absolute;
+          width: 300px;
+          height: 300px;
+          background: radial-gradient(circle, rgba(99, 102, 241, 0.05) 0%, rgba(255, 255, 255, 0) 70%);
+          right: -50px;
+          top: -50px;
+          pointer-events: none;
+        }
+
+        .employee-avatar {
+          width: 110px;
+          height: 110px;
           object-fit: cover;
-          border: 4px solid #f3f7fa;
         }
 
-        .employee-self-stat {
-          padding: 18px;
-          height: 100%;
+        .avatar-wrapper {
+          display: inline-block;
         }
 
-        .employee-self-action {
-          min-height: 112px;
-          padding: 18px;
+        .status-dot {
+          position: absolute;
+          width: 16px;
+          height: 16px;
+          border-radius: 50%;
+          border: 3px solid #ffffff;
+          bottom: 4px;
+          right: 4px;
+        }
+
+        .metric-card {
+          border: 1px solid #eef2f6 !important;
+          border-radius: 14px;
+          transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .metric-card:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px rgba(16, 24, 40, 0.06) !important;
+        }
+
+        .metric-glow {
+          position: absolute;
+          width: 150px;
+          height: 150px;
+          background: radial-gradient(circle, rgba(0, 0, 0, 0.02) 0%, rgba(255, 255, 255, 0) 70%);
+          right: -40px;
+          bottom: -40px;
+          pointer-events: none;
+          opacity: 0.5;
+        }
+
+        .metric-icon-box {
+          width: 48px;
+          height: 48px;
+          border-radius: 12px;
           display: flex;
-          gap: 14px;
-          align-items: flex-start;
-          color: inherit;
-          text-decoration: none;
-          height: 100%;
-          transition: border-color 0.15s ease, transform 0.15s ease;
-        }
-
-        .employee-self-action:hover {
-          border-color: #0ea66b;
-          transform: translateY(-1px);
-        }
-
-        .employee-self-action-icon {
-          width: 42px;
-          height: 42px;
-          border-radius: 8px;
-          background: #eaf8f1;
-          color: #0ea66b;
-          display: inline-flex;
           align-items: center;
           justify-content: center;
-          flex: 0 0 auto;
+          flex-shrink: 0;
+        }
+
+        .quick-action-card {
+          border: 1px solid #eef2f6 !important;
+          border-radius: 14px;
+          transition: all 0.2s ease;
+        }
+
+        .quick-action-card:hover {
+          transform: translateY(-3px);
+          border-color: #4f46e5 !important;
+          box-shadow: 0 10px 20px rgba(79, 70, 229, 0.05) !important;
+        }
+
+        .action-icon-wrapper {
+          width: 46px;
+          height: 46px;
+          border-radius: 10px;
+        }
+
+        .animate-pulse {
+          animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        @keyframes pulse {
+          0%, 100% {
+            opacity: 1;
+          }
+          50% {
+            opacity: .6;
+          }
+        }
+
+        .heading-welcome {
+          font-family: 'Outfit', sans-serif;
+          letter-spacing: -0.5px;
         }
       `}</style>
     </div>

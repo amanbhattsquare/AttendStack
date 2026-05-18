@@ -11,8 +11,10 @@ import {
   IconShieldCheck,
   IconUser,
   IconWallet,
+  IconDownload,
 } from "@tabler/icons-react";
 import { useCurrentEmployee } from "../useCurrentEmployee";
+import { Spinner, Alert, Badge, Row, Col } from "react-bootstrap";
 
 const formatDate = (value?: string | null) => {
   if (!value) return "Not provided";
@@ -28,7 +30,7 @@ const formatCurrency = (value?: string | null) => {
   return new Intl.NumberFormat("en-IN", {
     style: "currency",
     currency: "INR",
-    maximumFractionDigits: 2,
+    maximumFractionDigits: 0,
   }).format(Number(value));
 };
 
@@ -36,13 +38,27 @@ const valueOrFallback = (value?: string | null) => {
   return value && value.trim() ? value : "Not provided";
 };
 
-const ProfileItem = ({ label, value, icon }: { label: string; value?: string | null; icon: React.ReactNode }) => (
-  <div className="my-profile-item">
-    <span className="my-profile-icon">{icon}</span>
-    <span>
-      <span className="my-profile-label">{label}</span>
-      <span className="my-profile-value">{valueOrFallback(value)}</span>
-    </span>
+const ProfileItem = ({ label, value, icon, linkUrl }: { label: string; value?: string | null; icon: React.ReactNode; linkUrl?: string | null }) => (
+  <div className="my-profile-item border shadow-xs h-100 d-flex gap-3 align-items-start p-3 bg-white rounded-3 transition-all hover-lift">
+    <div className="my-profile-icon d-flex align-items-center justify-content-center flex-shrink-0">
+      {icon}
+    </div>
+    <div className="flex-grow-1">
+      <span className="my-profile-label text-uppercase text-muted small fw-bold d-block mb-1">{label}</span>
+      <span className="my-profile-value text-dark fw-semibold d-block">
+        {valueOrFallback(value)}
+      </span>
+      {linkUrl && (
+        <a 
+          href={linkUrl} 
+          target="_blank" 
+          rel="noopener noreferrer" 
+          className="btn btn-link btn-sm text-primary p-0 d-inline-flex align-items-center gap-1 mt-2 fw-semibold text-decoration-none"
+        >
+          <IconDownload size={14} /> Download Document
+        </a>
+      )}
+    </div>
   </div>
 );
 
@@ -50,11 +66,25 @@ const ProfilePage = () => {
   const { employee, isLoading, error } = useCurrentEmployee();
 
   if (isLoading) {
-    return <div className="card border-0 shadow-sm"><div className="card-body py-5 text-center text-secondary">Loading your profile...</div></div>;
+    return (
+      <div className="d-flex justify-content-center align-items-center py-6 min-vh-50">
+        <div className="text-center">
+          <Spinner animation="border" variant="primary" role="status" className="mb-3">
+            <span className="visually-hidden">Loading Profile...</span>
+          </Spinner>
+          <p className="text-secondary">Retrieving secure employee records...</p>
+        </div>
+      </div>
+    );
   }
 
   if (error || !employee) {
-    return <div className="alert alert-danger">{error || "Unable to load your profile."}</div>;
+    return (
+      <Alert variant="danger" className="border-0 shadow-sm p-4">
+        <h5 className="fw-bold mb-2">Failed to load profile</h5>
+        <p className="mb-0">{error || "Unable to retrieve your personal employee profile."}</p>
+      </Alert>
+    );
   }
 
   const sections = [
@@ -62,11 +92,16 @@ const ProfilePage = () => {
       title: "Personal Information",
       items: [
         { label: "Full Name", value: employee.full_name, icon: <IconUser size={18} /> },
-        { label: "Email", value: employee.email, icon: <IconMail size={18} /> },
-        { label: "Phone", value: employee.phone, icon: <IconPhone size={18} /> },
+        { label: "Email Address", value: employee.email, icon: <IconMail size={18} /> },
+        { label: "Phone Number", value: employee.phone, icon: <IconPhone size={18} /> },
         { label: "Date of Birth", value: formatDate(employee.date_of_birth), icon: <IconCalendar size={18} /> },
-        { label: "Aadhaar Number", value: employee.aadhaar_number, icon: <IconId size={18} /> },
-        { label: "Address", value: employee.address, icon: <IconMapPin size={18} /> },
+        { 
+          label: "Aadhaar Card", 
+          value: employee.aadhaar_number, 
+          icon: <IconId size={18} />,
+          linkUrl: employee.aadhaar_document_url 
+        },
+        { label: "Permanent Address", value: employee.address, icon: <IconMapPin size={18} /> },
       ],
     },
     {
@@ -77,120 +112,129 @@ const ProfilePage = () => {
         { label: "Department", value: employee.department, icon: <IconShieldCheck size={18} /> },
         { label: "Designation", value: employee.designation, icon: <IconUser size={18} /> },
         { label: "Employment Type", value: employee.employment_type_label, icon: <IconFileText size={18} /> },
-        { label: "Reporting Manager", value: employee.reporting_manager, icon: <IconUser size={18} /> },
+        { label: "Reporting Manager", value: employee.reporting_manager || "Admin Desk", icon: <IconUser size={18} /> },
       ],
     },
     {
-      title: "Salary & Bank",
+      title: "Salary & Bank Credentials",
       items: [
-        { label: "Annual Salary", value: formatCurrency(employee.annual_salary), icon: <IconWallet size={18} /> },
+        { label: "Annual CTC Package", value: formatCurrency(employee.annual_salary), icon: <IconWallet size={18} /> },
         { label: "Pay Frequency", value: employee.pay_frequency_label, icon: <IconCalendar size={18} /> },
         { label: "Bank Name", value: employee.bank_name, icon: <IconBuildingBank size={18} /> },
         { label: "Account Number", value: employee.bank_account_number, icon: <IconId size={18} /> },
-        { label: "Tax ID / PAN", value: employee.tax_id, icon: <IconFileText size={18} /> },
+        { label: "Tax ID / PAN Card", value: employee.tax_id, icon: <IconFileText size={18} /> },
       ],
     },
   ];
 
   return (
-    <div>
-      <div className="my-profile-header mb-4">
-        <img
-          src={employee.profile_photo_url || "/images/avatar/avatar-fallback.jpg"}
-          alt={employee.full_name}
-          className="my-profile-avatar"
-        />
-        <div>
-          <div className="d-flex flex-wrap align-items-center gap-2 mb-1">
-            <h2 className="mb-0">{employee.full_name}</h2>
-            <span className="badge bg-success-subtle text-success">{employee.status_label}</span>
+    <div className="employee-profile-container py-3">
+      {/* Profile Header Card */}
+      <div className="card border-0 shadow-sm mb-5 my-profile-header-card overflow-hidden position-relative">
+        <div className="profile-glow"></div>
+        <div className="card-body p-4 position-relative">
+          <div className="d-flex flex-column flex-sm-row align-items-center gap-4 text-center text-sm-start">
+            <img
+              src={employee.profile_photo_url || "/images/avatar/avatar-fallback.jpg"}
+              alt={employee.full_name}
+              className="rounded-circle border border-4 border-white shadow-sm my-profile-avatar-img"
+            />
+            <div>
+              <div className="d-flex flex-wrap justify-content-center justify-content-sm-start align-items-center gap-2 mb-2">
+                <h2 className="fw-bold mb-0 text-dark heading-profile-name">{employee.full_name}</h2>
+                <Badge bg="success" className="px-3 py-2 bg-success-subtle text-success border border-success-subtle rounded-pill font-monospace">
+                  {employee.status_label}
+                </Badge>
+              </div>
+              <p className="text-secondary fw-semibold mb-0 fs-5">
+                {employee.designation} <span className="mx-1 text-muted">•</span> {employee.department}
+              </p>
+              <span className="small text-muted d-block mt-2">Corporate Portal Account Active</span>
+            </div>
           </div>
-          <p className="text-secondary mb-0">{employee.designation} - {employee.department}</p>
         </div>
       </div>
 
+      {/* Sections rendering */}
       {sections.map((section) => (
-        <section className="my-profile-section" key={section.title}>
-          <h5 className="mb-4">{section.title}</h5>
-          <div className="row g-3">
+        <div className="mb-5" key={section.title}>
+          <h4 className="fw-bold mb-4 text-dark section-title-decor">{section.title}</h4>
+          <Row className="g-4">
             {section.items.map((item) => (
-              <div className="col-md-6 col-xl-4" key={item.label}>
+              <Col md={6} xl={4} key={item.label}>
                 <ProfileItem {...item} />
-              </div>
+              </Col>
             ))}
-          </div>
-        </section>
+          </Row>
+        </div>
       ))}
 
       <style jsx global>{`
-        .my-profile-header,
-        .my-profile-section {
-          background: #fff;
-          border: 1px solid #edf1f5;
-          border-radius: 10px;
-          box-shadow: 0 2px 8px rgba(16, 24, 40, 0.04);
-          padding: 24px;
+        .employee-profile-container {
+          font-family: 'Inter', sans-serif;
         }
 
-        .my-profile-header {
-          display: flex;
-          align-items: center;
-          gap: 18px;
+        .my-profile-header-card {
+          background: #ffffff;
+          border: 1px solid #eef2f6 !important;
+          border-radius: 16px;
         }
 
-        .my-profile-section {
-          margin-bottom: 24px;
+        .profile-glow {
+          position: absolute;
+          width: 250px;
+          height: 250px;
+          background: radial-gradient(circle, rgba(99, 102, 241, 0.04) 0%, rgba(255, 255, 255, 0) 70%);
+          right: -30px;
+          top: -30px;
+          pointer-events: none;
         }
 
-        .my-profile-avatar {
-          width: 96px;
-          height: 96px;
-          border-radius: 50%;
+        .my-profile-avatar-img {
+          width: 104px;
+          height: 104px;
           object-fit: cover;
-          border: 4px solid #f3f7fa;
-        }
-
-        .my-profile-item {
-          min-height: 84px;
-          height: 100%;
-          display: flex;
-          gap: 12px;
-          align-items: flex-start;
-          background: #fbfcfe;
-          border: 1px solid #edf1f5;
-          border-radius: 8px;
-          padding: 14px;
         }
 
         .my-profile-icon {
-          width: 36px;
-          height: 36px;
-          border-radius: 8px;
-          background: #eaf8f1;
-          color: #0ea66b;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          flex: 0 0 auto;
+          width: 40px;
+          height: 40px;
+          border-radius: 10px;
+          background: #eeebff;
+          color: #4f46e5;
         }
 
-        .my-profile-label,
-        .my-profile-value {
-          display: block;
+        .hover-lift {
+          transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
         }
 
-        .my-profile-label {
-          color: #6b7a8c;
-          font-size: 12px;
-          font-weight: 600;
-          text-transform: uppercase;
-          margin-bottom: 4px;
+        .hover-lift:hover {
+          transform: translateY(-2px);
+          border-color: #4f46e5 !important;
+          box-shadow: 0 6px 15px rgba(79, 70, 229, 0.05) !important;
         }
 
-        .my-profile-value {
-          color: #0f172a;
-          font-weight: 600;
-          overflow-wrap: anywhere;
+        .section-title-decor {
+          font-family: 'Outfit', sans-serif;
+          position: relative;
+          padding-left: 12px;
+          letter-spacing: -0.3px;
+        }
+
+        .section-title-decor::before {
+          content: "";
+          position: absolute;
+          left: 0;
+          top: 4px;
+          bottom: 4px;
+          width: 4px;
+          background: #4f46e5;
+          border-radius: 2px;
+        }
+
+        .heading-profile-name {
+          font-family: 'Outfit', sans-serif;
+          letter-spacing: -0.5px;
         }
       `}</style>
     </div>

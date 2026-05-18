@@ -58,6 +58,7 @@ const getStatusBadge = (status: string) => {
 };
 
 const MyAttendanceClient = () => {
+  const [mounted, setMounted] = useState(false);
   const [today, setToday] = useState<TodayAttendance | null>(null);
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -91,6 +92,7 @@ const MyAttendanceClient = () => {
   };
 
   useEffect(() => {
+    setMounted(true);
     loadAttendance();
     const timer = window.setInterval(() => setCurrentTime(new Date()), 1000);
     return () => window.clearInterval(timer);
@@ -143,12 +145,21 @@ const MyAttendanceClient = () => {
         <Card.Body className="p-4">
           <div className="d-flex flex-column flex-lg-row justify-content-between gap-4">
             <div>
-              <h4 className="mb-1">Mark Attendance</h4>
-              <p className="text-secondary mb-0">{currentTime.toLocaleDateString("en-IN", { weekday: "long", day: "2-digit", month: "long", year: "numeric" })}</p>
+              <h4 className="mb-1 fw-bold text-dark">Mark Attendance</h4>
+              <p className="text-secondary mb-0">
+                {mounted 
+                  ? currentTime.toLocaleDateString("en-IN", { weekday: "long", day: "2-digit", month: "long", year: "numeric" }) 
+                  : "Loading current date..."}
+              </p>
+              <span className="badge bg-primary-subtle text-primary border border-primary-subtle mt-2 px-3 py-1.5 rounded-pill fw-semibold">
+                Shift Timing: 10:00 AM – 06:00 PM
+              </span>
             </div>
             <div className="text-lg-end">
-              <div className="display-6 fw-bold">{currentTime.toLocaleTimeString("en-IN")}</div>
-              <div className="text-secondary">Asia/Kolkata</div>
+              <div className="display-6 fw-bold text-dark">
+                {mounted ? currentTime.toLocaleTimeString("en-IN") : "--:--:--"}
+              </div>
+              <div className="text-secondary small">Asia/Kolkata</div>
             </div>
           </div>
 
@@ -199,7 +210,7 @@ const MyAttendanceClient = () => {
 
       <Card className="border-0 shadow-sm">
         <Card.Header className="bg-white">
-          <h4 className="mb-0">My Attendance Records</h4>
+          <h4 className="mb-0 fw-bold text-dark">My Attendance Records</h4>
         </Card.Header>
         <Card.Body>
           <Table hover responsive className="text-nowrap align-middle">
@@ -208,19 +219,17 @@ const MyAttendanceClient = () => {
                 <th>Date</th>
                 <th>Check In</th>
                 <th>Check Out</th>
-                <th>Total Hours</th>
                 <th>Status</th>
               </tr>
             </thead>
             <tbody>
-              {isLoading && <tr><td colSpan={5} className="text-center py-4 text-secondary">Loading records...</td></tr>}
-              {!isLoading && currentRecords.length === 0 && <tr><td colSpan={5} className="text-center py-4 text-secondary">No attendance records yet.</td></tr>}
+              {isLoading && <tr><td colSpan={4} className="text-center py-4 text-secondary">Loading records...</td></tr>}
+              {!isLoading && currentRecords.length === 0 && <tr><td colSpan={4} className="text-center py-4 text-secondary">No attendance records yet.</td></tr>}
               {!isLoading && currentRecords.map((record) => (
                 <tr key={record.id}>
                   <td>{formatDate(record.date)}</td>
                   <td>{formatTime(record.check_in)}</td>
                   <td>{formatTime(record.check_out)}</td>
-                  <td>{record.total_hours || "-"}</td>
                   <td><Badge bg={getStatusBadge(record.status)}>{record.status_label}</Badge></td>
                 </tr>
               ))}

@@ -54,8 +54,8 @@ class EmployeeSerializer(serializers.ModelSerializer):
 
     def validate_full_name(self, value):
         value = value.strip()
-        if len(value.split()) < 2:
-            raise serializers.ValidationError("Enter first and last name.")
+        if not value:
+            raise serializers.ValidationError("Enter a valid name.")
         return value
 
     def validate_tax_id(self, value):

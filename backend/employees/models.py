@@ -33,7 +33,7 @@ class Employee(models.Model):
     organization = models.ForeignKey(
         Organization, on_delete=models.CASCADE, related_name="employees", null=True
     )
-    employee_id = models.CharField(max_length=30, unique=True, db_index=True)
+    employee_id = models.CharField(max_length=30, unique=True, db_index=True, blank=True)
 
     full_name = models.CharField(max_length=150)
     email = models.EmailField(unique=True, db_index=True)
@@ -93,3 +93,24 @@ class Employee(models.Model):
 
     def __str__(self):
         return f"{self.full_name} ({self.employee_id})"
+
+    def save(self, *args, **kwargs):
+        if not self.employee_id:
+            last_emp = Employee.objects.filter(employee_id__startswith="EMP-").order_by("-employee_id").first()
+            if last_emp:
+                try:
+                    last_num = int(last_emp.employee_id.split("-")[1])
+                    new_num = last_num + 1
+                except (IndexError, ValueError):
+                    new_num = 1
+            else:
+                new_num = 1
+            
+            while True:
+                candidate_id = f"EMP-{new_num:05d}"
+                if not Employee.objects.filter(employee_id=candidate_id).exists():
+                    self.employee_id = candidate_id
+                    break
+                new_num += 1
+                
+        super().save(*args, **kwargs)

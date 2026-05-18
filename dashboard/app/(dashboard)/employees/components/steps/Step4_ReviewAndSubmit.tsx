@@ -50,7 +50,7 @@ const Step4_ReviewAndSubmit = ({ data }: { data: EmployeeFormData }) => {
           <hr className="my-4" />
 
           <h5 className="mb-3">Employment Details</h5>
-          <ReviewItem label="Employee ID" value={data.employeeId} />
+          <ReviewItem label="Employee ID" value={data.employeeId || "Auto-Generated on save"} />
           <ReviewItem label="Joining Date" value={data.joiningDate} />
           <ReviewItem label="Department" value={data.department} />
           <ReviewItem label="Designation" value={data.designation} />

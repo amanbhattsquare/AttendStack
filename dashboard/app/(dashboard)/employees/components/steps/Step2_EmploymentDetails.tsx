@@ -14,8 +14,7 @@ const Step2_EmploymentDetails = ({ data, errors, onChange }: StepProps) => {
       <div className="row g-3">
         <div className="col-md-6">
           <label htmlFor="employeeId" className="form-label">Employee ID</label>
-          <input type="text" className={`form-control ${errors.employeeId ? "is-invalid" : ""}`} id="employeeId" placeholder="Enter employee ID" value={data.employeeId} onChange={(event) => onChange("employeeId", event.target.value)} />
-          {errors.employeeId && <div className="invalid-feedback">{errors.employeeId}</div>}
+          <input type="text" className="form-control bg-light" id="employeeId" value="Auto-Generated on save" disabled />
         </div>
         <div className="col-md-6">
           <label htmlFor="joiningDate" className="form-label">Joining Date</label>

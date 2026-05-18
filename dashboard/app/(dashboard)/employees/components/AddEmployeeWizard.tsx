@@ -145,7 +145,6 @@ const AddEmployeeWizard = () => {
     }
 
     if (step === 2) {
-      required("employeeId", "Employee ID");
       required("joiningDate", "Joining date");
       required("department", "Department");
       required("designation", "Designation");

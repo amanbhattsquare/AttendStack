@@ -4,6 +4,9 @@ __pycache__/
 *.pyo
 *.pyd
 *.so
+.Python
+celerybeat-schedule
+celerybeat.pid
 
 # Environment
 .env
@@ -14,6 +17,7 @@ venv/
 # Django
 *.log
 db.sqlite3
+db.sqlite3-journal
 media/
 staticfiles/
 
@@ -25,3 +29,16 @@ staticfiles/
 # OS
 .DS_Store
 Thumbs.db
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+#mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+#pytest
+.pytest_cache/
+.coverage
+.tox/

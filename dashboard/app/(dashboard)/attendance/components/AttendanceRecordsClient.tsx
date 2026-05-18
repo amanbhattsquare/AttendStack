@@ -2,8 +2,9 @@
 
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { Badge, Button, Card, CardBody, CardHeader, Col, Form, Modal, Row, Table } from "react-bootstrap";
-import { IconPencil, IconRefresh, IconTrash } from "@tabler/icons-react";
+import { IconCalendar, IconList, IconPencil, IconRefresh, IconTrash } from "@tabler/icons-react";
 import CustomPagination from "components/shared/CustomPagination";
+import AttendanceCalendar from "./AttendanceCalendar";
 
 type AttendanceRecord = {
   id: number;
@@ -95,6 +96,8 @@ const AttendanceRecordsClient = () => {
   const [error, setError] = useState("");
   const [editingRecord, setEditingRecord] = useState<AttendanceRecord | null>(null);
   const [deletingRecord, setDeletingRecord] = useState<AttendanceRecord | null>(null);
+  const [view, setView] = useState("table");
+  const [selectedEmployee, setSelectedEmployee] = useState<string | null>(null);
 
   const handleUpdateRecord = async (updatedRecord: AttendanceRecord) => {
     try {
@@ -118,17 +121,8 @@ const AttendanceRecordsClient = () => {
     }
   };
 
-  const handleSaveChanges = () => {
+  const handleSaveChanges = (updatedRecord: AttendanceRecord) => {
     if (!editingRecord) return;
-
-    const form = document.querySelector("#edit-attendance-form") as HTMLFormElement;
-    const updatedRecord: AttendanceRecord = {
-      ...editingRecord,
-      check_in: form.checkin.value,
-      check_out: form.checkout.value,
-      status: form.status.value,
-    };
-
     handleUpdateRecord(updatedRecord);
   };
 
@@ -210,6 +204,17 @@ const AttendanceRecordsClient = () => {
     return records.slice(first, first + recordsPerPage);
   }, [currentPage, records]);
 
+  const calendarEvents = useMemo(() => {
+    const filteredRecords = selectedEmployee ? records.filter((record) => record.employee_id === selectedEmployee) : records;
+    return filteredRecords.map((record) => ({
+      title: `${record.employee_name} - ${record.status_label}`,
+      start: new Date(record.date),
+      end: new Date(record.date),
+      allDay: true,
+      resource: record,
+    }));
+  }, [records, selectedEmployee]);
+
   const years = Array.from({ length: 5 }, (_, index) => today.getFullYear() - index);
   const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
   const days = Array.from({ length: daysInMonth }, (_, index) => index + 1);
@@ -272,22 +277,34 @@ const AttendanceRecordsClient = () => {
       </Card>
 
       <Card className="border-0 shadow-sm mb-4">
-        <CardHeader className="bg-white">
+        <CardHeader className="bg-white d-flex justify-content-between align-items-center">
           <h4 className="mb-0">Monthly Employee Summary</h4>
+          <div>
+            {view === "calendar" && selectedEmployee && (
+              <Button variant="outline-secondary" size="sm" onClick={() => setSelectedEmployee(null)} className="me-2">
+                Back to All
+              </Button>
+            )}
+            <Button variant="outline-secondary" size="sm" onClick={() => setView(view === "table" ? "calendar" : "table")}>
+              {view === "table" ? <IconCalendar size={16} /> : <IconList size={16} />} {view === "table" ? "Calendar View" : "Table View"}
+            </Button>
+          </div>
         </CardHeader>
         <CardBody>
-          <Table hover responsive className="text-nowrap align-middle">
-            <thead className="table-light">
-              <tr>
-                <th>Employee</th>
-                <th className="text-center">Present</th>
-                <th className="text-center">Late</th>
+          {view === "table" ? (
+            <Table hover responsive className="text-nowrap align-middle">
+              <thead className="table-light">
+                <tr>
+                  <th>Employee</th>
+                  <th className="text-center">Present</th>
+                  <th className="text-center">Late</th>
                 <th className="text-center">Half Days</th>
                 <th className="text-center">Absent</th>
+                <th className="text-end">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {employeeSummary.length === 0 && <tr><td colSpan={5} className="text-center py-4 text-secondary">No summary available for selected filters.</td></tr>}
+              {employeeSummary.length === 0 && <tr><td colSpan={6} className="text-center py-4 text-secondary">No summary available for selected filters.</td></tr>}
               {employeeSummary.map((summary) => (
                 <tr key={summary.id}>
                   <td>
@@ -303,10 +320,18 @@ const AttendanceRecordsClient = () => {
                   <td className="text-center">{summary.late}</td>
                   <td className="text-center">{summary.halfDay}</td>
                   <td className="text-center">{summary.absent}</td>
+                  <td className="text-end">
+                    <Button variant="outline-secondary" size="sm" onClick={() => { setSelectedEmployee(summary.id); setView("calendar"); }}>
+                      View Calendar
+                    </Button>
+                  </td>
                 </tr>
               ))}
             </tbody>
-          </Table>
+            </Table>
+          ) : (
+            <AttendanceCalendar events={calendarEvents} onSelectEvent={(event) => setEditingRecord(event.resource)} />
+          )}
         </CardBody>
       </Card>
 
@@ -395,7 +420,16 @@ const AttendanceRecordsClient = () => {
             <Button variant="secondary" onClick={() => setEditingRecord(null)}>
               Close
             </Button>
-            <Button variant="primary" onClick={handleSaveChanges}>
+            <Button variant="primary" onClick={() => {
+              const form = document.querySelector("#edit-attendance-form") as HTMLFormElement;
+              const updatedRecord: AttendanceRecord = {
+                ...editingRecord,
+                check_in: form.checkin.value,
+                check_out: form.checkout.value,
+                status: form.status.value,
+              };
+              handleSaveChanges(updatedRecord);
+            }}>
               Save Changes
             </Button>
           </Modal.Footer>

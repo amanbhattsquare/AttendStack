@@ -1,6 +1,6 @@
 "use client";
 import { Holiday } from "./types";
-import { IconBeach, IconPencil, IconTrash } from "@tabler/icons-react";
+import { IconPencil, IconTrash } from "@tabler/icons-react";
 import { Tooltip, OverlayTrigger } from "react-bootstrap";
 import { flexRender, Row } from "@tanstack/react-table";
 
@@ -8,42 +8,48 @@ const HolidayRow = ({
   row,
   handleDelete,
   handleEdit,
+  isAdmin,
 }: {
   row: Row<Holiday>;
   handleDelete: (id: number) => void;
   handleEdit: (holiday: Holiday) => void;
+  isAdmin: boolean;
 }) => {
   return (
     <tr>
-      {row.getVisibleCells().map((cell) => (
+      {row.getVisibleCells().filter(cell => cell.column.id !== "action").map((cell) => (
         <td key={cell.id}>
           {flexRender(cell.column.columnDef.cell, cell.getContext())}
         </td>
       ))}
-      <td className="d-flex gap-2">
-        <OverlayTrigger
-          placement="top"
-          overlay={<Tooltip id="tooltip-edit">Edit</Tooltip>}
-        >
-          <button
-            className="btn btn-primary btn-sm"
-            onClick={() => handleEdit(row.original)}
-          >
-            <IconPencil size={16} />
-          </button>
-        </OverlayTrigger>
-        <OverlayTrigger
-          placement="top"
-          overlay={<Tooltip id="tooltip-delete">Delete</Tooltip>}
-        >
-          <button
-            className="btn btn-danger btn-sm"
-            onClick={() => handleDelete(row.original.id)}
-          >
-            <IconTrash size={16} />
-          </button>
-        </OverlayTrigger>
-      </td>
+      {isAdmin && (
+        <td>
+          <div className="d-flex gap-2">
+            <OverlayTrigger
+              placement="top"
+              overlay={<Tooltip id="tooltip-edit">Edit Holiday</Tooltip>}
+            >
+              <button
+                className="btn btn-outline-primary btn-sm px-2 py-1"
+                onClick={() => handleEdit(row.original)}
+              >
+                <IconPencil size={15} />
+              </button>
+            </OverlayTrigger>
+            <OverlayTrigger
+              placement="top"
+              overlay={<Tooltip id="tooltip-delete">Delete Holiday</Tooltip>}
+            >
+              <button
+                className="btn btn-outline-danger btn-sm px-2 py-1"
+                onClick={() => handleDelete(row.original.id)}
+              >
+                <IconTrash size={15} />
+              </button>
+            </OverlayTrigger>
+          </div>
+        </td>
+      )}
     </tr>
   );
 };

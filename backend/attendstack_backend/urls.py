@@ -25,6 +25,7 @@ urlpatterns = [
     path("api/v1/accounts/", include("accounts.urls", namespace="accounts")),
     path("api/v1/employees/", include("employees.urls", namespace="employees")),
     path("api/v1/attendance/", include("attendance.urls", namespace="attendance")),
+    path("api/v1/holidays/", include("holidays.urls", namespace="holidays")),
 ]
 
 if settings.DEBUG:

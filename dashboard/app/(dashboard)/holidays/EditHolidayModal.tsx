@@ -1,5 +1,5 @@
 "use client";
-import { Modal, Button, Form } from "react-bootstrap";
+import { Modal, Button, Form, Spinner } from "react-bootstrap";
 import { Holiday } from "./types";
 import { useEffect, useState } from "react";
 
@@ -12,11 +12,12 @@ const EditHolidayModal = ({
   show: boolean;
   handleClose: () => void;
   holiday: Holiday | null;
-  updateHoliday: (holiday: Holiday) => void;
+  updateHoliday: (holiday: Holiday) => Promise<void>;
 }) => {
   const [name, setName] = useState("");
   const [date, setDate] = useState("");
   const [type, setType] = useState<Holiday["type"]>("Public Holiday");
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (holiday) {
@@ -26,49 +27,58 @@ const EditHolidayModal = ({
     }
   }, [holiday]);
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (holiday) {
-      const updatedHoliday: Holiday = {
-        ...holiday,
-        name,
-        date,
-        day: new Date(date).toLocaleDateString("en-US", {
-          weekday: "long",
-        }),
-        type,
-      };
-      updateHoliday(updatedHoliday);
-      handleClose();
+      setSubmitting(true);
+      try {
+        const updatedHoliday: Holiday = {
+          ...holiday,
+          name,
+          date,
+          day: new Date(date).toLocaleDateString("en-US", {
+            weekday: "long",
+          }),
+          type,
+        };
+        await updateHoliday(updatedHoliday);
+        handleClose();
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setSubmitting(false);
+      }
     }
   };
 
   return (
     <Modal show={show} onHide={handleClose} centered>
       <Modal.Header closeButton>
-        <Modal.Title>Edit Holiday</Modal.Title>
+        <Modal.Title className="fw-bold">Edit Company Holiday</Modal.Title>
       </Modal.Header>
       <Modal.Body>
         <Form onSubmit={handleSubmit}>
           <Form.Group className="mb-3" controlId="holidayName">
-            <Form.Label>Holiday Name</Form.Label>
+            <Form.Label className="fw-semibold">Holiday Name</Form.Label>
             <Form.Control
               type="text"
               placeholder="Enter holiday name"
               value={name}
               onChange={(e) => setName(e.target.value)}
+              required
             />
           </Form.Group>
           <Form.Group className="mb-3" controlId="holidayDate">
-            <Form.Label>Date</Form.Label>
+            <Form.Label className="fw-semibold">Date</Form.Label>
             <Form.Control
               type="date"
               value={date}
               onChange={(e) => setDate(e.target.value)}
+              required
             />
           </Form.Group>
           <Form.Group className="mb-3" controlId="holidayType">
-            <Form.Label>Type</Form.Label>
+            <Form.Label className="fw-semibold">Type</Form.Label>
             <Form.Select
               value={type}
               onChange={(e) => setType(e.target.value as Holiday["type"])}
@@ -79,9 +89,21 @@ const EditHolidayModal = ({
               <option>Optional Holiday</option>
             </Form.Select>
           </Form.Group>
-          <Button variant="primary" type="submit">
-            Update Holiday
-          </Button>
+          <div className="d-flex justify-content-end gap-2 mt-4">
+            <Button variant="outline-secondary" onClick={handleClose} disabled={submitting}>
+              Cancel
+            </Button>
+            <Button variant="primary" type="submit" disabled={submitting}>
+              {submitting ? (
+                <>
+                  <Spinner as="span" animation="border" size="sm" className="me-2" />
+                  Saving...
+                </>
+              ) : (
+                "Save Changes"
+              )}
+            </Button>
+          </div>
         </Form>
       </Modal.Body>
     </Modal>

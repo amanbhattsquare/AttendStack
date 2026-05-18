@@ -1,22 +1,71 @@
 "use client";
-import { Fragment, useState } from "react";
-import { IconPlus } from "@tabler/icons-react";
+import { Fragment, useState, useEffect } from "react";
+import { IconPlus, IconRefresh } from "@tabler/icons-react";
 import HolidayRow from "./HolidayRow";
-import { holidays as initialHolidays } from "./data";
 import { Holiday } from "./types";
 import AddHolidayModal from "./AddHolidayModal";
 import EditHolidayModal from "./EditHolidayModal";
 import { useHolidays } from "./useHolidays";
 import { flexRender } from "@tanstack/react-table";
 import Pagination from "./Pagination";
+import { Spinner, Button, Alert } from "react-bootstrap";
+
+const BASE_URL = "http://127.0.0.1:8000/api/v1/holidays/";
+
+const authHeaders = (): HeadersInit => {
+  const token = localStorage.getItem("authToken");
+  return {
+    "Content-Type": "application/json",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+};
 
 const HolidaysPage = () => {
-  const [holidays, setHolidays] = useState<Holiday[]>(initialHolidays);
+  const [holidays, setHolidays] = useState<Holiday[]>([]);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState("");
+
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedHoliday, setSelectedHoliday] = useState<Holiday | null>(null);
 
-  const { table } = useHolidays(holidays);
+  // Determine user role
+  useEffect(() => {
+    const userData = localStorage.getItem("user");
+    if (userData) {
+      try {
+        const parsed = JSON.parse(userData);
+        setIsAdmin(parsed.role === "SUPER_ADMIN" || parsed.role === "HR");
+      } catch (err) {
+        console.error("Failed to parse user data.", err);
+      }
+    }
+  }, []);
+
+  // Fetch holidays from Django API
+  const fetchHolidays = async () => {
+    setIsLoading(true);
+    setError("");
+    try {
+      const res = await fetch(BASE_URL, { headers: authHeaders() });
+      if (!res.ok) throw new Error("Failed to load company holidays.");
+      const data = await res.json();
+      const results = Array.isArray(data) ? data : data.results || [];
+      setHolidays(results);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load holidays.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchHolidays();
+  }, []);
+
+  // Table setup
+  const { table } = useHolidays(holidays, isAdmin);
 
   const handleShowAddModal = () => setShowAddModal(true);
   const handleCloseAddModal = () => setShowAddModal(false);
@@ -30,20 +79,59 @@ const HolidaysPage = () => {
     setShowEditModal(false);
   };
 
-  const addHoliday = (holiday: Holiday) => {
-    setHolidays([...holidays, holiday]);
+  // API Mutators
+  const addHoliday = async (newHoliday: { name: string; date: string; type: string }) => {
+    try {
+      const res = await fetch(BASE_URL, {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify(newHoliday),
+      });
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.detail || errorData.date?.[0] || "Failed to create holiday.");
+      }
+      await fetchHolidays();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to create holiday.");
+      throw err;
+    }
   };
 
-  const updateHoliday = (updatedHoliday: Holiday) => {
-    setHolidays(
-      holidays.map((holiday) =>
-        holiday.id === updatedHoliday.id ? updatedHoliday : holiday
-      )
-    );
+  const updateHoliday = async (updatedHoliday: Holiday) => {
+    try {
+      const res = await fetch(`${BASE_URL}${updatedHoliday.id}/`, {
+        method: "PUT",
+        headers: authHeaders(),
+        body: JSON.stringify({
+          name: updatedHoliday.name,
+          date: updatedHoliday.date,
+          type: updatedHoliday.type,
+        }),
+      });
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.detail || errorData.date?.[0] || "Failed to update holiday.");
+      }
+      await fetchHolidays();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to update holiday.");
+      throw err;
+    }
   };
 
-  const handleDelete = (id: number) => {
-    setHolidays(holidays.filter((holiday) => holiday.id !== id));
+  const handleDelete = async (id: number) => {
+    if (!confirm("Are you sure you want to permanently delete this holiday?")) return;
+    try {
+      const res = await fetch(`${BASE_URL}${id}/`, {
+        method: "DELETE",
+        headers: authHeaders(),
+      });
+      if (!res.ok) throw new Error("Failed to delete the holiday record.");
+      await fetchHolidays();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to delete holiday.");
+    }
   };
 
   return (
@@ -52,56 +140,89 @@ const HolidaysPage = () => {
         <div>
           <h2 className="mb-0 fw-bold">Company Holidays</h2>
           <p className="text-secondary mb-0">
-            Manage and view all upcoming company holidays and events.
+            Manage and view all upcoming company holidays and festival calendars.
           </p>
         </div>
-        <button
-          className="btn btn-primary d-flex align-items-center gap-2"
-          onClick={handleShowAddModal}
-        >
-          <IconPlus size={18} /> Add Holiday
-        </button>
+        <div className="d-flex gap-2">
+          <Button variant="outline-secondary" size="sm" onClick={fetchHolidays} className="d-flex align-items-center gap-2">
+            <IconRefresh size={16} /> Sync
+          </Button>
+          {isAdmin && (
+            <button
+              className="btn btn-primary d-flex align-items-center gap-2 shadow-sm"
+              onClick={handleShowAddModal}
+            >
+              <IconPlus size={18} /> Add Holiday
+            </button>
+          )}
+        </div>
       </div>
 
+      {error && <Alert variant="danger">{error}</Alert>}
+
       <div className="card border-0 shadow-sm mb-6">
-        <div className="card-body">
+        <div className="card-body p-0">
           <div className="table-responsive">
-            <table className="table align-middle table-hover text-nowrap">
-              <thead className="table-light">
-                {table.getHeaderGroups().map((headerGroup) => (
-                  <tr key={headerGroup.id}>
-                    {headerGroup.headers.map((header) => (
-                      <th key={header.id}>
-                        {header.isPlaceholder
-                          ? null
-                          : flexRender(
-                              header.column.columnDef.header,
-                              header.getContext()
-                            )}
-                      </th>
+            {isLoading ? (
+              <div className="d-flex justify-content-center align-items-center py-6">
+                <Spinner animation="border" variant="primary" role="status">
+                  <span className="visually-hidden">Loading calendar...</span>
+                </Spinner>
+              </div>
+            ) : (
+              <>
+                <table className="table align-middle table-hover text-nowrap mb-0">
+                  <thead className="table-light">
+                    {table.getHeaderGroups().map((headerGroup) => (
+                      <tr key={headerGroup.id}>
+                        {headerGroup.headers.map((header) => (
+                          <th key={header.id}>
+                            {header.isPlaceholder
+                              ? null
+                              : flexRender(
+                                  header.column.columnDef.header,
+                                  header.getContext()
+                                )}
+                          </th>
+                        ))}
+                      </tr>
                     ))}
-                  </tr>
-                ))}
-              </thead>
-              <tbody>
-                {table.getRowModel().rows.map((row) => (
-                  <HolidayRow
-                    key={row.id}
-                    row={row}
-                    handleDelete={handleDelete}
-                    handleEdit={handleShowEditModal}
-                  />
-                ))}
-              </tbody>
-            </table>
-            <Pagination
-              totalPages={table.getPageCount()}
-              currentPage={table.getState().pagination.pageIndex + 1}
-              onPageChange={(page) => table.setPageIndex(page - 1)}
-            />
+                  </thead>
+                  <tbody>
+                    {table.getRowModel().rows.length === 0 ? (
+                      <tr>
+                        <td colSpan={isAdmin ? 6 : 5} className="text-center py-5 text-secondary">
+                          No company holidays registered.
+                        </td>
+                      </tr>
+                    ) : (
+                      table.getRowModel().rows.map((row) => (
+                        <HolidayRow
+                          key={row.id}
+                          row={row}
+                          handleDelete={handleDelete}
+                          handleEdit={handleShowEditModal}
+                          isAdmin={isAdmin}
+                        />
+                      ))
+                    )}
+                  </tbody>
+                </table>
+                {table.getPageCount() > 1 && (
+                  <div className="px-4 py-3 border-top">
+                    <Pagination
+                      totalPages={table.getPageCount()}
+                      currentPage={table.getState().pagination.pageIndex + 1}
+                      onPageChange={(page) => table.setPageIndex(page - 1)}
+                    />
+                  </div>
+                )}
+              </>
+            )}
           </div>
         </div>
       </div>
+
       <AddHolidayModal
         show={showAddModal}
         handleClose={handleCloseAddModal}

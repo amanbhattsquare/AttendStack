@@ -1,6 +1,7 @@
 "use client";
 import { Fragment, useState, useEffect } from "react";
 import { IconPlus, IconRefresh } from "@tabler/icons-react";
+import Swal from "sweetalert2";
 import HolidayRow from "./HolidayRow";
 import { Holiday } from "./types";
 import AddHolidayModal from "./AddHolidayModal";
@@ -93,7 +94,12 @@ const HolidaysPage = () => {
       }
       await fetchHolidays();
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to create holiday.");
+      Swal.fire({
+        title: "Creation Failed",
+        text: err instanceof Error ? err.message : "Failed to create holiday.",
+        icon: "error",
+        confirmButtonColor: "#dc3545",
+      });
       throw err;
     }
   };
@@ -115,13 +121,28 @@ const HolidaysPage = () => {
       }
       await fetchHolidays();
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to update holiday.");
+      Swal.fire({
+        title: "Update Failed",
+        text: err instanceof Error ? err.message : "Failed to update holiday.",
+        icon: "error",
+        confirmButtonColor: "#dc3545",
+      });
       throw err;
     }
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm("Are you sure you want to permanently delete this holiday?")) return;
+    const result = await Swal.fire({
+      title: "Delete Holiday?",
+      text: "Are you sure you want to permanently delete this holiday record?",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#dc3545",
+      cancelButtonColor: "#6c757d",
+      confirmButtonText: "Yes, Delete It",
+      cancelButtonText: "Cancel",
+    });
+    if (!result.isConfirmed) return;
     try {
       const res = await fetch(`${BASE_URL}${id}/`, {
         method: "DELETE",
@@ -129,8 +150,20 @@ const HolidaysPage = () => {
       });
       if (!res.ok) throw new Error("Failed to delete the holiday record.");
       await fetchHolidays();
+      Swal.fire({
+        title: "Deleted!",
+        text: "The holiday record has been deleted successfully.",
+        icon: "success",
+        timer: 1500,
+        showConfirmButton: false,
+      });
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to delete holiday.");
+      Swal.fire({
+        title: "Delete Failed",
+        text: err instanceof Error ? err.message : "Failed to delete holiday.",
+        icon: "error",
+        confirmButtonColor: "#dc3545",
+      });
     }
   };
 

@@ -29,8 +29,12 @@ const OffcanvasSidebar = () => {
     >
       <OffcanvasHeader closeButton>
         <Link href="/" className="d-flex align-items-center gap-2">
-          <Image src={getAssetPath("/images/brand/logo/logo-icon.svg")} alt="" />
-          <span className="fw-bold fs-4  site-logo-text">Dasher</span>
+          <Image
+            src={getAssetPath("/images/brand/logo/logo.png")}
+            alt=""
+            style={{ height: "30px", width: "auto" }}
+          />
+          <span className="fw-bold fs-4  site-logo-text">AttendStack</span>
         </Link>
       </OffcanvasHeader>
       <OffcanvasBody className="p-0 ">

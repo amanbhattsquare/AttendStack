@@ -100,8 +100,9 @@ const Sidebar: React.FC<SidebarProps> = ({ hideLogo = false, containerId, curren
               href='/'
               className='d-none d-md-flex align-items-center gap-2'>
               <Image
-                src={getAssetPath("/images/brand/logo/logo-icon.svg")}
+                src={getAssetPath("/images/brand/logo/logo.png")}
                 alt=''
+                style={{ height: "30px", width: "auto" }}
               />
               <span className='fw-bold fs-4 site-logo-text'>AttendStack</span>
             </Link>
@@ -269,7 +270,7 @@ const Sidebar: React.FC<SidebarProps> = ({ hideLogo = false, containerId, curren
               <div>
                 <Avatar
                   type='image'
-                  src={getAssetPath("/images/brand/logo/logo-icon.svg")}
+                  src={getAssetPath("/images/brand/logo/logo.png")}
                   size='md'
                   className='rounded-circle'
                 />

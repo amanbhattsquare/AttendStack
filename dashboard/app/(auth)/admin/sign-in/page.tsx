@@ -77,10 +77,10 @@ const AdminSignIn = () => {
               <div className="text-center mb-4">
                 <Link href="/">
                   <Image
-                    src={"/images/brand/logo/logo-icon.svg"}
+                    src={"/images/brand/logo/logo.png"}
                     className="mb-4"
                     alt="AttendStack Logo"
-                    width="150"
+                    style={{ height: "45px", width: "auto" }}
                   />
                 </Link>
                 <p className="text-muted">Administrator Access</p>

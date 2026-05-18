@@ -98,6 +98,57 @@ const AttendanceRecordsClient = () => {
   const [deletingRecord, setDeletingRecord] = useState<AttendanceRecord | null>(null);
   const [view, setView] = useState("table");
   const [selectedEmployee, setSelectedEmployee] = useState<string | null>(null);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [employeesList, setEmployeesList] = useState<any[]>([]);
+
+  const loadEmployees = async () => {
+    try {
+      const response = await fetch("http://127.0.0.1:8000/api/v1/employees/", {
+        headers: authHeaders(),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setEmployeesList(Array.isArray(data) ? data : data.results || []);
+      }
+    } catch (err) {
+      console.error("Failed to load employees list:", err);
+    }
+  };
+
+  const handleCreateRecord = async (newRecord: {
+    employee: string;
+    date: string;
+    check_in: string | null;
+    check_out: string | null;
+    status: string;
+    notes: string;
+  }) => {
+    try {
+      const response = await fetch(API_URL, {
+        method: "POST",
+        headers: {
+          ...authHeaders(),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(newRecord),
+      });
+
+      if (!response.ok) {
+        const errData = await response.json();
+        const errMsg = errData.detail || Object.values(errData).flat().join(" ") || "Failed to create the record.";
+        throw new Error(errMsg);
+      }
+
+      setIsCreateOpen(false);
+      loadRecords();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "An unknown error occurred.");
+    }
+  };
+
+  useEffect(() => {
+    loadEmployees();
+  }, []);
 
   const handleUpdateRecord = async (updatedRecord: AttendanceRecord) => {
     try {
@@ -338,7 +389,7 @@ const AttendanceRecordsClient = () => {
       <Card className="border-0 shadow-sm">
         <CardHeader className="bg-white d-flex justify-content-between align-items-center">
           <h4 className="mb-0">Detailed Daily Log</h4>
-          <Button variant="primary" size="sm">Mark Attendance</Button>
+          <Button variant="primary" size="sm" onClick={() => setIsCreateOpen(true)}>Mark Attendance</Button>
         </CardHeader>
         <CardBody>
           {error && <div className="alert alert-danger">{error}</div>}
@@ -389,6 +440,90 @@ const AttendanceRecordsClient = () => {
         </CardBody>
       </Card>
 
+      {isCreateOpen && (
+        <Modal show={isCreateOpen} onHide={() => setIsCreateOpen(false)}>
+          <Modal.Header closeButton>
+            <Modal.Title>Mark Attendance (New Record)</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            <Form id="create-attendance-form">
+              <Form.Group className="mb-3" controlId="formEmployeeSelect">
+                <Form.Label>Employee</Form.Label>
+                <Form.Select name="employee" required>
+                  <option value="">Select Employee...</option>
+                  {employeesList.map((emp) => (
+                    <option key={emp.id} value={emp.id}>
+                      {emp.full_name} ({emp.employee_id || emp.email})
+                    </option>
+                  ))}
+                </Form.Select>
+              </Form.Group>
+              <Form.Group className="mb-3" controlId="formDate">
+                <Form.Label>Date</Form.Label>
+                <Form.Control name="date" type="date" defaultValue={new Date().toISOString().slice(0, 10)} required />
+              </Form.Group>
+              <Form.Group className="mb-3" controlId="formCheckIn">
+                <Form.Label>Check In</Form.Label>
+                <Form.Control name="checkin" type="time" defaultValue="09:00" />
+              </Form.Group>
+              <Form.Group className="mb-3" controlId="formCheckOut">
+                <Form.Label>Check Out</Form.Label>
+                <Form.Control name="checkout" type="time" defaultValue="18:00" />
+              </Form.Group>
+              <Form.Group className="mb-3" controlId="formStatus">
+                <Form.Label>Status</Form.Label>
+                <Form.Select name="status" defaultValue="PRESENT">
+                  <option value="PRESENT">Present</option>
+                  <option value="LATE">Late Entry</option>
+                  <option value="HALF_DAY">Half-day</option>
+                  <option value="ABSENT">Absent</option>
+                  <option value="ON_LEAVE">On Leave</option>
+                </Form.Select>
+              </Form.Group>
+              <Form.Group className="mb-3" controlId="formNotes">
+                <Form.Label>Notes</Form.Label>
+                <Form.Control name="notes" as="textarea" rows={3} placeholder="Add optional details..." />
+              </Form.Group>
+            </Form>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button variant="secondary" onClick={() => setIsCreateOpen(false)}>
+              Close
+            </Button>
+            <Button variant="primary" onClick={() => {
+              const form = document.querySelector("#create-attendance-form") as HTMLFormElement;
+              const employeeSelect = form.elements.namedItem("employee") as HTMLSelectElement;
+              const dateInput = form.elements.namedItem("date") as HTMLInputElement;
+              const checkInInput = form.elements.namedItem("checkin") as HTMLInputElement;
+              const checkOutInput = form.elements.namedItem("checkout") as HTMLInputElement;
+              const statusSelect = form.elements.namedItem("status") as HTMLSelectElement;
+              const notesInput = form.elements.namedItem("notes") as HTMLTextAreaElement;
+
+              if (!employeeSelect.value) {
+                alert("Please select an employee.");
+                return;
+              }
+              if (!dateInput.value) {
+                alert("Please select a date.");
+                return;
+              }
+
+              const newRecord = {
+                employee: employeeSelect.value,
+                date: dateInput.value,
+                check_in: checkInInput.value || null,
+                check_out: checkOutInput.value || null,
+                status: statusSelect.value,
+                notes: notesInput.value,
+              };
+              handleCreateRecord(newRecord);
+            }}>
+              Mark Attendance
+            </Button>
+          </Modal.Footer>
+        </Modal>
+      )}
+
       {editingRecord && (
         <Modal show={!!editingRecord} onHide={() => setEditingRecord(null)}>
           <Modal.Header closeButton>
@@ -422,11 +557,14 @@ const AttendanceRecordsClient = () => {
             </Button>
             <Button variant="primary" onClick={() => {
               const form = document.querySelector("#edit-attendance-form") as HTMLFormElement;
+              const checkInInput = form.elements.namedItem("checkin") as HTMLInputElement;
+              const checkOutInput = form.elements.namedItem("checkout") as HTMLInputElement;
+              const statusSelect = form.elements.namedItem("status") as HTMLSelectElement;
               const updatedRecord: AttendanceRecord = {
                 ...editingRecord,
-                check_in: form.checkin.value,
-                check_out: form.checkout.value,
-                status: form.status.value,
+                check_in: checkInInput?.value || null,
+                check_out: checkOutInput?.value || null,
+                status: statusSelect?.value || "PRESENT",
               };
               handleSaveChanges(updatedRecord);
             }}>

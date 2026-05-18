@@ -22,6 +22,12 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = super().get_queryset()
+        user = self.request.user
+        
+        # Enforce data isolation: Employees can only view their own records
+        if user.is_authenticated and user.role == "EMPLOYEE":
+            queryset = queryset.filter(employee__email__iexact=user.email)
+            
         params = self.request.query_params
 
         date_from = params.get("date_from")

@@ -8,7 +8,7 @@ import "react-big-calendar/lib/css/react-big-calendar.css";
 
 const localizer = momentLocalizer(moment);
 
-const eventStyleGetter = (event) => {
+const eventStyleGetter = (event: any) => {
   let backgroundColor = "#808080"; // Default grey
   switch (event.resource.status) {
     case "PRESENT":
@@ -39,7 +39,7 @@ const eventStyleGetter = (event) => {
   };
 };
 
-const AttendanceCalendar = ({ events, onSelectEvent }) => {
+const AttendanceCalendar = ({ events, onSelectEvent }: { events: any[]; onSelectEvent: (event: any) => void }) => {
   return (
     <div>
       <Calendar

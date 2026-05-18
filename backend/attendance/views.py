@@ -8,9 +8,9 @@ from rest_framework.response import Response
 
 from accounts.permissions import IsAdminOrHR
 from employees.models import Employee, EmployeeStatus
-from .models import AttendanceRecord, AttendanceStatus
+from .models import AttendanceRecord, AttendanceStatus, LeaveRequest
 from .permissions import IsAdminOrReadOnly
-from .serializers import AttendanceRecordSerializer, TodayAttendanceSerializer
+from .serializers import AttendanceRecordSerializer, TodayAttendanceSerializer, LeaveRequestSerializer
 
 
 class AttendanceRecordViewSet(viewsets.ModelViewSet):
@@ -154,3 +154,44 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
         record.save()
         serializer = self.get_serializer(record)
         return Response(serializer.data)
+
+
+class LeaveRequestViewSet(viewsets.ModelViewSet):
+    queryset = LeaveRequest.objects.select_related("employee").all()
+    serializer_class = LeaveRequestSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        user = self.request.user
+        
+        # Isolation: Employees only see their own leave requests
+        if user.is_authenticated and user.role not in ["SUPER_ADMIN", "HR"] and not user.is_staff:
+            try:
+                employee = Employee.objects.get(email=user.email)
+                queryset = queryset.filter(employee=employee)
+            except Employee.DoesNotExist:
+                queryset = queryset.none()
+        return queryset
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        if user.role not in ["SUPER_ADMIN", "HR"] and not user.is_staff:
+            try:
+                employee = Employee.objects.get(email=user.email)
+                serializer.save(employee=employee, status="PENDING")
+            except Employee.DoesNotExist:
+                raise ValidationError({"detail": "No employee profile is linked to this user account."})
+        else:
+            serializer.save()
+
+    def perform_update(self, serializer):
+        user = self.request.user
+        
+        # If user is Employee, they cannot update status or admin_notes
+        if user.role not in ["SUPER_ADMIN", "HR"] and not user.is_staff:
+            if "status" in self.request.data or "admin_notes" in self.request.data:
+                raise ValidationError({"detail": "Employees are not authorized to approve/reject leave requests or edit admin notes."})
+            serializer.save()
+        else:
+            serializer.save()

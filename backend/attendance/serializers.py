@@ -3,7 +3,7 @@ from django.utils import timezone
 from rest_framework import serializers
 
 from employees.models import Employee
-from .models import AttendanceRecord
+from .models import AttendanceRecord, LeaveRequest
 
 
 def parse_time_or_datetime(value, date_val):
@@ -163,3 +163,53 @@ class TodayAttendanceSerializer(serializers.Serializer):
     status = serializers.CharField()
     status_label = serializers.CharField()
     live_status = serializers.CharField()
+
+
+class LeaveRequestSerializer(serializers.ModelSerializer):
+    employee = serializers.PrimaryKeyRelatedField(
+        queryset=Employee.objects.all(), required=False
+    )
+    employee_uuid = serializers.UUIDField(source="employee.id", read_only=True)
+    employee_id = serializers.CharField(source="employee.employee_id", read_only=True)
+    employee_name = serializers.CharField(source="employee.full_name", read_only=True)
+    employee_email = serializers.EmailField(source="employee.email", read_only=True)
+    employee_department = serializers.CharField(source="employee.department", read_only=True)
+    employee_designation = serializers.CharField(source="employee.designation", read_only=True)
+    leave_type_label = serializers.CharField(source="get_leave_type_display", read_only=True)
+    status_label = serializers.CharField(source="get_status_display", read_only=True)
+
+    class Meta:
+        model = LeaveRequest
+        fields = [
+            "id",
+            "employee",
+            "employee_uuid",
+            "employee_id",
+            "employee_name",
+            "employee_email",
+            "employee_department",
+            "employee_designation",
+            "start_date",
+            "end_date",
+            "leave_type",
+            "leave_type_label",
+            "reason",
+            "status",
+            "status_label",
+            "admin_notes",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "employee_uuid",
+            "employee_id",
+            "employee_name",
+            "employee_email",
+            "employee_department",
+            "employee_designation",
+            "leave_type_label",
+            "status_label",
+            "created_at",
+            "updated_at",
+        ]

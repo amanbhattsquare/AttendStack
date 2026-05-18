@@ -86,3 +86,42 @@ class AttendanceRecord(models.Model):
     def save(self, *args, **kwargs):
         self.refresh_status()
         super().save(*args, **kwargs)
+
+
+class LeaveType(models.TextChoices):
+    CASUAL = "CASUAL", "Casual Leave"
+    SICK   = "SICK",   "Sick Leave"
+    ANNUAL = "ANNUAL", "Annual Leave"
+    OTHER  = "OTHER",  "Other"
+
+
+class LeaveStatus(models.TextChoices):
+    PENDING  = "PENDING",  "Pending"
+    APPROVED = "APPROVED", "Approved"
+    REJECTED = "REJECTED", "Rejected"
+
+
+class LeaveRequest(models.Model):
+    employee = models.ForeignKey(
+        "employees.Employee", on_delete=models.CASCADE, related_name="leave_requests"
+    )
+    start_date = models.DateField()
+    end_date   = models.DateField()
+    leave_type = models.CharField(
+        max_length=20, choices=LeaveType.choices, default=LeaveType.CASUAL
+    )
+    reason     = models.TextField()
+    status     = models.CharField(
+        max_length=20, choices=LeaveStatus.choices, default=LeaveStatus.PENDING
+    )
+    admin_notes = models.TextField(blank=True, null=True)
+    created_at  = models.DateTimeField(auto_now_add=True)
+    updated_at  = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering            = ["-created_at"]
+        verbose_name        = "Leave Request"
+        verbose_name_plural = "Leave Requests"
+
+    def __str__(self):
+        return f"{self.employee.full_name} - {self.get_leave_type_display()} ({self.status})"

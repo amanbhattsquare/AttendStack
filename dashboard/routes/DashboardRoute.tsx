@@ -14,6 +14,7 @@ import {
   IconFingerprint,
   IconChartBar,
   IconWallet,
+  IconCalendarTime,
 } from "@tabler/icons-react";
 
 //import custom type
@@ -67,6 +68,12 @@ export const DashboardMenu: MenuItemType[] = [
     title: "Salary & Payroll",
     link: "/salary",
     icon: <IconCoin size={20} strokeWidth={1.5} />,
+  },
+  {
+    id: uuid(),
+    title: "Leave Requests",
+    link: "/leaves",
+    icon: <IconCalendarTime size={20} strokeWidth={1.5} />,
   },
   {
     id: uuid(),

@@ -21,7 +21,7 @@ export default function Home() {
               The future of professional HR and attendance management.
             </p>
             <div className="d-grid gap-2 d-sm-flex justify-content-sm-center">
-              <Link href="/sign-in" passHref>
+              <Link href="/admin/sign-in" passHref>
                 <Button variant="light" size="lg" className="px-4 gap-3">
                   Company Login
                 </Button>
@@ -29,11 +29,6 @@ export default function Home() {
               <Link href="/sign-in" passHref>
                 <Button variant="outline-light" size="lg" className="px-4">
                   Employee Login
-                </Button>
-              </Link>
-              <Link href="/admin/sign-in" passHref>
-                <Button variant="outline-light" size="lg" className="px-4">
-                  Administrator Login
                 </Button>
               </Link>
             </div>

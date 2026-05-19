@@ -1,5 +1,6 @@
 "use client";
 
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   IconBeach,
@@ -14,9 +15,12 @@ import {
   IconBriefcase,
   IconClock,
   IconShield,
+  IconLogin2,
+  IconLogout2,
+  IconCircleCheck,
 } from "@tabler/icons-react";
 import { useCurrentEmployee } from "./useCurrentEmployee";
-import { Spinner, Alert, Badge } from "react-bootstrap";
+import { Spinner, Alert, Badge, Card, Button, Row, Col } from "react-bootstrap";
 
 const formatDate = (value?: string | null) => {
   if (!value) return "Not provided";
@@ -81,6 +85,70 @@ const quickActions = [
 
 const EmployeeDashboard = () => {
   const { employee, isLoading, error } = useCurrentEmployee();
+
+  const [mounted, setMounted] = useState(false);
+  const [today, setToday] = useState<any>(null);
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const [actionLoading, setActionLoading] = useState<"check-in" | "check-out" | null>(null);
+  const [punchError, setPunchError] = useState("");
+  const [punchSuccess, setPunchSuccess] = useState("");
+
+  const loadTodayAttendance = async () => {
+    const token = localStorage.getItem("authToken");
+    if (!token) return;
+    try {
+      const res = await fetch("http://127.0.0.1:8000/api/v1/attendance/me/today/", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setToday(data);
+      }
+    } catch (err) {
+      console.error("Error loading today attendance:", err);
+    }
+  };
+
+  useEffect(() => {
+    setMounted(true);
+    loadTodayAttendance();
+    const timer = window.setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const markAttendance = async (action: "check-in" | "check-out") => {
+    setActionLoading(action);
+    setPunchError("");
+    setPunchSuccess("");
+    const token = localStorage.getItem("authToken");
+    if (!token) {
+      setPunchError("Session expired. Please sign in again.");
+      setActionLoading(null);
+      return;
+    }
+
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/api/v1/attendance/${action}/`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null);
+        throw new Error(errData?.detail || "Attendance operation failed.");
+      }
+
+      setPunchSuccess(action === "check-in" ? "Checked in successfully!" : "Checked out successfully!");
+      await loadTodayAttendance();
+    } catch (err) {
+      setPunchError(err instanceof Error ? err.message : "Unable to mark attendance.");
+    } finally {
+      setActionLoading(null);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -161,6 +229,117 @@ const EmployeeDashboard = () => {
           <span className="text-secondary ms-1">Standard office timing is **10:00 AM to 06:00 PM**. Please check in and check out daily from your portal to track working hours accurately.</span>
         </div>
       </div>
+
+      {/* Attendance Punch In/Out Quick Action Panel */}
+      {mounted && (
+        <Card className="border-0 shadow-sm mb-5 overflow-hidden rounded-4 bg-white">
+          <Card.Body className="p-4">
+            <Row className="align-items-center g-4">
+              <Col xs={12} lg={6}>
+                <div className="d-flex align-items-center gap-3">
+                  <div className="p-3 bg-primary-subtle text-primary rounded-4">
+                    <IconFingerprint size={32} strokeWidth={1.5} />
+                  </div>
+                  <div>
+                    <h4 className="fw-bold text-dark mb-1">Daily Attendance Punch</h4>
+                    <p className="text-secondary small mb-0">
+                      Standard Timing: **10:00 AM — 06:00 PM**
+                    </p>
+                  </div>
+                </div>
+
+                {/* Ticking Digital Clock */}
+                <div className="mt-4 p-3 bg-light rounded-3 d-inline-flex align-items-center gap-3 border">
+                  <IconClock size={20} className="text-primary animate-pulse" />
+                  <div>
+                    <div className="fs-5 fw-bold text-dark font-monospace">
+                      {currentTime.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true })}
+                    </div>
+                    <div className="text-secondary small" style={{ fontSize: "0.76rem" }}>
+                      {currentTime.toLocaleDateString("en-IN", { weekday: "long", day: "2-digit", month: "short", year: "numeric" })}
+                    </div>
+                  </div>
+                </div>
+              </Col>
+
+              <Col xs={12} lg={6} className="d-flex flex-column justify-content-center align-items-lg-end">
+                {punchSuccess && (
+                  <Alert variant="success" className="border-0 shadow-sm rounded-3 w-100 mb-3 py-2 px-3 small" onClose={() => setPunchSuccess("")} dismissible>
+                    {punchSuccess}
+                  </Alert>
+                )}
+                {punchError && (
+                  <Alert variant="danger" className="border-0 shadow-sm rounded-3 w-100 mb-3 py-2 px-3 small" onClose={() => setPunchError("")} dismissible>
+                    {punchError}
+                  </Alert>
+                )}
+
+                {today ? (
+                  <div className="w-100 d-flex flex-column gap-3 align-items-lg-end">
+                    {/* Punch States */}
+                    {!today.check_in ? (
+                      <div className="w-100 text-lg-end">
+                        <p className="text-secondary small mb-3">You haven't clocked in today yet.</p>
+                        <Button
+                          variant="primary"
+                          size="lg"
+                          onClick={() => markAttendance("check-in")}
+                          disabled={actionLoading !== null}
+                          className="d-inline-flex align-items-center gap-2 px-5 py-3 rounded-3 fw-bold shadow-sm text-white border-0"
+                        >
+                          <IconLogin2 size={22} />
+                          {actionLoading === "check-in" ? "Punching In..." : "Clock In Now"}
+                        </Button>
+                      </div>
+                    ) : !today.check_out ? (
+                      <div className="w-100 text-lg-end">
+                        <div className="mb-3 d-inline-flex align-items-center gap-2 px-3 py-2 bg-success-subtle text-success border border-success-subtle rounded-3 small">
+                          <IconCircleCheck size={16} />
+                          <strong>Checked In at:</strong>{" "}
+                          {new Date(today.check_in).toLocaleTimeString("en-IN", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                            hour12: true,
+                          })}
+                        </div>
+                        <br />
+                        <Button
+                          variant="warning"
+                          size="lg"
+                          onClick={() => markAttendance("check-out")}
+                          disabled={actionLoading !== null}
+                          className="d-inline-flex align-items-center gap-2 px-5 py-3 rounded-3 fw-bold shadow-sm text-dark border-0"
+                          style={{ backgroundColor: "#ffb020", color: "#1e293b" }}
+                        >
+                          <IconLogout2 size={22} />
+                          {actionLoading === "check-out" ? "Punching Out..." : "Clock Out Now"}
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="w-100 text-lg-end">
+                        <div className="p-3 bg-light rounded-4 border text-center text-lg-end d-inline-block w-100">
+                          <h6 className="fw-bold text-success mb-2 d-flex align-items-center gap-2 justify-content-center justify-content-lg-end">
+                            <IconCircleCheck size={20} /> Shift Completed Today!
+                          </h6>
+                          <p className="text-secondary small mb-0">
+                            Check In: <strong>{new Date(today.check_in).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true })}</strong> | 
+                            Check Out: <strong>{new Date(today.check_out).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true })}</strong>
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-center w-100 py-3">
+                    <Spinner animation="border" size="sm" variant="primary" />
+                    <span className="ms-2 text-secondary small">Synchronizing punch status...</span>
+                  </div>
+                )}
+              </Col>
+            </Row>
+          </Card.Body>
+        </Card>
+      )}
 
       {/* Key Metrics grid */}
       <div className="row g-4 mb-5">

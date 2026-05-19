@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Badge, Button, Card, Col, Row, Table } from "react-bootstrap";
+import { Badge, Button, Card, Col, Row, Table, Form } from "react-bootstrap";
 import { IconLogin2, IconLogout2, IconRefresh } from "@tabler/icons-react";
 import CustomPagination from "../../../../components/shared/CustomPagination";
 
@@ -63,6 +63,8 @@ const MyAttendanceClient = () => {
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [currentPage, setCurrentPage] = useState(1);
+  const [selectedMonth, setSelectedMonth] = useState<string>("all");
+  const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [isLoading, setIsLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<"check-in" | "check-out" | null>(null);
   const [error, setError] = useState("");
@@ -127,12 +129,59 @@ const MyAttendanceClient = () => {
     }
   };
 
+  const availableMonths = useMemo(() => {
+    const months = new Set<string>();
+    records.forEach((record) => {
+      if (!record.date) return;
+      const date = new Date(record.date);
+      const monthStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+      months.add(monthStr);
+    });
+    return Array.from(months).sort().reverse();
+  }, [records]);
+
+  const monthFilteredRecords = useMemo(() => {
+    if (selectedMonth === "all") return records;
+    return records.filter((record) => {
+      if (!record.date) return false;
+      const date = new Date(record.date);
+      const monthStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+      return monthStr === selectedMonth;
+    });
+  }, [records, selectedMonth]);
+
+  const fullyFilteredRecords = useMemo(() => {
+    if (selectedStatus === "all") return monthFilteredRecords;
+    return monthFilteredRecords.filter(r => r.status === selectedStatus);
+  }, [monthFilteredRecords, selectedStatus]);
+
   const currentRecords = useMemo(() => {
     const first = (currentPage - 1) * recordsPerPage;
-    return records.slice(first, first + recordsPerPage);
-  }, [currentPage, records]);
+    return fullyFilteredRecords.slice(first, first + recordsPerPage);
+  }, [currentPage, fullyFilteredRecords]);
 
-  const totalPages = Math.ceil(records.length / recordsPerPage);
+  const summary = useMemo(() => {
+    const s = {
+      present: 0,
+      halfDay: 0,
+      leave: 0,
+      paidLeave: 0,
+      holiday: 0,
+      sundayUnpaid: 0,
+      unpaidDays: 0,
+    };
+    monthFilteredRecords.forEach((record) => {
+      if (record.status === "PRESENT") s.present += 1;
+      if (record.status === "HALF_DAY") s.halfDay += 1;
+      if (record.status === "ON_LEAVE") s.leave += 1;
+      if (record.status === "PAID_LEAVE") s.paidLeave += 1;
+      if (record.status === "HOLIDAY") s.holiday += 1;
+      if (record.status === "UNPAID_DAY") s.unpaidDays += 1;
+    });
+    return s;
+  }, [monthFilteredRecords]);
+
+  const totalPages = Math.ceil(fullyFilteredRecords.length / recordsPerPage);
   const canCheckIn = today && !today.check_in;
   const canCheckOut = today && today.check_in && !today.check_out;
 
@@ -208,9 +257,82 @@ const MyAttendanceClient = () => {
         </Card.Body>
       </Card>
 
+      <Card className="border-0 shadow-sm mb-4">
+        <Card.Header className="bg-white d-flex flex-column flex-md-row align-items-md-center justify-content-between py-3">
+          <h4 className="mb-2 mb-md-0 fw-bold text-dark">My Attendance Summary</h4>
+          <div className="d-flex align-items-center gap-2">
+            <span className="text-secondary small fw-semibold text-nowrap">Filter by Month:</span>
+            <Form.Select 
+              size="sm" 
+              value={selectedMonth} 
+              onChange={(e) => {
+                setSelectedMonth(e.target.value);
+                setCurrentPage(1);
+              }}
+              style={{ minWidth: "150px" }}
+            >
+              <option value="all">All Months</option>
+              {availableMonths.map(month => {
+                const [year, m] = month.split('-');
+                const date = new Date(parseInt(year), parseInt(m) - 1);
+                const label = date.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+                return <option key={month} value={month}>{label}</option>;
+              })}
+            </Form.Select>
+          </div>
+        </Card.Header>
+        <Card.Body>
+          <Table hover responsive className="text-nowrap align-middle mb-0">
+            <thead className="table-light">
+              <tr>
+                <th className="text-center">Present (P)</th>
+                <th className="text-center">Half Day (HD)</th>
+                <th className="text-center">Leave (L)</th>
+                <th className="text-center">Paid Leave (PL)</th>
+                <th className="text-center">HOLIDAY (H)</th>
+                <th className="text-center">Sunday Unpaid</th>
+                <th className="text-center">Unpaid Days (UD)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td className="text-center fw-bold text-success">{summary.present}</td>
+                <td className="text-center fw-bold text-info">{summary.halfDay}</td>
+                <td className="text-center fw-bold text-secondary">{summary.leave}</td>
+                <td className="text-center fw-bold text-primary">{summary.paidLeave}</td>
+                <td className="text-center fw-bold text-warning">{summary.holiday}</td>
+                <td className="text-center fw-bold text-muted">{summary.sundayUnpaid}</td>
+                <td className="text-center fw-bold text-danger">{summary.unpaidDays}</td>
+              </tr>
+            </tbody>
+          </Table>
+        </Card.Body>
+      </Card>
+
       <Card className="border-0 shadow-sm">
-        <Card.Header className="bg-white">
-          <h4 className="mb-0 fw-bold text-dark">My Attendance Records</h4>
+        <Card.Header className="bg-white d-flex flex-column flex-md-row align-items-md-center justify-content-between py-3">
+          <h4 className="mb-2 mb-md-0 fw-bold text-dark">My Attendance Records</h4>
+          <div className="d-flex align-items-center gap-2">
+            <span className="text-secondary small fw-semibold text-nowrap">Filter by Status:</span>
+            <Form.Select 
+              size="sm" 
+              value={selectedStatus} 
+              onChange={(e) => {
+                setSelectedStatus(e.target.value);
+                setCurrentPage(1);
+              }}
+              style={{ minWidth: "140px" }}
+            >
+              <option value="all">All Statuses</option>
+              <option value="PRESENT">Present</option>
+              <option value="HALF_DAY">Half Day</option>
+              <option value="ON_LEAVE">Leave</option>
+              <option value="PAID_LEAVE">Paid Leave</option>
+              <option value="HOLIDAY">Holiday</option>
+              <option value="ABSENT">Absent</option>
+              <option value="LATE">Late</option>
+            </Form.Select>
+          </div>
         </Card.Header>
         <Card.Body>
           <Table hover responsive className="text-nowrap align-middle">

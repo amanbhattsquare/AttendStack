@@ -18,6 +18,7 @@ import {
   IconLogin2,
   IconLogout2,
   IconCircleCheck,
+  IconNotes,
 } from "@tabler/icons-react";
 import { useCurrentEmployee } from "./useCurrentEmployee";
 import { Spinner, Alert, Badge, Card, Button, Row, Col } from "react-bootstrap";
@@ -92,6 +93,13 @@ const EmployeeDashboard = () => {
   const [actionLoading, setActionLoading] = useState<"check-in" | "check-out" | null>(null);
   const [punchError, setPunchError] = useState("");
   const [punchSuccess, setPunchSuccess] = useState("");
+  const DEFAULT_RULES = `1. Core Working Hours: 10:00 AM to 6:00 PM.
+2. Late Entry: Arriving after 10:15 AM will be marked as Late.
+3. Half Day: Working less than 4 hours will be considered a Half Day.
+4. Leave Requests: Must be submitted at least 24 hours in advance.
+5. Unpaid Leave: Absences without prior approval will be considered Unpaid.`;
+
+  const [attendanceRules, setAttendanceRules] = useState("");
 
   const loadTodayAttendance = async () => {
     const token = localStorage.getItem("authToken");
@@ -112,6 +120,8 @@ const EmployeeDashboard = () => {
   useEffect(() => {
     setMounted(true);
     loadTodayAttendance();
+    const rules = localStorage.getItem("attendance_rules");
+    setAttendanceRules(rules || DEFAULT_RULES);
     const timer = window.setInterval(() => setCurrentTime(new Date()), 1000);
     return () => window.clearInterval(timer);
   }, []);
@@ -222,13 +232,28 @@ const EmployeeDashboard = () => {
       </div>
 
       {/* Helpful Tip Banner */}
-      <div className="alert alert-primary border-0 shadow-sm d-flex align-items-center gap-3 mb-5 p-3 px-4">
+      <div className="alert alert-primary border-0 shadow-sm d-flex align-items-center gap-3 mb-4 p-3 px-4">
         <IconClock size={24} className="text-primary flex-shrink-0 animate-pulse" />
         <div>
           <strong className="text-primary-emphasis">Shift Schedule:</strong> 
           <span className="text-secondary ms-1">Standard office timing is **10:00 AM to 06:00 PM**. Please check in and check out daily from your portal to track working hours accurately.</span>
         </div>
       </div>
+
+      {/* Attendance Rules Section */}
+      {attendanceRules && (
+        <Card className="border-0 shadow-sm mb-5 overflow-hidden rounded-4 bg-white">
+          <Card.Header className="bg-light d-flex align-items-center gap-2 py-3 border-bottom-0">
+            <IconNotes size={20} className="text-primary" />
+            <h5 className="mb-0 fw-bold text-dark">Company Attendance Rules</h5>
+          </Card.Header>
+          <Card.Body className="p-4 bg-light-subtle">
+            <div className="rules-content text-secondary" style={{ whiteSpace: "pre-line", lineHeight: "1.6" }}>
+              {attendanceRules}
+            </div>
+          </Card.Body>
+        </Card>
+      )}
 
       {/* Attendance Punch In/Out Quick Action Panel */}
       {mounted && (

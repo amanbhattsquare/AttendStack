@@ -26,7 +26,78 @@ const AdminDashboard = () => {
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [totalEmployees, setTotalEmployees] = useState(0);
   const [stats, setStats] = useState<DashboardStatType[]>([]);
-  const [chartData, setChartData] = useState<{ x: string; y: number }[]>([]);
+  const [attendanceChartData, setAttendanceChartData] = useState<{ status: string; count: number; color: string }[]>([]);
+  const [activityLogs, setActivityLogs] = useState<{ description: string; timestamp: string; colorClass: string }[]>([]);
+
+  const fetchAttendances = async () => {
+    try {
+      const token = localStorage.getItem("authToken");
+      const response = await axios.get("http://127.0.0.1:8000/api/v1/attendance/", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const records = Array.isArray(response.data) ? response.data : (response.data.results || []);
+      
+      // Process for Chart: Today's Overview
+      const todayStr = new Date().toISOString().split("T")[0];
+      const todaysRecords = records.filter((r: any) => r.date === todayStr);
+      
+      let presentCount = 0;
+      let absentCount = 0;
+      let lateCount = 0;
+      let leaveCount = 0;
+
+      todaysRecords.forEach((r: any) => {
+        if (r.status === "PRESENT") presentCount++;
+        else if (r.status === "ABSENT") absentCount++;
+        else if (r.status === "LATE") lateCount++;
+        else if (r.status === "ON_LEAVE" || r.status === "PAID_LEAVE") leaveCount++;
+        else if (r.status === "HALF_DAY") presentCount++; // counted as present for pie chart simplicity, or split it
+      });
+
+      setAttendanceChartData([
+        { status: "Present", count: presentCount, color: "#10b981" }, // success green
+        { status: "Late", count: lateCount, color: "#f59e0b" }, // warning yellow
+        { status: "Absent", count: absentCount, color: "#ef4444" }, // danger red
+        { status: "On Leave", count: leaveCount, color: "#64748b" }, // secondary gray
+      ]);
+
+      // Process for Activity Log (Latest 5 records based on created/updated or just first 5)
+      // Since it's a list of records, we will create events like "Aman checked in"
+      const recentRecords = [...records].reverse().slice(0, 5);
+      const logs = recentRecords.map((r: any) => {
+        const timeStr = r.check_in 
+          ? new Intl.DateTimeFormat("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true }).format(new Date(r.check_in))
+          : new Intl.DateTimeFormat("en-IN", { month: "short", day: "2-digit" }).format(new Date(r.date));
+        
+        let desc = `${r.employee_name || 'Employee'} marked attendance`;
+        let color = "primary";
+        
+        if (r.status === "PRESENT" || r.status === "HALF_DAY") {
+          desc = `${r.employee_name || 'Employee'} checked in at ${timeStr}`;
+          color = "success";
+        } else if (r.status === "LATE") {
+          desc = `${r.employee_name || 'Employee'} checked in late at ${timeStr}`;
+          color = "warning";
+        } else if (r.status === "ON_LEAVE" || r.status === "PAID_LEAVE") {
+          desc = `${r.employee_name || 'Employee'} is on leave`;
+          color = "secondary";
+        } else if (r.status === "ABSENT") {
+          desc = `${r.employee_name || 'Employee'} was marked absent`;
+          color = "danger";
+        }
+        
+        return {
+          description: desc,
+          timestamp: new Date(r.date).toLocaleDateString("en-IN", { month: "short", day: "2-digit", year: "numeric" }),
+          colorClass: color
+        };
+      });
+      setActivityLogs(logs);
+
+    } catch (err) {
+      console.error("Failed to fetch attendances.", err);
+    }
+  };
 
   const fetchOrganizations = async () => {
     try {
@@ -59,6 +130,7 @@ const AdminDashboard = () => {
   useEffect(() => {
     fetchOrganizations();
     fetchEmployees();
+    fetchAttendances();
   }, []);
 
   useEffect(() => {
@@ -73,13 +145,6 @@ const AdminDashboard = () => {
     );
 
     setStats([...adminStats, ...filteredDashboardStats]);
-
-    setChartData(
-      organizations.map((org) => ({
-        x: org.name,
-        y: org.employee_count,
-      }))
-    );
   }, [organizations, totalEmployees]);
 
   return (
@@ -94,10 +159,10 @@ const AdminDashboard = () => {
 
       <Row className="g-4 mb-4">
         <Col xs={12} lg={8}>
-          <EmployeesByOrgChart data={chartData} />
+          <EmployeesByOrgChart data={attendanceChartData} />
         </Col>
         <Col xs={12} lg={4}>
-          <ActivityLog />
+          <ActivityLog logs={activityLogs} />
         </Col>
       </Row>
     </div>

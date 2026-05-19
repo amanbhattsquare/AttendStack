@@ -3,24 +3,44 @@ import { Card } from "react-bootstrap";
 import Chart from "react-apexcharts";
 import { ApexOptions } from "apexcharts";
 
-interface EmployeesByOrgChartProps {
-  data: { x: string; y: number }[];
+interface AttendanceOverviewChartProps {
+  data: { status: string; count: number; color: string }[];
 }
 
-const EmployeesByOrgChart = ({ data }: EmployeesByOrgChartProps) => {
+const EmployeesByOrgChart = ({ data }: AttendanceOverviewChartProps) => {
   const options: ApexOptions = {
     chart: {
-      type: "bar",
+      type: "donut",
       height: 350,
-      toolbar: {
-        show: false,
-      },
+      fontFamily: 'Inter, sans-serif',
     },
+    labels: data.map((d) => d.status),
+    colors: data.map((d) => d.color),
     plotOptions: {
-      bar: {
-        horizontal: false,
-        columnWidth: "55%",
-      },
+      pie: {
+        donut: {
+          size: '70%',
+          labels: {
+            show: true,
+            name: {
+              show: true,
+              fontSize: '14px',
+            },
+            value: {
+              show: true,
+              fontSize: '24px',
+              fontWeight: 600,
+            },
+            total: {
+              show: true,
+              showAlways: true,
+              label: 'Total',
+              fontSize: '16px',
+              fontWeight: 600,
+            }
+          }
+        }
+      }
     },
     dataLabels: {
       enabled: false,
@@ -30,16 +50,9 @@ const EmployeesByOrgChart = ({ data }: EmployeesByOrgChartProps) => {
       width: 2,
       colors: ["transparent"],
     },
-    xaxis: {
-      categories: data.map((d) => d.x),
-    },
-    yaxis: {
-      title: {
-        text: "Number of Employees",
-      },
-    },
-    fill: {
-      opacity: 1,
+    legend: {
+      position: 'bottom',
+      horizontalAlign: 'center',
     },
     tooltip: {
       y: {
@@ -50,20 +63,24 @@ const EmployeesByOrgChart = ({ data }: EmployeesByOrgChartProps) => {
     },
   };
 
-  const series = [
-    {
-      name: "Employees",
-      data: data.map((d) => d.y),
-    },
-  ];
+  const series = data.map((d) => d.count);
+  const totalCount = series.reduce((a, b) => a + b, 0);
 
   return (
-    <Card>
-      <Card.Header>
-        <h5 className="mb-0">Employees by Organization</h5>
+    <Card className="border-0 shadow-sm h-100">
+      <Card.Header className="bg-white py-3 border-bottom-0">
+        <h5 className="mb-0 fw-bold text-dark">Today's Attendance Overview</h5>
       </Card.Header>
-      <Card.Body>
-        <Chart options={options} series={series} type="bar" height={350} />
+      <Card.Body className="d-flex align-items-center justify-content-center">
+        {totalCount > 0 ? (
+          <div className="w-100 d-flex justify-content-center">
+            <Chart options={options} series={series} type="donut" height={350} width={400} />
+          </div>
+        ) : (
+          <div className="text-secondary text-center py-5">
+            No attendance records available for today.
+          </div>
+        )}
       </Card.Body>
     </Card>
   );

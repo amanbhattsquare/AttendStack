@@ -23,10 +23,12 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path("api/v1/", include("organizations.urls")),
     path("api/v1/accounts/", include("accounts.urls", namespace="accounts")),
+    path('admin/sign-in', include("accounts.urls", namespace="sign-in")),
     path("api/v1/employees/", include("employees.urls", namespace="employees")),
     path("api/v1/attendance/", include("attendance.urls", namespace="attendance")),
     path("api/v1/holidays/", include("holidays.urls", namespace="holidays")),
     path("api/v1/payroll/", include("payroll.urls", namespace="payroll")),
+    path("api/", include("accounts.urls")),
 ]
 
 if settings.DEBUG:

@@ -4,7 +4,7 @@ import { Fragment, useState, useEffect } from "react";
 import { IconDownload, IconPrinter } from "@tabler/icons-react";
 import { Spinner, Alert, Badge, Table, Button, Modal, Row, Col } from "react-bootstrap";
 
-const BASE_URL = "http://127.0.0.1:8000/api/v1/payroll/";
+const BASE_URL = `${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/payroll/`;
 
 const authHeaders = (): HeadersInit => {
   const token = localStorage.getItem("authToken");

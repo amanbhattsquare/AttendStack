@@ -53,7 +53,7 @@ const AdminLeavesClient = () => {
     }
 
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/v1/attendance/leaves/", {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/attendance/leaves/`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -93,7 +93,7 @@ const AdminLeavesClient = () => {
 
     setIsSubmitting(true);
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/v1/attendance/leaves/${selectedLeave.id}/`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/attendance/leaves/${selectedLeave.id}/`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",

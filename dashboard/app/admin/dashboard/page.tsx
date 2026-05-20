@@ -10,7 +10,11 @@ import { IconBuilding, IconUsers } from "@tabler/icons-react";
 import DashboardStats from "components/dashboard/DashboardStats";
 import { AdminDashboardStatsData } from "data/AdminDashboardData";
 import { DashboardStatType } from "types/DashboardTypes";
-import EmployeesByOrgChart from "components/dashboard/EmployeesByOrgChart";
+import dynamic from "next/dynamic";
+const EmployeesByOrgChart = dynamic(
+  () => import("components/dashboard/EmployeesByOrgChart"),
+  { ssr: false }
+);
 import ActivityLog from "components/dashboard/ActivityLog";
 import { activityLog as activityLogData, DashboardStatsData } from "data/DashboardData";
 
@@ -22,6 +26,15 @@ interface Organization {
   employee_count: number;
 }
 
+const getAuthHeaders = () => {
+  const token = typeof window !== 'undefined' ? localStorage.getItem("authToken") : null;
+  return {
+    headers: {
+      Authorization: token ? `Bearer ${token}` : '',
+    },
+  };
+};
+
 const AdminDashboard = () => {
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [totalEmployees, setTotalEmployees] = useState(0);
@@ -30,12 +43,7 @@ const AdminDashboard = () => {
 
   const fetchOrganizations = async () => {
     try {
-      const token = localStorage.getItem("authToken");
-      const response = await axios.get("http://127.0.0.1:8000/api/v1/organizations/", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      const response = await axios.get("http://127.0.0.1:8000/api/v1/organizations/", getAuthHeaders());
       setOrganizations(response.data.results);
     } catch (err) {
       console.error("Failed to fetch organizations.", err);
@@ -44,12 +52,7 @@ const AdminDashboard = () => {
 
   const fetchEmployees = async () => {
     try {
-      const token = localStorage.getItem("authToken");
-      const response = await axios.get("http://127.0.0.1:8000/api/v1/employees/", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      const response = await axios.get("http://127.0.0.1:8000/api/v1/employees/", getAuthHeaders());
       setTotalEmployees(response.data.count);
     } catch (err) {
       console.error("Failed to fetch employees count.");

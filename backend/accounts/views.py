@@ -4,8 +4,9 @@ Login, profile, and user management views
 """
 
 from django.contrib.auth import get_user_model
-from rest_framework import generics, status
+from rest_framework import generics, status, permissions
 from rest_framework.response import Response
+from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView
 
 from .permissions import IsSuperAdmin
@@ -93,3 +94,13 @@ class CreateHRView(generics.CreateAPIView):
         }
         headers = self.get_success_headers(serializer.data)
         return Response(response_data, status=status.HTTP_201_CREATED, headers=headers)
+
+
+class HealthCheckView(APIView):
+    """
+    Check the health of the application.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, *args, **kwargs):
+        return Response({"status": "ok"})

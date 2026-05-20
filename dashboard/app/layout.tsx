@@ -10,6 +10,8 @@ import "swiper/swiper-bundle.css";
 
 // import main theme scss
 import "styles/theme.scss";
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 const publicSans = Public_Sans({
   variable: "--font-public-sans",

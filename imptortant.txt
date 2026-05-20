@@ -1,0 +1,160 @@
+python3 -m venv venv
+source venv/bin/activate
+
+
+python manage.py collectstatic --noinput
+sudo nano /etc/systemd/system/attendstack-backend.service
+
+
+
+sudo systemctl start attendstack-backend
+sudo systemctl enable attendstack-backend  # Starts on boot
+
+
+
+npm run build
+
+
+
+
+# 1. Navigate to your frontend project directory
+cd /home/squarefit/AttendStack/dashboard
+
+# 2. Install PM2 globally (if you haven't already)
+sudo npm install pm2 -g
+
+# 3. Tell PM2 to start your Next.js app on port 3001
+#    Note the use of -p for the port
+pm2 start npm --name "attendstack-frontend" -- start -- -p 3001
+
+# 4. Save the PM2 process list to be restored on reboot
+pm2 save
+
+# 5. Generate the command to make PM2 start on boot
+pm2 startup
+
+
+
+
+
+
+sudo nano /etc/nginx/sites-available/attendstack
+
+
+
+
+
+
+
+
+
+# /etc/nginx/sites-available/attendstack
+
+server {
+    listen 80;
+    server_name attendance.nextgenapplication.com;
+
+    # Increase max body size for file uploads if needed
+    client_max_body_size 10M;
+
+    # ==========================================
+    # 1. PROXY ALL API REQUESTS TO DJANGO
+    # ==========================================
+    location /api {
+        proxy_pass http://127.0.0.1:8001;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # ==========================================
+    # 2. SERVE DJANGO'S ADMIN PANEL & STATIC FILES
+    # ==========================================
+    location /admin {
+        proxy_pass http://127.0.0.1:8001;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+
+    # Serve collected static files directly for better performance
+    location /static/ {
+        alias /home/squarefit/AttendStack/backend/staticfiles/;
+    }
+
+    # Serve Django's media uploads directly
+    location /media/ {
+        alias /home/squarefit/AttendStack/backend/media/;
+    }
+
+    # ==========================================
+    # 3. PROXY ALL OTHER REQUESTS TO NEXT.JS
+    # ==========================================
+    location / {
+        proxy_pass http://127.0.0.1:3001;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+
+
+
+
+
+
+
+sudo ln -s /etc/nginx/sites-available/attendstack /etc/nginx/sites-enabled/
+
+sudo nginx -t
+
+
+
+
+# Install Certbot and the Nginx plugin
+sudo apt install certbot python3-certbot-nginx -y
+
+# Run Certbot, which will automatically modify your Nginx config
+sudo certbot --nginx -d attendance.nextgenapplication.com
+
+
+
+
+
+
+
+
+# Check Django status
+sudo systemctl status attendstack-backend
+
+# Check Next.js status
+pm2 list
+
+
+
+
+
+
+# Check service status
+sudo systemctl status nginx
+sudo systemctl status attendstack-backend
+
+# Restart services if needed
+sudo systemctl restart nginx
+sudo systemctl restart attendstack-backend
+
+# View logs
+sudo journalctl -u attendstack-backend -f
+sudo tail -f /var/log/nginx/access.log
+
+
+
+sudo systemctl restart attendstack-backend

@@ -38,7 +38,7 @@ type EmployeeSummary = {
   halfDay: number;
 };
 
-const API_URL = "http://127.0.0.1:8000/api/v1/attendance/";
+const API_URL = `${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/attendance/`;
 const recordsPerPage = 20;
 
 const authHeaders = (): HeadersInit => {
@@ -115,13 +115,10 @@ const AttendanceRecordsClient = () => {
 
   const loadEmployees = async () => {
     try {
-      const response = await fetch("http://127.0.0.1:8000/api/v1/employees/", {
-        headers: authHeaders(),
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setEmployeesList(Array.isArray(data) ? data : data.results || []);
-      }
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/employees/`, { headers: authHeaders() });
+      if (!response.ok) throw new Error("Failed to load employees list.");
+      const data = await response.json();
+      setEmployeesList(Array.isArray(data) ? data : data.results || []);
     } catch (err) {
       console.error("Failed to load employees list:", err);
     }

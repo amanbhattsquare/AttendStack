@@ -8,7 +8,9 @@ import {
 } from "@tanstack/react-table";
 import { useState } from "react";
 
-export const useHolidays = (data: any, isAdmin: boolean) => {
+import { Holiday } from "./types";
+
+export const useHolidays = (data: Holiday[], isAdmin: boolean) => {
   const [sorting, setSorting] = useState<any>([]);
   const [columnFilters, setColumnFilters] = useState<any>([]);
   const [pagination, setPagination] = useState({
@@ -59,7 +61,7 @@ export const useHolidays = (data: any, isAdmin: boolean) => {
     });
   }
 
-  const table = useReactTable({
+  const table = useReactTable<Holiday>({
     data,
     columns,
     state: {

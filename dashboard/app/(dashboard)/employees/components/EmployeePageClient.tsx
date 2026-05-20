@@ -42,7 +42,7 @@ type PasswordActionResponse = {
   temporary_password: string;
 };
 
-const API_URL = "http://127.0.0.1:8000/api/v1/employees/";
+const API_URL = `${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/employees/`;
 
 const statusBadgeClass: Record<Employee["status"], string> = {
   ACTIVE: "bg-success-subtle text-success",

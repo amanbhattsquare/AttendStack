@@ -30,7 +30,7 @@ const AddOrganizationPage = () => {
     trialPeriod: '14',
   });
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setNewOrg(prevState => ({ ...prevState, [name]: value }));
   };

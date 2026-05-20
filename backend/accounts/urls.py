@@ -7,6 +7,7 @@ from rest_framework_simplejwt.views import TokenRefreshView
 from .views import (
     ChangePasswordView,
     CreateHRView,
+    HealthCheckView,
     LoginView,
     UserProfileView,
 )
@@ -24,4 +25,7 @@ urlpatterns = [
 
     # Admin
     path("admin/create-hr/", CreateHRView.as_view(), name="create_hr"),
+
+    # Health Check
+    path("", HealthCheckView.as_view(), name="health_check"),
 ]

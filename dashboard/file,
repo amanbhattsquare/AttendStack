@@ -1,0 +1,592 @@
+Script started on 2026-05-19 05:23:07+00:00 [TERM="xterm-256color" TTY="/dev/pts/4" COLUMNS="86" LINES="14"]
+[?2004h]0;squarefit@srv1208982: ~/AttendStack/dashboard[01;32msquarefit@srv1208982[00m:[01;34m~/AttendStack/dashboard[00m$ [H[2J]0;squarefit@srv1208982: ~/AttendStack/dashboard[01;32msquarefit@srv1208982[00m:[01;34m~/AttendStack/dashboard[00m$ [7mcd /path/to/your/nextjs/frontend[27m
+
+[7m# Install dependencies and build the project[27m
+[7mnpm install[27m
+[7mnpm run build  # This creates the .next folder[27m
+
+[7m# You can test it manually first:[27m
+[7m# npm run start -- --port 3001[27m[A[A[A[A[A[A[A]0;squarefit@srv1208982: ~/AttendStack/dashboard[01;32msquarefit@srv1208982[00m:[01;34m~/AttendStack/dashboard[00m$ cd /path/to/your/nextjs/frontend
+
+# Install dependencies and build the project
+npm install
+npm run build  # This creates the .next folder
+
+# You can test it manually first:
+# npm run start -- --port 3001
+[?2004lbash: cd: /path/to/your/nextjs/frontend: No such file or directory
+⠙[1G[0K⠹[1G[0K⠸[1G[0K⠼[1G[0K⠴[1G[0K⠦[1G[0K⠧[1G[0K⠇[1G[0K⠏[1G[0K⠋[1G[0K⠙[1G[0K⠹[1G[0K⠸[1G[0K⠼[1G[0K⠴[1G[0K⠦[1G[0K⠧[1G[0K⠇[1G[0K⠏[1G[0K⠋[1G[0K⠙[1G[0K⠹[1G[0K⠸[1G[0K⠼[1G[0K⠴[1G[0K⠦[1G[0K⠧[1G[0K⠇[1G[0K⠏[1G[0K⠋[1G[0K⠙[1G[0K⠹[1G[0K⠸[1G[0K⠼[1G[0K
+up to date, audited 628 packages in 5s
+⠼[1G[0K
+⠼[1G[0K182 packages are looking for funding
+⠼[1G[0K  run `npm fund` for details
+⠼[1G[0K
+[31m[1m23[22m[39m vulnerabilities (4 [1mlow[22m, 9 [33m[1mmoderate[22m[39m, 9 [31m[1mhigh[22m[39m, 1 [35m[1mcritical[22m[39m)
+
+To address issues that do not require attention, run:
+  npm audit fix
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+⠴[1G[0K
+> dasher-ui-nextjs-free@1.0.0 build
+> next build && touch out/.nojekyll
+
+[1m[38;2;173;127;168m▲ Next.js 16.2.6[39m[22m (Turbopack)
+
+[37m[1m [22m[39m Creating an optimized production build ...
+Turbopack build encountered 16 warnings:
+./styles/theme.scss
+Issue while running loader
+SassWarning: 434 repetitive deprecation warnings omitted.
+Run in verbose mode to see all warnings.
+
+
+./styles/theme.scss
+Issue while running loader
+SassWarning: Deprecation Warning on line 1, column 8 of file:///home/squarefit/AttendStack/dashboard/styles/theme.scss:1:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+1 | @import "../node_modules/bootstrap/scss/functions";
+
+
+styles/theme.scss 2:9  root stylesheet
+
+
+
+./styles/theme.scss
+Issue while running loader
+SassWarning: Deprecation Warning on line 10, column 8 of file:///home/squarefit/AttendStack/dashboard/styles/theme.scss:10:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+10 | @import "theme/variables";
+
+
+styles/theme.scss 11:9  root stylesheet
+
+
+
+./styles/theme.scss
+Issue while running loader
+SassWarning: Deprecation Warning on line 11, column 8 of file:///home/squarefit/AttendStack/dashboard/styles/theme.scss:11:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+11 | @import "theme/variables-dark";
+
+
+styles/theme.scss 12:9  root stylesheet
+
+
+
+./styles/theme.scss
+Issue while running loader
+SassWarning: Deprecation Warning on line 13, column 8 of file:///home/squarefit/AttendStack/dashboard/styles/theme.scss:13:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+13 | @import "theme/utilities";
+
+
+styles/theme.scss 14:9  root stylesheet
+
+
+
+./styles/theme.scss
+Issue while running loader
+SassWarning: Deprecation Warning on line 206, column 10 of file:///home/squarefit/AttendStack/dashboard/node_modules/bootstrap/scss/_functions.scss:206:10:
+Global built-in functions are deprecated and will be removed in Dart Sass 3.0.0.
+Use color.mix instead.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+206 |   @return mix(white, $color, $weight);
+
+
+node_modules/bootstrap/scss/_functions.scss 207:11  tint-color()
+styles/theme/_variables.scss 70:15                  @import
+styles/theme.scss 11:9                              root stylesheet
+
+
+
+./styles/theme.scss
+Issue while running loader
+SassWarning: Deprecation Warning on line 67, column 20 of file:///home/squarefit/AttendStack/dashboard/styles/theme/_variables.scss:67:20:
+Global built-in functions are deprecated and will be removed in Dart Sass 3.0.0.
+Use color.red instead.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+67 | $primary-100-rgb: #[35m{red($primary-100)}[39m, #[35m{green($primary-100)}[39m, #[35m{blue($primary-100)}[39m;
+
+
+styles/theme/_variables.scss 68:21  @import
+styles/theme.scss 11:9              root stylesheet
+
+
+
+./styles/theme.scss
+Issue while running loader
+SassWarning: Deprecation Warning on line 67, column 20 of file:///home/squarefit/AttendStack/dashboard/styles/theme/_variables.scss:67:20:
+red() is deprecated. Suggestion:
+
+color.channel($color, "red", $space: rgb)
+
+More info: https://sass-lang.com/d/color-functions
+
+67 | $primary-100-rgb: #[35m{red($primary-100)}[39m, #[35m{green($primary-100)}[39m, #[35m{blue($primary-100)}[39m;
+
+
+styles/theme/_variables.scss 68:21  @import
+styles/theme.scss 11:9              root stylesheet
+
+
+
+./styles/theme.scss
+Issue while running loader
+SassWarning: Deprecation Warning on line 67, column 42 of file:///home/squarefit/AttendStack/dashboard/styles/theme/_variables.scss:67:42:
+Global built-in functions are deprecated and will be removed in Dart Sass 3.0.0.
+Use color.green instead.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+67 | $primary-100-rgb: #[35m{red($primary-100)}[39m, #[35m{green($primary-100)}[39m, #[35m{blue($primary-100)}[39m;
+
+
+styles/theme/_variables.scss 68:43  @import
+styles/theme.scss 11:9              root stylesheet
+
+
+
+./styles/theme.scss
+Issue while running loader
+SassWarning: Deprecation Warning on line 67, column 42 of file:///home/squarefit/AttendStack/dashboard/styles/theme/_variables.scss:67:42:
+green() is deprecated. Suggestion:
+
+color.channel($color, "green", $space: rgb)
+
+More info: https://sass-lang.com/d/color-functions
+
+67 | $primary-100-rgb: #[35m{red($primary-100)}[39m, #[35m{green($primary-100)}[39m, #[35m{blue($primary-100)}[39m;
+
+
+styles/theme/_variables.scss 68:43  @import
+styles/theme.scss 11:9              root stylesheet
+
+
+
+./styles/theme.scss
+Issue while running loader
+SassWarning: Deprecation Warning on line 67, column 66 of file:///home/squarefit/AttendStack/dashboard/styles/theme/_variables.scss:67:66:
+Global built-in functions are deprecated and will be removed in Dart Sass 3.0.0.
+Use color.blue instead.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+67 | $primary-100-rgb: #[35m{red($primary-100)}[39m, #[35m{green($primary-100)}[39m, #[35m{blue($primary-100)}[39m;
+
+
+styles/theme/_variables.scss 68:67  @import
+styles/theme.scss 11:9              root stylesheet
+
+
+
+./styles/theme.scss
+Issue while running loader
+SassWarning: Deprecation Warning on line 67, column 66 of file:///home/squarefit/AttendStack/dashboard/styles/theme/_variables.scss:67:66:
+blue() is deprecated. Suggestion:
+
+color.channel($color, "blue", $space: rgb)
+
+More info: https://sass-lang.com/d/color-functions
+
+67 | $primary-100-rgb: #[35m{red($primary-100)}[39m, #[35m{green($primary-100)}[39m, #[35m{blue($primary-100)}[39m;
+
+
+styles/theme/_variables.scss 68:67  @import
+styles/theme.scss 11:9              root stylesheet
+
+
+
+./styles/theme.scss
+Issue while running loader
+SassWarning: Deprecation Warning on line 7, column 8 of file:///home/squarefit/AttendStack/dashboard/styles/theme.scss:7:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+7 | @import "user-variables";
+
+
+styles/theme.scss 8:9  root stylesheet
+
+
+
+./styles/theme.scss
+Issue while running loader
+SassWarning: Deprecation Warning on line 71, column 20 of file:///home/squarefit/AttendStack/dashboard/styles/theme/_variables.scss:71:20:
+Global built-in functions are deprecated and will be removed in Dart Sass 3.0.0.
+Use color.red instead.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+71 | $primary-300-rgb: #[35m{red($primary-300)}[39m, #[35m{green($primary-300)}[39m, #[35m{blue($primary-300)}[39m;
+
+
+styles/theme/_variables.scss 72:21  @import
+styles/theme.scss 11:9              root stylesheet
+
+
+
+./styles/theme.scss
+Issue while running loader
+SassWarning: Deprecation Warning on line 71, column 20 of file:///home/squarefit/AttendStack/dashboard/styles/theme/_variables.scss:71:20:
+red() is deprecated. Suggestion:
+
+color.channel($color, "red", $space: rgb)
+
+More info: https://sass-lang.com/d/color-functions
+
+71 | $primary-300-rgb: #[35m{red($primary-300)}[39m, #[35m{green($primary-300)}[39m, #[35m{blue($primary-300)}[39m;
+
+
+styles/theme/_variables.scss 72:21  @import
+styles/theme.scss 11:9              root stylesheet
+
+
+
+./styles/theme.scss
+Issue while running loader
+SassWarning: Deprecation Warning on line 71, column 42 of file:///home/squarefit/AttendStack/dashboard/styles/theme/_variables.scss:71:42:
+green() is deprecated. Suggestion:
+
+color.channel($color, "green", $space: rgb)
+
+More info: https://sass-lang.com/d/color-functions
+
+71 | $primary-300-rgb: #[35m{red($primary-300)}[39m, #[35m{green($primary-300)}[39m, #[35m{blue($primary-300)}[39m;
+
+
+styles/theme/_variables.scss 72:43  @import
+styles/theme.scss 11:9              root stylesheet
+
+
+
+[32m[1m✓[22m[39m Compiled successfully in 24.3s
+[?25l[37m[1m [22m[39m Running TypeScript  [36m.[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m..[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m...[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m.[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m..[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m...[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m.[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m..[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m...[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m.[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m..[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m...[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m.[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m..[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m...[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m.[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m..[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m...[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m.[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m..[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m...[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m.[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m..[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m...[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m.[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m..[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m...[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m.[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m..[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m...[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m.[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m..[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m...[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m.[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m..[39m[?25h⠙[1G[0K[?2004h]0;squarefit@srv1208982: ~/AttendStack/dashboard[01;32msquarefit@srv1208982[00m:[01;34m~/AttendStack/dashboard[00m$ [H[2J]0;squarefit@srv1208982: ~/AttendStack/dashboard[01;32msquarefit@srv1208982[00m:[01;34m~/AttendStack/dashboard[00m$ [7m# Navigate to your Next.js project direc[27m[7mt[27m[7mory [27m
+[7mcd /home/squarefit/AttendStack/dashboard[27m
+
+[7m# Install dependencies and build the project[27m
+[7mnpm install[27m
+[7mnpm run build[27m
+
+[7m# You can test it manually first:[27m
+[7mnpm run start -- --port 3001[27m[A[A[A[A[A[A[A[A[A]0;squarefit@srv1208982: ~/AttendStack/dashboard[01;32msquarefit@srv1208982[00m:[01;34m~/AttendStack/dashboard[00m$ # Navigate to your Next.js project directory
+cd /home/squarefit/AttendStack/dashboard
+
+# Install dependencies and build the project
+npm install
+npm run build
+
+# You can test it manually first:
+npm run start -- --port 3001
+[?2004l⠙[1G[0K⠹[1G[0K⠸[1G[0K⠼[1G[0K⠴[1G[0K⠦[1G[0K⠧[1G[0K⠇[1G[0K⠏[1G[0K⠋[1G[0K⠙[1G[0K⠹[1G[0K⠸[1G[0K⠼[1G[0K⠴[1G[0K⠦[1G[0K⠧[1G[0K⠇[1G[0K
+up to date, audited 628 packages in 5s
+⠇[1G[0K
+⠇[1G[0K182 packages are looking for funding
+⠇[1G[0K  run `npm fund` for details
+⠇[1G[0K
+[31m[1m23[22m[39m vulnerabilities (4 [1mlow[22m, 9 [33m[1mmoderate[22m[39m, 9 [31m[1mhigh[22m[39m, 1 [35m[1mcritical[22m[39m)
+
+To address issues that do not require attention, run:
+  npm audit fix
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+⠏[1G[0K
+> dasher-ui-nextjs-free@1.0.0 build
+> next build && touch out/.nojekyll
+
+[1m[38;2;173;127;168m▲ Next.js 16.2.6[39m[22m (Turbopack)
+
+[37m[1m [22m[39m Creating an optimized production build ...
+Turbopack build encountered 16 warnings:
+./styles/theme.scss
+Issue while running loader
+SassWarning: 434 repetitive deprecation warnings omitted.
+Run in verbose mode to see all warnings.
+
+
+./styles/theme.scss
+Issue while running loader
+SassWarning: Deprecation Warning on line 1, column 8 of file:///home/squarefit/AttendStack/dashboard/styles/theme.scss:1:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+1 | @import "../node_modules/bootstrap/scss/functions";
+
+
+styles/theme.scss 2:9  root stylesheet
+
+
+
+./styles/theme.scss
+Issue while running loader
+SassWarning: Deprecation Warning on line 10, column 8 of file:///home/squarefit/AttendStack/dashboard/styles/theme.scss:10:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+10 | @import "theme/variables";
+
+
+styles/theme.scss 11:9  root stylesheet
+
+
+
+./styles/theme.scss
+Issue while running loader
+SassWarning: Deprecation Warning on line 11, column 8 of file:///home/squarefit/AttendStack/dashboard/styles/theme.scss:11:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+11 | @import "theme/variables-dark";
+
+
+styles/theme.scss 12:9  root stylesheet
+
+
+
+./styles/theme.scss
+Issue while running loader
+SassWarning: Deprecation Warning on line 13, column 8 of file:///home/squarefit/AttendStack/dashboard/styles/theme.scss:13:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+13 | @import "theme/utilities";
+
+
+styles/theme.scss 14:9  root stylesheet
+
+
+
+./styles/theme.scss
+Issue while running loader
+SassWarning: Deprecation Warning on line 206, column 10 of file:///home/squarefit/AttendStack/dashboard/node_modules/bootstrap/scss/_functions.scss:206:10:
+Global built-in functions are deprecated and will be removed in Dart Sass 3.0.0.
+Use color.mix instead.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+206 |   @return mix(white, $color, $weight);
+
+
+node_modules/bootstrap/scss/_functions.scss 207:11  tint-color()
+styles/theme/_variables.scss 70:15                  @import
+styles/theme.scss 11:9                              root stylesheet
+
+
+
+./styles/theme.scss
+Issue while running loader
+SassWarning: Deprecation Warning on line 67, column 20 of file:///home/squarefit/AttendStack/dashboard/styles/theme/_variables.scss:67:20:
+Global built-in functions are deprecated and will be removed in Dart Sass 3.0.0.
+Use color.red instead.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+67 | $primary-100-rgb: #[35m{red($primary-100)}[39m, #[35m{green($primary-100)}[39m, #[35m{blue($primary-100)}[39m;
+
+
+styles/theme/_variables.scss 68:21  @import
+styles/theme.scss 11:9              root stylesheet
+
+
+
+./styles/theme.scss
+Issue while running loader
+SassWarning: Deprecation Warning on line 67, column 20 of file:///home/squarefit/AttendStack/dashboard/styles/theme/_variables.scss:67:20:
+red() is deprecated. Suggestion:
+
+color.channel($color, "red", $space: rgb)
+
+More info: https://sass-lang.com/d/color-functions
+
+67 | $primary-100-rgb: #[35m{red($primary-100)}[39m, #[35m{green($primary-100)}[39m, #[35m{blue($primary-100)}[39m;
+
+
+styles/theme/_variables.scss 68:21  @import
+styles/theme.scss 11:9              root stylesheet
+
+
+
+./styles/theme.scss
+Issue while running loader
+SassWarning: Deprecation Warning on line 67, column 42 of file:///home/squarefit/AttendStack/dashboard/styles/theme/_variables.scss:67:42:
+Global built-in functions are deprecated and will be removed in Dart Sass 3.0.0.
+Use color.green instead.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+67 | $primary-100-rgb: #[35m{red($primary-100)}[39m, #[35m{green($primary-100)}[39m, #[35m{blue($primary-100)}[39m;
+
+
+styles/theme/_variables.scss 68:43  @import
+styles/theme.scss 11:9              root stylesheet
+
+
+
+./styles/theme.scss
+Issue while running loader
+SassWarning: Deprecation Warning on line 67, column 42 of file:///home/squarefit/AttendStack/dashboard/styles/theme/_variables.scss:67:42:
+green() is deprecated. Suggestion:
+
+color.channel($color, "green", $space: rgb)
+
+More info: https://sass-lang.com/d/color-functions
+
+67 | $primary-100-rgb: #[35m{red($primary-100)}[39m, #[35m{green($primary-100)}[39m, #[35m{blue($primary-100)}[39m;
+
+
+styles/theme/_variables.scss 68:43  @import
+styles/theme.scss 11:9              root stylesheet
+
+
+
+./styles/theme.scss
+Issue while running loader
+SassWarning: Deprecation Warning on line 67, column 66 of file:///home/squarefit/AttendStack/dashboard/styles/theme/_variables.scss:67:66:
+Global built-in functions are deprecated and will be removed in Dart Sass 3.0.0.
+Use color.blue instead.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+67 | $primary-100-rgb: #[35m{red($primary-100)}[39m, #[35m{green($primary-100)}[39m, #[35m{blue($primary-100)}[39m;
+
+
+styles/theme/_variables.scss 68:67  @import
+styles/theme.scss 11:9              root stylesheet
+
+
+
+./styles/theme.scss
+Issue while running loader
+SassWarning: Deprecation Warning on line 67, column 66 of file:///home/squarefit/AttendStack/dashboard/styles/theme/_variables.scss:67:66:
+blue() is deprecated. Suggestion:
+
+color.channel($color, "blue", $space: rgb)
+
+More info: https://sass-lang.com/d/color-functions
+
+67 | $primary-100-rgb: #[35m{red($primary-100)}[39m, #[35m{green($primary-100)}[39m, #[35m{blue($primary-100)}[39m;
+
+
+styles/theme/_variables.scss 68:67  @import
+styles/theme.scss 11:9              root stylesheet
+
+
+
+./styles/theme.scss
+Issue while running loader
+SassWarning: Deprecation Warning on line 7, column 8 of file:///home/squarefit/AttendStack/dashboard/styles/theme.scss:7:8:
+Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+7 | @import "user-variables";
+
+
+styles/theme.scss 8:9  root stylesheet
+
+
+
+./styles/theme.scss
+Issue while running loader
+SassWarning: Deprecation Warning on line 71, column 20 of file:///home/squarefit/AttendStack/dashboard/styles/theme/_variables.scss:71:20:
+Global built-in functions are deprecated and will be removed in Dart Sass 3.0.0.
+Use color.red instead.
+
+More info and automated migrator: https://sass-lang.com/d/import
+
+71 | $primary-300-rgb: #[35m{red($primary-300)}[39m, #[35m{green($primary-300)}[39m, #[35m{blue($primary-300)}[39m;
+
+
+styles/theme/_variables.scss 72:21  @import
+styles/theme.scss 11:9              root stylesheet
+
+
+
+./styles/theme.scss
+Issue while running loader
+SassWarning: Deprecation Warning on line 71, column 20 of file:///home/squarefit/AttendStack/dashboard/styles/theme/_variables.scss:71:20:
+red() is deprecated. Suggestion:
+
+color.channel($color, "red", $space: rgb)
+
+More info: https://sass-lang.com/d/color-functions
+
+71 | $primary-300-rgb: #[35m{red($primary-300)}[39m, #[35m{green($primary-300)}[39m, #[35m{blue($primary-300)}[39m;
+
+
+styles/theme/_variables.scss 72:21  @import
+styles/theme.scss 11:9              root stylesheet
+
+
+
+./styles/theme.scss
+Issue while running loader
+SassWarning: Deprecation Warning on line 71, column 42 of file:///home/squarefit/AttendStack/dashboard/styles/theme/_variables.scss:71:42:
+green() is deprecated. Suggestion:
+
+color.channel($color, "green", $space: rgb)
+
+More info: https://sass-lang.com/d/color-functions
+
+71 | $primary-300-rgb: #[35m{red($primary-300)}[39m, #[35m{green($primary-300)}[39m, #[35m{blue($primary-300)}[39m;
+
+
+styles/theme/_variables.scss 72:43  @import
+styles/theme.scss 11:9              root stylesheet
+
+
+
+[32m[1m✓[22m[39m Compiled successfully in 26.3s
+[?25l[37m[1m [22m[39m Running TypeScript  [36m.[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m..[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m...[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m.[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m..[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m...[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m.[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m..[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m...[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m.[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m..[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m...[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m.[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m..[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m...[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m.[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m..[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m...[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m.[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m..[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m...[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m.[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m..[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m...[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m.[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m..[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m...[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m.[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m..[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m...[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m.[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m..[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m...[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m.[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m..[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m...[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m.[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m..[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m...[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m.[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m..[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m...[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m.[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m..[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m...[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m.[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m..[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m...[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m.[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m..[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m...[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m.[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m..[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m...[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m.[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m..[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m...[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m.[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m..[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m...[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m.[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m..[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m...[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m.[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m..[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m...[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m.[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m..[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m...[39m[2K[1G[37m[1m [22m[39m Running TypeScript  [36m.[39m[2K[1G[?25h[?25l[37m[1m [22m[39m Finished TypeScript in 14.0s  [36m.[39m[2K[1G[?25h[37m[1m [22m[39m Finished TypeScript in 14.0s    [32m[1m✓[22m[39m Finished TypeScript in 14.0s 
+[?25l[37m[1m [22m[39m Collecting page data using 1 worker  [36m.[39m[2K[1G[37m[1m [22m[39m Collecting page data using 1 worker  [36m..[39m[2K[1G[37m[1m [22m[39m Collecting page data using 1 worker  [36m...[39m[2K[1G[37m[1m [22m[39m Collecting page data using 1 worker  [36m.[39m[2K[1G[?25h[37m[1m [22m[39m Collecting page data using 1 worker in 686ms    [32m[1m✓[22m[39m Collecting page data using 1 worker in 686ms 
+[?25l[37m[1m [22m[39m Generating static pages using 1 worker (0/31)  [36m[    ][39m[2K[1G[37m[1m [22m[39m Generating static pages using 1 worker (0/31)  [36m[=   ][39m[2K[1G[37m[1m [22m[39m Generating static pages using 1 worker (0/31)  [36m[==  ][39m[2K[1G[37m[1m [22m[39m Generating static pages using 1 worker (8/31)  [36m[=== ][39m[2K[1G[37m[1m [22m[39m Generating static pages using 1 worker (16/31)  [36m[ ===][39m[2K[1G[?25h[32m[1m✓[22m[39m Generating static pages using 1 worker (31/31) in 996ms
+[?25l[37m[1m [22m[39m Finalizing page optimization  [36m.[39m[2K[1G[?25h[37m[1m [22m[39m Finalizing page optimization in 18ms    [32m[1m✓[22m[39m Finalizing page optimization in 18ms 
+
+[4mRoute (app)[24m
+┌ ○ /
+├ ○ /_not-found
+├ ○ /admin
+├ ○ /admin/administrators
+├ ○ /admin/dashboard
+├ ○ /admin/login
+├ ○ /admin/organizations
+├ ○ /admin/organizations/add
+├ ○ /admin/settings
+├ ○ /admin/sign-in
+├ ƒ /api/attendance
+├ ○ /attendance
+├ ○ /attendance/records
+├ ○ /attendance/today-attendance
+├ ○ /employee-dashboard
+├ ○ /employee-dashboard/attendance
+├ ○ /employee-dashboard/attendance-report
+├ ○ /employee-dashboard/holidays
+├ ○ /employee-dashboard/leaves
+├ ○ /

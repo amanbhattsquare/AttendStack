@@ -1,11 +1,17 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useState } from "react";
-import { Badge, Button, Card, CardBody, CardHeader, Col, Form, Modal, Row, Table } from "react-bootstrap";
-import { IconCalendar, IconList, IconPencil, IconRefresh, IconTrash } from "@tabler/icons-react";
+import { Badge, Button, Card, CardBody, CardHeader, Col, Form, Modal, Row, Table, Alert } from "react-bootstrap";
+import { IconCalendar, IconList, IconPencil, IconRefresh, IconTrash, IconSettings } from "@tabler/icons-react";
 import CustomPagination from "components/shared/CustomPagination";
 import AttendanceCalendar from "./AttendanceCalendar";
 import Swal from "sweetalert2";
+
+const DEFAULT_RULES = `1. Core Working Hours: 10:00 AM to 6:00 PM.
+2. Late Entry: Arriving after 10:15 AM will be marked as Late.
+3. Half Day: Working less than 4 hours will be considered a Half Day.
+4. Leave Requests: Must be submitted at least 24 hours in advance.
+5. Unpaid Leave: Absences without prior approval will be considered Unpaid.`;
 
 type AttendanceRecord = {
   id: number;
@@ -32,10 +38,15 @@ type EmployeeSummary = {
   name: string;
   email: string;
   avatar: string | null;
-  present: number;
+  present: number; // P
   late: number;
   absent: number;
-  halfDay: number;
+  halfDay: number; // HD
+  leave: number; // L
+  paidLeave: number; // PL
+  holiday: number; // H
+  sundayUnpaid: number;
+  unpaidDays: number; // UD
 };
 
 const API_URL = `${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/attendance/`;
@@ -111,7 +122,20 @@ const AttendanceRecordsClient = () => {
   const [view, setView] = useState("table");
   const [selectedEmployee, setSelectedEmployee] = useState<string | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isRulesModalOpen, setIsRulesModalOpen] = useState(false);
+  const [attendanceRules, setAttendanceRules] = useState("");
   const [employeesList, setEmployeesList] = useState<any[]>([]);
+
+  useEffect(() => {
+    const savedRules = localStorage.getItem("attendance_rules");
+    setAttendanceRules(savedRules || DEFAULT_RULES);
+  }, []);
+
+  const handleSaveRules = () => {
+    localStorage.setItem("attendance_rules", attendanceRules);
+    setIsRulesModalOpen(false);
+    Swal.fire("Saved", "Attendance rules updated successfully.", "success");
+  };
 
   const loadEmployees = async () => {
     try {
@@ -253,12 +277,22 @@ const AttendanceRecordsClient = () => {
           late: 0,
           absent: 0,
           halfDay: 0,
+          leave: 0,
+          paidLeave: 0,
+          holiday: 0,
+          sundayUnpaid: 0,
+          unpaidDays: 0,
         };
       }
       if (record.status === "PRESENT") summary[record.employee_id].present += 1;
       if (record.status === "LATE") summary[record.employee_id].late += 1;
       if (record.status === "ABSENT") summary[record.employee_id].absent += 1;
       if (record.status === "HALF_DAY") summary[record.employee_id].halfDay += 1;
+      if (record.status === "ON_LEAVE") summary[record.employee_id].leave += 1;
+      // Note: Add additional logic here for Paid Leave, Holiday, Sunday Unpaid, Unpaid Days when available from backend
+      if (record.status === "PAID_LEAVE") summary[record.employee_id].paidLeave += 1;
+      if (record.status === "HOLIDAY") summary[record.employee_id].holiday += 1;
+      if (record.status === "UNPAID_DAY") summary[record.employee_id].unpaidDays += 1;
     });
     return Object.values(summary);
   }, [records]);
@@ -286,6 +320,15 @@ const AttendanceRecordsClient = () => {
 
   return (
     <Fragment>
+      <div className="d-flex justify-content-between align-items-center mb-4">
+        <div>
+          {/* Optional: Add page-level actions here if needed */}
+        </div>
+        <Button variant="outline-dark" onClick={() => setIsRulesModalOpen(true)} className="d-flex align-items-center gap-2">
+          <IconSettings size={18} /> Set Attendance Rules
+        </Button>
+      </div>
+
       <Card className="border-0 shadow-sm mb-4">
         <CardBody>
           <div className="d-flex justify-content-between align-items-center mb-3">
@@ -398,10 +441,13 @@ const AttendanceRecordsClient = () => {
               <thead className="table-light">
                 <tr>
                   <th>Employee</th>
-                  <th className="text-center">Present</th>
-                  <th className="text-center">Late</th>
-                <th className="text-center">Half Days</th>
-                <th className="text-center">Absent</th>
+                  <th className="text-center">Present (P)</th>
+                  <th className="text-center">Half Day (HD)</th>
+                  <th className="text-center">Leave (L)</th>
+                  <th className="text-center">Paid Leave (PL)</th>
+                  <th className="text-center">HOLIDAY (H)</th>
+                  <th className="text-center">Sunday Unpaid</th>
+                  <th className="text-center">Unpaid Days (UD)</th>
                 <th className="text-end">Actions</th>
               </tr>
             </thead>
@@ -418,10 +464,13 @@ const AttendanceRecordsClient = () => {
                       </div>
                     </div>
                   </td>
-                  <td className="text-center">{summary.present}</td>
-                  <td className="text-center">{summary.late}</td>
-                  <td className="text-center">{summary.halfDay}</td>
-                  <td className="text-center">{summary.absent}</td>
+                  <td className="text-center fw-bold text-success">{summary.present}</td>
+                  <td className="text-center fw-bold text-info">{summary.halfDay}</td>
+                  <td className="text-center fw-bold text-secondary">{summary.leave}</td>
+                  <td className="text-center fw-bold text-primary">{summary.paidLeave}</td>
+                  <td className="text-center fw-bold text-warning">{summary.holiday}</td>
+                  <td className="text-center fw-bold text-muted">{summary.sundayUnpaid}</td>
+                  <td className="text-center fw-bold text-danger">{summary.unpaidDays}</td>
                   <td className="text-end">
                     <Button variant="outline-secondary" size="sm" onClick={() => { setSelectedEmployee(summary.id); setView("calendar"); }}>
                       View Calendar
@@ -653,6 +702,35 @@ const AttendanceRecordsClient = () => {
           </Modal.Footer>
         </Modal>
       )}
+
+      <Modal show={isRulesModalOpen} onHide={() => setIsRulesModalOpen(false)} size="lg">
+        <Modal.Header closeButton>
+          <Modal.Title>Set Attendance Rules</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <Alert variant="info">
+            These rules will be visible to all employees on their dashboard. Use this space to define core working hours, late entry policies, and leave guidelines.
+          </Alert>
+          <Form.Group className="mb-3">
+            <Form.Label className="fw-bold">Company Attendance Rules</Form.Label>
+            <Form.Control
+              as="textarea"
+              rows={10}
+              value={attendanceRules}
+              onChange={(e) => setAttendanceRules(e.target.value)}
+              placeholder="Define the attendance rules here..."
+            />
+          </Form.Group>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setIsRulesModalOpen(false)}>
+            Close
+          </Button>
+          <Button variant="primary" onClick={handleSaveRules}>
+            Save Rules
+          </Button>
+        </Modal.Footer>
+      </Modal>
     </Fragment>
   );
 };

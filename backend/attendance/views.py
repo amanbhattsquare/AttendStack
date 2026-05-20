@@ -18,7 +18,10 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminOrReadOnly]
     queryset = AttendanceRecord.objects.select_related("employee").all()
 
-
+    def get_permissions(self):
+        if self.action in ["check_in", "check_out"]:
+            return [IsAuthenticated()]
+        return super().get_permissions()
 
     def get_queryset(self):
         queryset = super().get_queryset()

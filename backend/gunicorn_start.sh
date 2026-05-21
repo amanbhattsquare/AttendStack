@@ -23,5 +23,6 @@ export PYTHONPATH=$DJANGODIR:$PYTHONPATH
 exec /home/squarefit/AttendStack/backend/venv/bin/gunicorn ${NAME}.wsgi:application \
   --name $NAME \
   --workers 3 \
-  --bind=127.0.0.1:8001 \
-  --log-level=debug
+  --bind=127.0.0.1:8000 \
+  --log-level=debug \
+  --log-file=-

@@ -2,7 +2,9 @@
 import axios from 'axios';
 import { handleError } from './errorHandler';
 
-const API_URL = process.env.NEXT_PUBLIC_API_ENDPOINT;
+const rawApiEndpoint = (process.env.NEXT_PUBLIC_API_ENDPOINT || '').trim();
+const API_ROOT = rawApiEndpoint.replace(/\/api$/, '').replace(/\/+$/, '');
+const API_URL = API_ROOT || '';
 
 const authHeaders = () => {
   const token = localStorage.getItem('authToken');
@@ -15,6 +17,11 @@ const apiClient = axios.create({
     'Content-Type': 'application/json',
   },
 });
+
+export const buildApiUrl = (path: string) => {
+  const normalizedPath = path.replace(/^\/+/,'').replace(/\/+/g, '/');
+  return `${API_URL}/${normalizedPath}`.replace(/([^:]\/\/)(api\/){2,}/, '$1api/');
+};
 
 apiClient.interceptors.request.use((config) => {
   const token = localStorage.getItem('authToken');

@@ -84,11 +84,12 @@ WSGI_APPLICATION = "attendstack_backend.wsgi.application"
 # ──────────────────────────────────────────────────────────────────────────────
 # DATABASE
 # ──────────────────────────────────────────────────────────────────────────────
+import dj_database_url
+
 DATABASES = {
-    "default": {
-        "ENGINE": config("DB_ENGINE", default="django.db.backends.sqlite3"),
-        "NAME": BASE_DIR / config("DB_NAME", default="db.sqlite3"),
-    }
+    'default': dj_database_url.config(
+        default=config('DATABASE_URL', default='sqlite:///' + str(BASE_DIR / 'db.sqlite3'))
+    )
 }
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -123,6 +124,7 @@ MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
 STATIC_ROOT = '/var/www/attendstack/static/'
+
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 

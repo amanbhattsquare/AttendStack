@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { CurrentEmployee } from "./types";
 
-const API_URL = "http://127.0.0.1:8000/api/v1/employees/me/";
+const API_URL = `${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/employees/me/`;
 
 export const useCurrentEmployee = () => {
   const [employee, setEmployee] = useState<CurrentEmployee | null>(null);

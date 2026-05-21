@@ -5,7 +5,7 @@ import { IconDownload, IconSearch, IconPlus, IconPencil, IconCheck, IconPrinter 
 import { Spinner, Alert, Modal, Button, Form, Badge, Table } from "react-bootstrap";
 import Swal from "sweetalert2";
 
-const BASE_URL = "http://127.0.0.1:8000/api/v1/payroll/";
+const BASE_URL = `${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/payroll/`;
 
 const authHeaders = (): HeadersInit => {
   const token = localStorage.getItem("authToken");

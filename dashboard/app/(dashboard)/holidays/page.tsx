@@ -11,7 +11,7 @@ import { flexRender } from "@tanstack/react-table";
 import Pagination from "./Pagination";
 import { Spinner, Button, Alert } from "react-bootstrap";
 
-const BASE_URL = "http://127.0.0.1:8000/api/v1/holidays/";
+const BASE_URL = `${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/holidays/`;
 
 const authHeaders = (): HeadersInit => {
   const token = localStorage.getItem("authToken");

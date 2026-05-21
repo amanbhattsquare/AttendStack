@@ -45,7 +45,7 @@ const AdminDashboard = () => {
   const fetchAttendances = async () => {
     try {
       const token = localStorage.getItem("authToken");
-      const response = await axios.get("http://127.0.0.1:8000/api/v1/attendance/", {
+      const response = await axios.get(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/attendance/`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const records = Array.isArray(response.data) ? response.data : (response.data.results || []);
@@ -114,7 +114,7 @@ const AdminDashboard = () => {
 
   const fetchOrganizations = async () => {
     try {
-      const response = await axios.get("http://127.0.0.1:8000/api/v1/organizations/", getAuthHeaders());
+      const response = await axios.get(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/organizations/`, getAuthHeaders());
       setOrganizations(response.data.results);
     } catch (err) {
       console.error("Failed to fetch organizations.", err);
@@ -123,7 +123,7 @@ const AdminDashboard = () => {
 
   const fetchEmployees = async () => {
     try {
-      const response = await axios.get("http://127.0.0.1:8000/api/v1/employees/", getAuthHeaders());
+      const response = await axios.get(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/employees/`, getAuthHeaders());
       setTotalEmployees(response.data.count);
     } catch (err) {
       console.error("Failed to fetch employees count.");

@@ -10,7 +10,7 @@ import { ApexOptions } from "apexcharts";
 // SSR safe dynamic import for ApexCharts
 const Chart = dynamic(() => import("react-apexcharts"), { ssr: false });
 
-const BASE_URL = "http://127.0.0.1:8000/api/v1";
+const BASE_URL = `${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1`;
 
 const authHeaders = (): HeadersInit => {
   const token = localStorage.getItem("authToken");

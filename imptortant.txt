@@ -158,3 +158,11 @@ sudo tail -f /var/log/nginx/access.log
 
 
 sudo systemctl restart attendstack-backend
+
+
+sudo systemctl status attendstack-backend
+
+
+
+bhattsquare1@gmail.com
+Admin@#12

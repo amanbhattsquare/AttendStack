@@ -105,7 +105,7 @@ const EmployeeDashboard = () => {
     const token = localStorage.getItem("authToken");
     if (!token) return;
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/v1/attendance/me/today/", {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/attendance/me/today/`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
@@ -138,7 +138,7 @@ const EmployeeDashboard = () => {
     }
 
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/v1/attendance/${action}/`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/attendance/${action}/`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,

@@ -24,7 +24,7 @@ const SignInPage = () => {
     }
 
     try {
-      const response = await axios.post("http://127.0.0.1:8000/api/v1/accounts/login/", {
+      const response = await axios.post(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/accounts/login/`, {
         email,
         password,
       });

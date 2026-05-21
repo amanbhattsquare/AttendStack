@@ -19,9 +19,7 @@ const AdministratorsPage = () => {
     const fetchAdministrators = async () => {
       try {
         const token = localStorage.getItem("authToken");
-        const response = await axios.get(
-          "http://127.0.0.1:8000/api/v1/administrators/",
-          {
+        const response = await axios.get(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/administrators/`, {
             headers: {
               Authorization: `Bearer ${token}`,
             },

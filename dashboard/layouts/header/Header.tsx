@@ -50,7 +50,7 @@ const Header = () => {
 
       // 1. Fetch holidays (applicable to everyone)
       try {
-        const holidaysRes = await fetch("http://127.0.0.1:8000/api/v1/holidays/", {
+        const holidaysRes = await fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/holidays/`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (holidaysRes.ok) {
@@ -82,7 +82,7 @@ const Header = () => {
       if (isEmployee) {
         // Attendance
         try {
-          const attendanceRes = await fetch("http://127.0.0.1:8000/api/v1/attendance/me/", {
+          const attendanceRes = await fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/attendance/me/`, {
             headers: { Authorization: `Bearer ${token}` },
           });
           if (attendanceRes.ok) {
@@ -107,7 +107,7 @@ const Header = () => {
 
         // Payslips
         try {
-          const payrollRes = await fetch("http://127.0.0.1:8000/api/v1/payroll/", {
+          const payrollRes = await fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/payroll/`, {
             headers: { Authorization: `Bearer ${token}` },
           });
           if (payrollRes.ok) {

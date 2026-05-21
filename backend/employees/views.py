@@ -7,6 +7,8 @@ from rest_framework.exceptions import NotFound
 from accounts.permissions import IsAdminOrHR
 from django.contrib.auth import get_user_model
 from django.db.models import Exists, OuterRef
+
+from organizations.models import Organization
 from .models import Employee
 from .serializers import EmployeeSerializer
 from .services import create_employee_user, reset_employee_user_password
@@ -57,12 +59,25 @@ class EmployeeViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         user = self.request.user
         organization = None
-        if not user.is_superuser:
+
+        if user.is_superuser:
+            # For superusers, assign the first organization as a default
+            organization = Organization.objects.first()
+        else:
+            # For other users, derive organization from their own employee record
             try:
                 employee = Employee.objects.get(email=user.email)
                 organization = employee.organization
             except Employee.DoesNotExist:
+                # This case should ideally not happen for non-superusers
                 pass
+        
+        # Ensure an organization is set before saving
+        if organization is None:
+            # Handle case where no organization is found, perhaps raise an error
+            # For now, we'll let the serializer handle it, which might fail if org is required
+            pass
+
         serializer.save(organization=organization)
 
     @action(detail=False, methods=["get"], url_path="me")

@@ -38,9 +38,9 @@ pm2 startup
 
 
 
-sudo nano /etc/nginx/sites-available/attendstack
+sudo nano /etc/nginx/sites-available/attendance.nextgenapplication.com
 
-
+sudo systemctl restart nginx
 
 
 

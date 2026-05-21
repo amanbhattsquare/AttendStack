@@ -46,7 +46,7 @@ export const DashboardMenu: MenuItemType[] = [
       {
         id: uuid(),
         title: "Today's Attendance",
-        link: "/attendance/today-attendance",
+        link: "/attendance/todays-attendance",
         icon: <IconCircleCheck size={20} strokeWidth={1.5} />,
       },
       {

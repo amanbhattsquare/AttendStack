@@ -86,11 +86,22 @@ WSGI_APPLICATION = "attendstack_backend.wsgi.application"
 # ──────────────────────────────────────────────────────────────────────────────
 import dj_database_url
 
-DATABASES = {
-    'default': dj_database_url.config(
-        default=config('DATABASE_URL', default='sqlite:///' + str(BASE_DIR / 'db.sqlite3'))
-    )
-}
+# If DEBUG is True and USE_POSTGRES_LOCALLY is not explicitly True, use SQLite.
+# This prevents database errors for developers who don't have Postgres running locally.
+use_postgres = config("USE_POSTGRES_LOCALLY", default=False, cast=bool)
+if DEBUG and not use_postgres:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
+    }
+else:
+    DATABASES = {
+        "default": dj_database_url.config(
+            default=config("DATABASE_URL")
+        )
+    }
 
 # ──────────────────────────────────────────────────────────────────────────────
 # CUSTOM USER MODEL
@@ -119,11 +130,12 @@ USE_TZ = True
 # STATIC & MEDIA FILES
 # ──────────────────────────────────────────────────────────────────────────────
 STATIC_URL = "/static/"
-STATIC_ROOT = BASE_DIR / "staticfiles"
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
-STATIC_ROOT = '/var/www/attendstack/static/'
+# Read STATIC_ROOT from environment (e.g. /var/www/attendstack/static/ in prod)
+# Defaults to a local directory for easy development on Windows/Mac
+STATIC_ROOT = config("STATIC_ROOT", default=str(BASE_DIR / "staticfiles"))
 
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"

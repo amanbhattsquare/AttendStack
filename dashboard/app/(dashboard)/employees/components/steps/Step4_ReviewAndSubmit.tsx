@@ -1,6 +1,6 @@
 "use client";
 
-import { EmployeeFormData } from "../AddEmployeeWizard";
+import { EmployeeFormData } from "../EmployeeFormWizard";
 
 const ReviewItem = ({ label, value }: { label: string; value: string | undefined }) => (
   <div className="row py-2">
@@ -24,7 +24,7 @@ const humanize = (value: string) => {
   return labels[value] || value;
 };
 
-const Step4_ReviewAndSubmit = ({ data }: { data: EmployeeFormData }) => {
+const Step4_ReviewAndSubmit = ({ data }: { data: Partial<EmployeeFormData> }) => {
   return (
     <div>
       <h4 className="mb-4 text-center">Review Your Information</h4>

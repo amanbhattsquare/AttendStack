@@ -4,7 +4,7 @@
 *.env
 
 # Django settings
-backend/attendstack_backend/settings.py
+
 
 # Python
 *.pyc

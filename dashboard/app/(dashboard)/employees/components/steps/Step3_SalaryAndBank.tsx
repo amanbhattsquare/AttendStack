@@ -3,7 +3,7 @@
 import { EmployeeFormData, EmployeeFormErrors } from "../EmployeeFormWizard";
 
 type StepProps = {
-  data: EmployeeFormData;
+  data: Partial<EmployeeFormData>;
   errors: EmployeeFormErrors;
   onChange: <TKey extends keyof EmployeeFormData>(field: TKey, value: EmployeeFormData[TKey]) => void;
 };

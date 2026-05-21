@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { EmployeeFormData, EmployeeFormErrors } from "../AddEmployeeWizard";
+import { EmployeeFormData, EmployeeFormErrors } from "../EmployeeFormWizard";
 
 type StepProps = {
   data: Partial<EmployeeFormData>;

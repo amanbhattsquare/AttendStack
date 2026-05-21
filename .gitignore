@@ -1,0 +1,13 @@
+# Environment variables
+.env
+.env.*
+*.env
+
+# Django settings
+backend/attendstack_backend/settings.py
+
+# Python
+*.pyc
+__pycache__/
+venv/
+.venv/

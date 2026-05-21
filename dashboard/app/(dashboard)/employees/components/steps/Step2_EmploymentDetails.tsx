@@ -1,6 +1,6 @@
 "use client";
 
-import { EmployeeFormData, EmployeeFormErrors } from "../AddEmployeeWizard";
+import { EmployeeFormData, EmployeeFormErrors } from "../EmployeeFormWizard";
 
 type StepProps = {
   data: EmployeeFormData;

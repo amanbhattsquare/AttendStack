@@ -10,7 +10,7 @@ from django.db.models import Exists, OuterRef
 
 from organizations.models import Organization
 from .models import Employee
-from .serializers import EmployeeSerializer
+from .serializers import EmployeeSerializer, EmployeeProfileSerializer
 from .services import create_employee_user, reset_employee_user_password
 
 User = get_user_model()
@@ -80,7 +80,12 @@ class EmployeeViewSet(viewsets.ModelViewSet):
 
         serializer.save(organization=organization)
 
-    @action(detail=False, methods=["get"], url_path="me")
+    def get_serializer_class(self):
+        if self.action == "me":
+            return EmployeeProfileSerializer
+        return super().get_serializer_class()
+
+    @action(detail=False, methods=["get", "put", "patch"], url_path="me")
     def me(self, request):
         employee = (
             self.get_queryset()
@@ -98,7 +103,13 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         if employee is None:
             raise NotFound("No employee profile is linked to this login account.")
 
-        serializer = self.get_serializer(employee)
+        if request.method in ["PUT", "PATCH"]:
+            serializer = self.get_serializer(employee, data=request.data, partial=request.method == "PATCH")
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            return Response(serializer.data)
+
+        serializer = EmployeeSerializer(employee, context={"request": request})
         return Response(serializer.data)
 
     @action(detail=True, methods=["post"], url_path="create-password")

@@ -13,21 +13,24 @@ const Step1_PersonalInfo = ({ data, errors, onChange }: StepProps) => {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!data.profilePhoto) {
-      setPreviewUrl(null);
-      return;
-    }
+    // This effect should only handle File objects, not URL strings.
+    if (data.profilePhoto && data.profilePhoto instanceof File) {
+      const objectUrl = URL.createObjectURL(data.profilePhoto);
+      setPreviewUrl(objectUrl);
 
-    const objectUrl = URL.createObjectURL(data.profilePhoto);
-    setPreviewUrl(objectUrl);
-    return () => URL.revokeObjectURL(objectUrl);
+      // Cleanup function to revoke the object URL
+      return () => URL.revokeObjectURL(objectUrl);
+    } else {
+      // If there's no new file, there's no object URL to manage.
+      setPreviewUrl(null);
+    }
   }, [data.profilePhoto]);
 
   return (
     <div>
       <div className="mb-4 text-center">
         <img
-          src={previewUrl || "/images/avatar/avatar-fallback.jpg"}
+          src={previewUrl || data.profilePhotoUrl || "/images/avatar/avatar-fallback.jpg"}
           alt="Profile Preview"
           className="avatar avatar-xl rounded-circle mb-3"
         />
@@ -48,26 +51,26 @@ const Step1_PersonalInfo = ({ data, errors, onChange }: StepProps) => {
       <div className="row g-3">
         <div className="col-md-6">
           <label htmlFor="fullName" className="form-label">Full Name</label>
-          <input type="text" className={`form-control ${errors.fullName ? "is-invalid" : ""}`} id="fullName" placeholder="Enter full name" value={data.fullName} onChange={(event) => onChange("fullName", event.target.value)} />
+          <input type="text" className={`form-control ${errors.fullName ? "is-invalid" : ""}`} id="fullName" placeholder="Enter full name" value={data.fullName || ""} onChange={(event) => onChange("fullName", event.target.value)} />
           {errors.fullName && <div className="invalid-feedback">{errors.fullName}</div>}
         </div>
         <div className="col-md-6">
           <label htmlFor="email" className="form-label">Email Address</label>
-          <input type="email" className={`form-control ${errors.email ? "is-invalid" : ""}`} id="email" placeholder="Enter email address" value={data.email} onChange={(event) => onChange("email", event.target.value)} />
+          <input type="email" className={`form-control ${errors.email ? "is-invalid" : ""}`} id="email" placeholder="Enter email address" value={data.email || ""} onChange={(event) => onChange("email", event.target.value)} />
           {errors.email && <div className="invalid-feedback">{errors.email}</div>}
         </div>
         <div className="col-md-6">
           <label htmlFor="phone" className="form-label">Phone Number</label>
-          <input type="tel" className={`form-control ${errors.phone ? "is-invalid" : ""}`} id="phone" placeholder="Enter phone number" value={data.phone} onChange={(event) => onChange("phone", event.target.value)} />
+          <input type="tel" className={`form-control ${errors.phone ? "is-invalid" : ""}`} id="phone" placeholder="Enter phone number" value={data.phone || ""} onChange={(event) => onChange("phone", event.target.value)} />
           {errors.phone && <div className="invalid-feedback">{errors.phone}</div>}
         </div>
         <div className="col-md-6">
           <label htmlFor="dob" className="form-label">Date of Birth</label>
-          <input type="date" className="form-control" id="dob" value={data.dateOfBirth} onChange={(event) => onChange("dateOfBirth", event.target.value)} />
+          <input type="date" className="form-control" id="dob" value={data.dateOfBirth || ""} onChange={(event) => onChange("dateOfBirth", event.target.value)} />
         </div>
         <div className="col-md-6">
           <label htmlFor="aadhaar" className="form-label">Aadhaar Number</label>
-          <input type="text" className={`form-control ${errors.aadhaarNumber ? "is-invalid" : ""}`} id="aadhaar" placeholder="Enter 12-digit Aadhaar number" value={data.aadhaarNumber} onChange={(event) => onChange("aadhaarNumber", event.target.value.replace(/\D/g, "").slice(0, 12))} />
+          <input type="text" className={`form-control ${errors.aadhaarNumber ? "is-invalid" : ""}`} id="aadhaar" placeholder="Enter 12-digit Aadhaar number" value={data.aadhaarNumber || ""} onChange={(event) => onChange("aadhaarNumber", event.target.value.replace(/\D/g, "").slice(0, 12))} />
           {errors.aadhaarNumber && <div className="invalid-feedback">{errors.aadhaarNumber}</div>}
         </div>
         <div className="col-md-6">
@@ -76,7 +79,7 @@ const Step1_PersonalInfo = ({ data, errors, onChange }: StepProps) => {
         </div>
         <div className="col-12">
           <label htmlFor="address" className="form-label">Address</label>
-          <textarea className="form-control" id="address" rows={3} placeholder="Enter full address" value={data.address} onChange={(event) => onChange("address", event.target.value)} />
+          <textarea className="form-control" id="address" rows={3} placeholder="Enter full address" value={data.address || ""} onChange={(event) => onChange("address", event.target.value)} />
         </div>
       </div>
 
@@ -85,15 +88,15 @@ const Step1_PersonalInfo = ({ data, errors, onChange }: StepProps) => {
       <div className="row g-3">
         <div className="col-md-6">
           <label htmlFor="emergencyContactName" className="form-label">Contact Name</label>
-          <input type="text" className="form-control" id="emergencyContactName" placeholder="Enter contact's full name" value={data.emergencyContactName} onChange={(event) => onChange("emergencyContactName", event.target.value)} />
+          <input type="text" className="form-control" id="emergencyContactName" placeholder="Enter contact's full name" value={data.emergencyContactName || ""} onChange={(event) => onChange("emergencyContactName", event.target.value)} />
         </div>
         <div className="col-md-6">
           <label htmlFor="emergencyContactRelationship" className="form-label">Relationship</label>
-          <input type="text" className="form-control" id="emergencyContactRelationship" placeholder="e.g., Spouse, Parent, Sibling" value={data.emergencyContactRelationship} onChange={(event) => onChange("emergencyContactRelationship", event.target.value)} />
+          <input type="text" className="form-control" id="emergencyContactRelationship" placeholder="e.g., Spouse, Parent, Sibling" value={data.emergencyContactRelationship || ""} onChange={(event) => onChange("emergencyContactRelationship", event.target.value)} />
         </div>
         <div className="col-md-6">
           <label htmlFor="emergencyContactPhone" className="form-label">Contact Phone</label>
-          <input type="tel" className="form-control" id="emergencyContactPhone" placeholder="Enter contact's phone number" value={data.emergencyContactPhone} onChange={(event) => onChange("emergencyContactPhone", event.target.value)} />
+          <input type="tel" className="form-control" id="emergencyContactPhone" placeholder="Enter contact's phone number" value={data.emergencyContactPhone || ""} onChange={(event) => onChange("emergencyContactPhone", event.target.value)} />
         </div>
       </div>
     </div>

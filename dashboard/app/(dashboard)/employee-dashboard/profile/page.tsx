@@ -12,9 +12,13 @@ import {
   IconUser,
   IconWallet,
   IconDownload,
+  IconEdit,
 } from "@tabler/icons-react";
 import { useCurrentEmployee } from "../useCurrentEmployee";
-import { Spinner, Alert, Badge, Row, Col } from "react-bootstrap";
+import { Spinner, Alert, Badge, Row, Col, Modal, Button } from "react-bootstrap";
+import { useState } from "react";
+import EmployeeFormWizard from "../../employees/components/EmployeeFormWizard";
+import { EmployeeFormData } from "../../employees/components/EmployeeFormWizard";
 
 const formatDate = (value?: string | null) => {
   if (!value) return "Not provided";
@@ -63,8 +67,22 @@ const ProfileItem = ({ label, value, icon, linkUrl }: { label: string; value?: s
 );
 
 const ProfilePage = () => {
-  const { employee, isLoading, error } = useCurrentEmployee();
+  const { employee, isLoading, error, refetch } = useCurrentEmployee();
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
+  const handleOpenEditModal = () => {
+    setIsEditModalOpen(true);
+  };
+
+  const handleCloseEditModal = () => {
+    setIsEditModalOpen(false);
+  };
+
+  const handleSave = () => {
+    handleCloseEditModal();
+    refetch();
+  };
+  
   if (isLoading) {
     return (
       <div className="d-flex justify-content-center align-items-center py-6 min-vh-50">
@@ -151,6 +169,11 @@ const ProfilePage = () => {
               </p>
               <span className="small text-muted d-block mt-2">Corporate Portal Account Active</span>
             </div>
+            <div className="ms-sm-auto">
+              <Button variant="outline-primary" onClick={handleOpenEditModal} className="d-flex align-items-center gap-2">
+                <IconEdit size={16} /> Edit Profile
+              </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -168,6 +191,23 @@ const ProfilePage = () => {
           </Row>
         </div>
       ))}
+
+      <Modal show={isEditModalOpen} onHide={handleCloseEditModal} centered size="lg">
+        <Modal.Header closeButton>
+          <Modal.Title>Edit Your Profile</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {employee && (
+            <EmployeeFormWizard
+              mode="edit"
+              employeeId={employee.id}
+              initialData={employee as unknown as Partial<EmployeeFormData>}
+              onSave={handleSave}
+              onCancel={handleCloseEditModal}
+            />
+          )}
+        </Modal.Body>
+      </Modal>
 
       <style jsx global>{`
         .employee-profile-container {

@@ -1,6 +1,6 @@
 import { Fragment } from "react";
 import { Metadata } from "next";
-import AddEmployeeWizard from "../components/AddEmployeeWizard";
+import EmployeeFormWizard from "../components/EmployeeFormWizard";
 import DasherBreadcrumb from "../../../../components/common/DasherBreadcrumb";
 
 export const metadata: Metadata = {
@@ -11,7 +11,7 @@ const AddEmployeePage = () => {
   return (
     <Fragment>
       <DasherBreadcrumb />
-      <AddEmployeeWizard />
+      <EmployeeFormWizard />
     </Fragment>
   );
 };

@@ -16,6 +16,7 @@ import {
 } from "@tabler/icons-react";
 import { Alert, Button, Dropdown, Modal } from "react-bootstrap";
 import Link from "next/link";
+import EmployeeFormWizard, { EmployeeFormData } from "./EmployeeFormWizard";
 
 type Employee = {
   id: string;
@@ -60,6 +61,14 @@ const formatDate = (value: string) => {
   }).format(new Date(value));
 };
 
+const toCamelCase = (s: string) => {
+  return s.replace(/([-_][a-z])/ig, ($1) => {
+    return $1.toUpperCase()
+      .replace('-', '')
+      .replace('_', '');
+  });
+};
+
 const EmployeePageClient = () => {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -71,6 +80,9 @@ const EmployeePageClient = () => {
   const [actionLoadingKey, setActionLoadingKey] = useState<string | null>(null);
   const [passwordResult, setPasswordResult] = useState<PasswordActionResponse | null>(null);
   const [copyLabel, setCopyLabel] = useState("Copy");
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingEmployee, setEditingEmployee] = useState<Partial<EmployeeFormData> | null>(null);
+  const [isEditModalLoading, setIsEditModalLoading] = useState(false);
   const router = useRouter();
 
   const loadEmployees = async () => {
@@ -102,6 +114,42 @@ const EmployeePageClient = () => {
 
   const handleRowClick = (employeeUuid: string) => {
     router.push(`/employees/${employeeUuid}`);
+  };
+
+  const handleEdit = async (employee: Employee) => {
+    setIsEditModalOpen(true);
+    setIsEditModalLoading(true);
+    setEditingEmployee(null);
+    try {
+      const details = await fetchEmployeeDetails(employee.id);
+      setEditingEmployee(details);
+    } catch (error) {
+      Swal.fire("Error", "Could not load employee details.", "error");
+      setIsEditModalOpen(false);
+    } finally {
+      setIsEditModalLoading(false);
+    }
+  };
+
+  const fetchEmployeeDetails = async (employeeId: string): Promise<Partial<EmployeeFormData>> => {
+    const token = localStorage.getItem("authToken");
+    const response = await fetch(`${API_URL}${employeeId}/`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+    if (!response.ok) {
+      throw new Error("Failed to fetch employee details.");
+    }
+    const data = await response.json();
+    const camelCaseData: Partial<EmployeeFormData> = {};
+    for (const key in data) {
+      const camelKey = toCamelCase(key);
+      if (camelKey === 'profilePhoto') {
+        camelCaseData['profilePhotoUrl'] = data[key];
+      } else {
+        (camelCaseData as any)[camelKey] = data[key];
+      }
+    }
+    return camelCaseData;
   };
 
   const handleDelete = async (employeeId: string) => {
@@ -370,7 +418,7 @@ const EmployeePageClient = () => {
                           <Dropdown.Item onClick={() => handleRowClick(employee.id)} className="d-flex align-items-center gap-2">
                             <IconEye size={16} /> View Profile
                           </Dropdown.Item>
-                          <Dropdown.Item onClick={() => handleRowClick(employee.id)} className="d-flex align-items-center gap-2">
+                          <Dropdown.Item onClick={() => handleEdit(employee)} className="d-flex align-items-center gap-2">
                             <IconEdit size={16} /> Edit Employee
                           </Dropdown.Item>
                           <Dropdown.Divider />
@@ -436,6 +484,34 @@ const EmployeePageClient = () => {
         <Modal.Footer>
           <Button variant="primary" onClick={() => setPasswordResult(null)}>Done</Button>
         </Modal.Footer>
+      </Modal>
+
+      <Modal show={isEditModalOpen} onHide={() => setIsEditModalOpen(false)} centered size="lg">
+        <Modal.Header closeButton>
+          <Modal.Title>Edit Employee</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {isEditModalLoading && <div className="text-center">Loading...</div>}
+          {!isEditModalLoading && editingEmployee && (
+            <EmployeeFormWizard
+              mode="edit"
+              employeeId={editingEmployee.id as string}
+              initialData={editingEmployee}
+              onSave={() => {
+                setIsEditModalOpen(false);
+                loadEmployees();
+                Swal.fire({
+                  title: "Success",
+                  text: "Employee details updated successfully.",
+                  icon: "success",
+                  timer: 2000,
+                  showConfirmButton: false,
+                });
+              }}
+              onCancel={() => setIsEditModalOpen(false)}
+            />
+          )}
+        </Modal.Body>
       </Modal>
 
       <style jsx global>{`

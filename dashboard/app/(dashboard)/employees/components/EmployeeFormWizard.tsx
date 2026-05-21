@@ -8,7 +8,9 @@ import Step3_SalaryAndBank from "./steps/Step3_SalaryAndBank";
 import Step4_ReviewAndSubmit from "./steps/Step4_ReviewAndSubmit";
 
 export type EmployeeFormData = {
+  id?: string;
   profilePhoto: File | null;
+  profilePhotoUrl?: string | null;
   aadhaarDocument: File | null;
   fullName: string;
   email: string;
@@ -83,9 +85,17 @@ const StepIndicator = ({ currentStep }: { currentStep: number }) => {
   );
 };
 
-const AddEmployeeWizard = () => {
+type EmployeeFormWizardProps = {
+  mode?: "add" | "edit";
+  initialData?: Partial<EmployeeFormData>;
+  employeeId?: string;
+  onSave?: () => void;
+  onCancel?: () => void;
+};
+
+const EmployeeFormWizard = ({ mode = "add", initialData, employeeId, onSave, onCancel }: EmployeeFormWizardProps) => {
   const [currentStep, setCurrentStep] = useState(1);
-  const [formData, setFormData] = useState<EmployeeFormData>(initialEmployeeFormData);
+  const [formData, setFormData] = useState<EmployeeFormData>({ ...initialEmployeeFormData, ...initialData });
   const [errors, setErrors] = useState<EmployeeFormErrors>({});
   const [submitError, setSubmitError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -218,8 +228,11 @@ const AddEmployeeWizard = () => {
 
     try {
       const token = localStorage.getItem("authToken");
-      const response = await fetch(API_URL, {
-        method: "POST",
+      const url = mode === "edit" ? `${API_URL}${employeeId}/` : API_URL;
+      const method = mode === "edit" ? "PATCH" : "POST";
+
+      const response = await fetch(url, {
+        method,
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         body: payload,
       });
@@ -232,8 +245,12 @@ const AddEmployeeWizard = () => {
         throw new Error(firstError);
       }
 
-      router.push("/employees");
-      router.refresh();
+      if (onSave) {
+        onSave();
+      } else {
+        router.push("/employees");
+        router.refresh();
+      }
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : "Unable to save employee.");
     } finally {
@@ -255,12 +272,18 @@ const AddEmployeeWizard = () => {
         {currentStep === 4 && <Step4_ReviewAndSubmit data={formData} />}
 
         <div className="d-flex justify-content-between mt-4">
-          {currentStep > 1 && (
-            <button className="btn btn-secondary" onClick={handleBack} disabled={isSubmitting}>
-              Back
-            </button>
-          )}
-          <div />
+          <div className="d-flex gap-2">
+            {currentStep > 1 && (
+              <button className="btn btn-secondary" onClick={handleBack} disabled={isSubmitting}>
+                Back
+              </button>
+            )}
+            {mode === "edit" && onCancel && (
+              <button className="btn btn-outline-secondary" onClick={onCancel} disabled={isSubmitting}>
+                Cancel
+              </button>
+            )}
+          </div>
           {currentStep < 4 ? (
             <button className="btn btn-primary" onClick={handleNext}>
               Next
@@ -276,4 +299,4 @@ const AddEmployeeWizard = () => {
   );
 };
 
-export default AddEmployeeWizard;
+export default EmployeeFormWizard;

@@ -6,6 +6,27 @@ from .models import Employee
 User = get_user_model()
 
 
+class EmployeeProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Employee
+        fields = [
+            "full_name",
+            "phone",
+            "date_of_birth",
+            "address",
+            "profile_photo",
+            "emergency_contact_name",
+            "emergency_contact_relationship",
+            "emergency_contact_phone",
+        ]
+
+    def validate_full_name(self, value):
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError("Enter a valid name.")
+        return value
+
+
 class EmployeeSerializer(serializers.ModelSerializer):
     profile_photo_url = serializers.SerializerMethodField()
     aadhaar_document_url = serializers.SerializerMethodField()

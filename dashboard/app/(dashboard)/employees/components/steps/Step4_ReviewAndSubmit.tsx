@@ -54,14 +54,14 @@ const Step4_ReviewAndSubmit = ({ data }: { data: Partial<EmployeeFormData> }) =>
           <ReviewItem label="Joining Date" value={data.joiningDate} />
           <ReviewItem label="Department" value={data.department} />
           <ReviewItem label="Designation" value={data.designation} />
-          <ReviewItem label="Employment Type" value={humanize(data.employmentType)} />
+          <ReviewItem label="Employment Type" value={humanize(data.employmentType || "")} />
           <ReviewItem label="Reporting Manager" value={data.reportingManager} />
 
           <hr className="my-4" />
 
           <h5 className="mb-3">Salary & Bank Details</h5>
           <ReviewItem label="Annual Salary" value={data.annualSalary ? `Rs. ${data.annualSalary}` : undefined} />
-          <ReviewItem label="Pay Frequency" value={humanize(data.payFrequency)} />
+          <ReviewItem label="Pay Frequency" value={humanize(data.payFrequency || "")} />
           <ReviewItem label="Bank Name" value={data.bankName} />
           <ReviewItem label="Account Number" value={data.bankAccountNumber} />
           <ReviewItem label="Tax ID / PAN" value={data.taxId} />

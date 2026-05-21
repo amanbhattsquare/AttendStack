@@ -82,26 +82,25 @@ TEMPLATES = [
 WSGI_APPLICATION = "attendstack_backend.wsgi.application"
 
 # ──────────────────────────────────────────────────────────────────────────────
-# DATABASE
+# DATABASE — Always PostgreSQL
 # ──────────────────────────────────────────────────────────────────────────────
 import dj_database_url
 
-# If DEBUG is True and USE_POSTGRES_LOCALLY is not explicitly True, use SQLite.
-# This prevents database errors for developers who don't have Postgres running locally.
-use_postgres = config("USE_POSTGRES_LOCALLY", default=False, cast=bool)
-if DEBUG and not use_postgres:
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.sqlite3",
-            "NAME": BASE_DIR / "db.sqlite3",
-        }
-    }
-else:
-    DATABASES = {
-        "default": dj_database_url.config(
-            default=config("DATABASE_URL")
-        )
-    }
+# SQLite disabled — using PostgreSQL for both local and production
+# If you ever need SQLite locally, uncomment the block below and set USE_SQLITE=True in .env
+# if config("USE_SQLITE", default=False, cast=bool):
+#     DATABASES = {
+#         "default": {
+#             "ENGINE": "django.db.backends.sqlite3",
+#             "NAME": BASE_DIR / "db.sqlite3",
+#         }
+#     }
+
+DATABASES = {
+    "default": dj_database_url.config(
+        default=config("DATABASE_URL")
+    )
+}
 
 # ──────────────────────────────────────────────────────────────────────────────
 # CUSTOM USER MODEL

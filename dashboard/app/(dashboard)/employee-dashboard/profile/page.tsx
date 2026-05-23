@@ -12,13 +12,9 @@ import {
   IconUser,
   IconWallet,
   IconDownload,
-  IconEdit,
 } from "@tabler/icons-react";
 import { useCurrentEmployee } from "../useCurrentEmployee";
-import { Spinner, Alert, Badge, Row, Col, Modal, Button } from "react-bootstrap";
-import { useState } from "react";
-import EmployeeFormWizard from "../../employees/components/EmployeeFormWizard";
-import { EmployeeFormData } from "../../employees/components/EmployeeFormWizard";
+import { Spinner, Alert, Badge, Row, Col } from "react-bootstrap";
 
 const formatDate = (value?: string | null) => {
   if (!value) return "Not provided";
@@ -68,21 +64,7 @@ const ProfileItem = ({ label, value, icon, linkUrl }: { label: string; value?: s
 
 const ProfilePage = () => {
   const { employee, isLoading, error, refetch } = useCurrentEmployee();
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
-  const handleOpenEditModal = () => {
-    setIsEditModalOpen(true);
-  };
-
-  const handleCloseEditModal = () => {
-    setIsEditModalOpen(false);
-  };
-
-  const handleSave = () => {
-    handleCloseEditModal();
-    refetch();
-  };
-  
   if (isLoading) {
     return (
       <div className="d-flex justify-content-center align-items-center py-6 min-vh-50">
@@ -157,7 +139,7 @@ const ProfilePage = () => {
               alt={employee.full_name}
               className="rounded-circle border border-4 border-white shadow-sm my-profile-avatar-img"
             />
-            <div>
+            <div className="flex-grow-1">
               <div className="d-flex flex-wrap justify-content-center justify-content-sm-start align-items-center gap-2 mb-2">
                 <h2 className="fw-bold mb-0 text-dark heading-profile-name">{employee.full_name}</h2>
                 <Badge bg="success" className="px-3 py-2 bg-success-subtle text-success border border-success-subtle rounded-pill font-monospace">
@@ -168,11 +150,6 @@ const ProfilePage = () => {
                 {employee.designation} <span className="mx-1 text-muted">•</span> {employee.department}
               </p>
               <span className="small text-muted d-block mt-2">Corporate Portal Account Active</span>
-            </div>
-            <div className="ms-sm-auto">
-              <Button variant="outline-primary" onClick={handleOpenEditModal} className="d-flex align-items-center gap-2">
-                <IconEdit size={16} /> Edit Profile
-              </Button>
             </div>
           </div>
         </div>
@@ -191,23 +168,6 @@ const ProfilePage = () => {
           </Row>
         </div>
       ))}
-
-      <Modal show={isEditModalOpen} onHide={handleCloseEditModal} centered size="lg">
-        <Modal.Header closeButton>
-          <Modal.Title>Edit Your Profile</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          {employee && (
-            <EmployeeFormWizard
-              mode="edit"
-              employeeId={employee.id}
-              initialData={employee as unknown as Partial<EmployeeFormData>}
-              onSave={handleSave}
-              onCancel={handleCloseEditModal}
-            />
-          )}
-        </Modal.Body>
-      </Modal>
 
       <style jsx global>{`
         .employee-profile-container {

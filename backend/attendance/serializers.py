@@ -146,6 +146,19 @@ class AttendanceRecordSerializer(serializers.ModelSerializer):
                 )
         return attrs
 
+    def create(self, validated_data):
+        manual_status = "status" in self.initial_data
+        record = AttendanceRecord(**validated_data)
+        record.save(auto_refresh_status=not manual_status)
+        return record
+
+    def update(self, instance, validated_data):
+        manual_status = "status" in self.initial_data
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save(auto_refresh_status=not manual_status)
+        return instance
+
 
 class TodayAttendanceSerializer(serializers.Serializer):
     employee_uuid = serializers.UUIDField()

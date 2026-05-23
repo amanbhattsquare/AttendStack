@@ -14,7 +14,7 @@ import {
   IconSearch,
   IconTrash,
 } from "@tabler/icons-react";
-import { Alert, Button, Dropdown, Modal } from "react-bootstrap";
+import { Alert, Button, Dropdown, Form, Modal } from "react-bootstrap";
 import Link from "next/link";
 import EmployeeFormWizard, { EmployeeFormData } from "./EmployeeFormWizard";
 
@@ -43,6 +43,8 @@ type PasswordActionResponse = {
   temporary_password: string;
 };
 
+type PasswordAction = "create-password" | "reset-password";
+
 const API_URL = `${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/employees/`;
 
 const statusBadgeClass: Record<Employee["status"], string> = {
@@ -69,6 +71,22 @@ const toCamelCase = (s: string) => {
   });
 };
 
+const generateStrongPassword = (length = 14) => {
+  const lower = "abcdefghijkmnopqrstuvwxyz";
+  const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+  const digits = "23456789";
+  const symbols = "!@#$%&*?";
+  const all = lower + upper + digits + symbols;
+  const required = [
+    lower[Math.floor(Math.random() * lower.length)],
+    upper[Math.floor(Math.random() * upper.length)],
+    digits[Math.floor(Math.random() * digits.length)],
+    symbols[Math.floor(Math.random() * symbols.length)],
+  ];
+  const remaining = Array.from({ length: length - required.length }, () => all[Math.floor(Math.random() * all.length)]);
+  return [...required, ...remaining].sort(() => Math.random() - 0.5).join("");
+};
+
 const EmployeePageClient = () => {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -78,9 +96,12 @@ const EmployeePageClient = () => {
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [actionLoadingKey, setActionLoadingKey] = useState<string | null>(null);
-  const [passwordResult, setPasswordResult] = useState<PasswordActionResponse | null>(null);
-  const [copyLabel, setCopyLabel] = useState("Copy");
-    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [passwordEmployee, setPasswordEmployee] = useState<Employee | null>(null);
+  const [passwordAction, setPasswordAction] = useState<PasswordAction>("create-password");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Partial<EmployeeFormData> | null>(null);
   const [isEditModalLoading, setIsEditModalLoading] = useState(false);
   const router = useRouter();
@@ -206,33 +227,68 @@ const EmployeePageClient = () => {
     return Object.values(errorBody).flat().join(" ");
   };
 
-  const handlePasswordAction = async (employee: Employee, action: "create-password" | "reset-password") => {
-    const isReset = action === "reset-password";
-    if (isReset) {
-      const confirmReset = await Swal.fire({
-        title: "Confirm Password Reset",
-        text: `Are you sure you want to reset the password for ${employee.full_name}?`,
-        icon: "question",
-        showCancelButton: true,
-        confirmButtonColor: "#3085d6",
-        cancelButtonColor: "#6c757d",
-        confirmButtonText: "Yes, Reset It",
-        cancelButtonText: "Cancel",
+  const openPasswordModal = (employee: Employee, action: PasswordAction) => {
+    setPasswordEmployee(employee);
+    setPasswordAction(action);
+    setNewPassword("");
+    setConfirmPassword("");
+    setShowPassword(false);
+  };
+
+  const closePasswordModal = () => {
+    setPasswordEmployee(null);
+    setNewPassword("");
+    setConfirmPassword("");
+    setShowPassword(false);
+  };
+
+  const handleAutoGeneratePassword = () => {
+    const generatedPassword = generateStrongPassword();
+    setNewPassword(generatedPassword);
+    setConfirmPassword(generatedPassword);
+    setShowPassword(true);
+  };
+
+  const handlePasswordAction = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!passwordEmployee) return;
+
+    const trimmedPassword = newPassword.trim();
+    const trimmedConfirmPassword = confirmPassword.trim();
+
+    if ((trimmedPassword || trimmedConfirmPassword) && trimmedPassword !== trimmedConfirmPassword) {
+      Swal.fire({
+        title: "Password Mismatch",
+        text: "Password and confirm password must match.",
+        icon: "warning",
+        confirmButtonColor: "#ffc107",
       });
-      if (!confirmReset.isConfirmed) return;
+      return;
+    }
+
+    if (trimmedPassword && trimmedPassword.length < 8) {
+      Swal.fire({
+        title: "Weak Password",
+        text: "Password must be at least 8 characters long.",
+        icon: "warning",
+        confirmButtonColor: "#ffc107",
+      });
+      return;
     }
 
     try {
       setError("");
       setSuccessMessage("");
-      setPasswordResult(null);
-      setCopyLabel("Copy");
-      setActionLoadingKey(`${employee.id}:${action}`);
+      setActionLoadingKey(`${passwordEmployee.id}:${passwordAction}`);
 
       const token = localStorage.getItem("authToken");
-      const response = await fetch(`${API_URL}${employee.id}/${action}/`, {
+      const response = await fetch(`${API_URL}${passwordEmployee.id}/${passwordAction}/`, {
         method: "POST",
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(trimmedPassword ? { password: trimmedPassword } : {}),
       });
 
       if (!response.ok) {
@@ -240,16 +296,22 @@ const EmployeePageClient = () => {
       }
 
       const data = (await response.json()) as PasswordActionResponse;
-      setPasswordResult(data);
+      closePasswordModal();
+
+      const successHtml = data.temporary_password
+        ? `${data.detail}<br/><br/><div class="text-start"><strong>New Password:</strong><div class="input-group mt-1"><input type="text" class="form-control font-monospace" value="${data.temporary_password}" readonly /><button class="btn btn-outline-secondary" onclick="navigator.clipboard.writeText('${data.temporary_password}').then(() => { this.innerText = 'Copied'; });">Copy</button></div><small class="d-block mt-2 text-warning">Please copy this password and share it securely. It will not be shown again.</small></div>`
+        : data.detail;
+
       Swal.fire({
         title: "Success",
-        text: data.detail,
+        html: successHtml,
         icon: "success",
         confirmButtonColor: "#198754",
       });
+
       setEmployees((prev) =>
         prev.map((item) =>
-          item.id === employee.id ? { ...item, account_exists: true } : item
+          item.id === passwordEmployee.id ? { ...item, account_exists: true } : item
         )
       );
     } catch (passwordError) {
@@ -264,13 +326,33 @@ const EmployeePageClient = () => {
     }
   };
 
-  const handleCopyPassword = async () => {
-    if (!passwordResult?.temporary_password) return;
+
+
+  const handleUpdate = async (formData: EmployeeFormData) => {
+    if (!editingEmployee?.id) return;
+
     try {
-      await navigator.clipboard.writeText(passwordResult.temporary_password);
-      setCopyLabel("Copied");
-    } catch {
-      setCopyLabel("Copy failed");
+      const token = localStorage.getItem("authToken");
+      const response = await fetch(`${API_URL}${editingEmployee.id}/`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(formData),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || "Failed to update employee.");
+      }
+
+      await loadEmployees(); 
+      setIsEditModalOpen(false);
+      Swal.fire("Success", "Employee updated successfully!", "success");
+
+    } catch (error) {
+      Swal.fire("Error", error.message, "error");
     }
   };
 
@@ -424,14 +506,14 @@ const EmployeePageClient = () => {
                           <Dropdown.Divider />
                           <Dropdown.Item
                             disabled={employee.account_exists || actionLoadingKey === `${employee.id}:create-password`}
-                            onClick={() => handlePasswordAction(employee, "create-password")}
+                            onClick={() => openPasswordModal(employee, "create-password")}
                             className="d-flex align-items-center gap-2"
                           >
                             <IconKey size={16} /> {actionLoadingKey === `${employee.id}:create-password` ? "Creating..." : "Create Password"}
                           </Dropdown.Item>
                           <Dropdown.Item
                             disabled={!employee.account_exists || actionLoadingKey === `${employee.id}:reset-password`}
-                            onClick={() => handlePasswordAction(employee, "reset-password")}
+                            onClick={() => openPasswordModal(employee, "reset-password")}
                             className="d-flex align-items-center gap-2"
                           >
                             <IconRefresh size={16} /> {actionLoadingKey === `${employee.id}:reset-password` ? "Resetting..." : "Reset Password"}
@@ -455,60 +537,83 @@ const EmployeePageClient = () => {
         </div>
       </div>
 
-      <Modal show={Boolean(passwordResult)} onHide={() => setPasswordResult(null)} centered>
+      <Modal show={Boolean(passwordEmployee)} onHide={closePasswordModal} centered>
         <Modal.Header closeButton>
-          <Modal.Title>Temporary Password</Modal.Title>
+          <Modal.Title>{passwordAction === "create-password" ? "Create Employee Password" : "Reset Employee Password"}</Modal.Title>
         </Modal.Header>
-        <Modal.Body>
-          <Alert variant="warning" className="mb-3">
-            Share this temporary password securely. It will not be shown again after this modal is closed.
-          </Alert>
-          <div className="mb-3">
-            <div className="text-secondary small">Employee</div>
-            <div className="fw-semibold">{passwordResult?.email}</div>
-          </div>
-          <label htmlFor="temporaryPassword" className="form-label">Temporary Password</label>
-          <div className="input-group">
-            <input
-              id="temporaryPassword"
-              type="text"
-              readOnly
-              className="form-control font-monospace"
-              value={passwordResult?.temporary_password || ""}
+        <Form onSubmit={handlePasswordAction}>
+          <Modal.Body>
+            <Alert variant="info" className="mb-4">
+              Enter your own password or use auto-generate. If both fields are left blank, the system will generate a secure password automatically.
+            </Alert>
+            <div className="mb-4">
+              <div className="text-secondary small">Employee</div>
+              <div className="fw-semibold">{passwordEmployee?.full_name}</div>
+              <div className="text-muted small">{passwordEmployee?.email}</div>
+            </div>
+            <Form.Group className="mb-3" controlId="employeePassword">
+              <div className="d-flex align-items-center justify-content-between gap-3 mb-2">
+                <Form.Label className="mb-0 fw-semibold">Password</Form.Label>
+                <Button
+                  type="button"
+                  variant="outline-primary"
+                  size="sm"
+                  onClick={handleAutoGeneratePassword}
+                >
+                  Auto Generate
+                </Button>
+              </div>
+              <Form.Control
+                type={showPassword ? "text" : "password"}
+                value={newPassword}
+                onChange={(event) => setNewPassword(event.target.value)}
+                placeholder="Enter custom password or auto-generate"
+                autoComplete="new-password"
+              />
+            </Form.Group>
+            <Form.Group className="mb-3" controlId="employeeConfirmPassword">
+              <Form.Label className="fw-semibold">Confirm Password</Form.Label>
+              <Form.Control
+                type={showPassword ? "text" : "password"}
+                value={confirmPassword}
+                onChange={(event) => setConfirmPassword(event.target.value)}
+                placeholder="Re-enter password"
+                autoComplete="new-password"
+              />
+            </Form.Group>
+            <Form.Check
+              type="checkbox"
+              id="showEmployeePassword"
+              label="Show password"
+              checked={showPassword}
+              onChange={(event) => setShowPassword(event.target.checked)}
             />
-            <Button variant="outline-secondary" onClick={handleCopyPassword}>
-              {copyLabel}
+          </Modal.Body>
+          <Modal.Footer>
+            <Button variant="outline-secondary" onClick={closePasswordModal} disabled={Boolean(actionLoadingKey)}>
+              Cancel
             </Button>
-          </div>
-        </Modal.Body>
-        <Modal.Footer>
-          <Button variant="primary" onClick={() => setPasswordResult(null)}>Done</Button>
-        </Modal.Footer>
+            <Button variant="primary" type="submit" disabled={Boolean(actionLoadingKey)}>
+              {actionLoadingKey ? "Saving..." : passwordAction === "create-password" ? "Create Password" : "Reset Password"}
+            </Button>
+          </Modal.Footer>
+        </Form>
       </Modal>
+
+
 
       <Modal show={isEditModalOpen} onHide={() => setIsEditModalOpen(false)} centered size="lg">
         <Modal.Header closeButton>
           <Modal.Title>Edit Employee</Modal.Title>
         </Modal.Header>
         <Modal.Body>
-          {isEditModalLoading && <div className="text-center">Loading...</div>}
-          {!isEditModalLoading && editingEmployee && (
+          {isEditModalLoading ? (
+            <div className="text-center">Loading...</div>
+          ) : (
             <EmployeeFormWizard
-              mode="edit"
-              employeeId={editingEmployee.id as string}
               initialData={editingEmployee}
-              onSave={() => {
-                setIsEditModalOpen(false);
-                loadEmployees();
-                Swal.fire({
-                  title: "Success",
-                  text: "Employee details updated successfully.",
-                  icon: "success",
-                  timer: 2000,
-                  showConfirmButton: false,
-                });
-              }}
-              onCancel={() => setIsEditModalOpen(false)}
+              onSubmit={handleUpdate}
+              isUpdateMode={true}
             />
           )}
         </Modal.Body>

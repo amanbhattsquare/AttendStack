@@ -18,6 +18,9 @@ const authHeaders = (): HeadersInit => {
 const formatCurrency = (val: number | string) =>
   new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(Number(val));
 
+const formatDays = (val: number | string | undefined) =>
+  Number(val || 0).toLocaleString("en-IN", { maximumFractionDigits: 1 });
+
 const monthsList = [
   { value: 1, label: "January" },
   { value: 2, label: "February" },
@@ -123,8 +126,12 @@ const SalaryPage = () => {
               <span class="fw-semibold">Generated Paychecks:</span>
               <span class="badge bg-success rounded-pill px-3 py-1 fs-6">${result.generated}</span>
             </div>
+            <div class="d-flex justify-content-between border-bottom py-2">
+              <span class="fw-semibold">Recalculated Pending Paychecks:</span>
+              <span class="badge bg-primary rounded-pill px-3 py-1 fs-6">${result.updated}</span>
+            </div>
             <div class="d-flex justify-content-between py-2">
-              <span class="fw-semibold">Skipped (Duplicate Checks):</span>
+              <span class="fw-semibold">Skipped Paid Paychecks:</span>
               <span class="badge bg-secondary rounded-pill px-3 py-1 fs-6">${result.skipped}</span>
             </div>
           </div>
@@ -152,7 +159,8 @@ const SalaryPage = () => {
   // Open Edit Modal
   const openEditModal = (p: any) => {
     setSelectedPayroll(p);
-    setEditBasic(p.basic_salary);
+    const monthlySalary = p.employee_details.annual_salary ? p.employee_details.annual_salary / 12 : 0;
+    setEditBasic(monthlySalary.toFixed(2));
     setEditAllowances(p.allowances);
     setEditDeductions(p.deductions);
     setEditStatus(p.status);
@@ -328,10 +336,10 @@ const SalaryPage = () => {
                 <thead className="table-light">
                   <tr>
                     <th>Employee Name</th>
-                    <th>Basic Salary</th>
+                    <th>Monthly Salary</th>
                     <th>Allowances</th>
                     <th>Deductions</th>
-                    <th>Net Salary</th>
+                    <th>Net Payout</th>
                     <th>Status</th>
                     <th className="text-end">Actions</th>
                   </tr>
@@ -339,74 +347,80 @@ const SalaryPage = () => {
                 <tbody>
                   {payrolls.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="text-center py-5 text-secondary">
+                      <td colSpan={8} className="text-center py-5 text-secondary">
                         No payroll records found for the selected filters.
                       </td>
                     </tr>
                   ) : (
-                    payrolls.map((p) => (
-                      <tr key={p.id}>
-                        <td>
-                          <div className="d-flex align-items-center">
-                            <img
-                              src={p.employee_details.profile_photo_url || "/images/avatar/avatar-fallback.jpg"}
-                              alt=""
-                              className="avatar avatar-sm rounded-circle me-3"
-                            />
-                            <div>
-                              <h6 className="mb-0 fw-semibold">{p.employee_details.full_name}</h6>
-                              <small className="text-muted">
-                                {p.employee_details.department} • {p.employee_details.designation}
-                              </small>
+                    payrolls.map((p) => {
+                      const monthlySalary = p.employee_details.annual_salary
+                        ? p.employee_details.annual_salary / 12
+                        : p.basic_salary;
+
+                      return (
+                        <tr key={p.id}>
+                          <td>
+                            <div className="d-flex align-items-center">
+                              <img
+                                src={p.employee_details.profile_photo_url || "/images/avatar/avatar-fallback.jpg"}
+                                alt=""
+                                className="avatar avatar-sm rounded-circle me-3"
+                              />
+                              <div>
+                                <h6 className="mb-0 fw-semibold">{p.employee_details.full_name}</h6>
+                                <small className="text-muted">
+                                  {p.employee_details.department} • {p.employee_details.designation}
+                                </small>
+                              </div>
                             </div>
-                          </div>
-                        </td>
-                        <td>{formatCurrency(p.basic_salary)}</td>
-                        <td>{formatCurrency(p.allowances)}</td>
-                        <td className="text-danger">-{formatCurrency(p.deductions)}</td>
-                        <td className="fw-bold text-success">{formatCurrency(p.net_salary)}</td>
-                        <td>
-                          <Badge bg={p.status === "PAID" ? "success" : "warning"}>
-                            {p.status}
-                          </Badge>
-                        </td>
-                        <td className="text-end">
-                          <div className="d-flex justify-content-end gap-2 px-3">
-                            {isAdmin && p.status === "PENDING" && (
+                          </td>
+                          <td>{formatCurrency(monthlySalary)}</td>
+                          <td>{formatCurrency(p.allowances)}</td>
+                          <td className="text-danger">-{formatCurrency(p.deductions)}</td>
+                          <td className="fw-bold text-success">{formatCurrency(p.payable_salary ?? p.net_salary)}</td>
+                          <td>
+                            <Badge bg={p.status === "PAID" ? "success" : "warning"}>
+                              {p.status}
+                            </Badge>
+                          </td>
+                          <td className="text-end">
+                            <div className="d-flex justify-content-end gap-2 px-3">
+                              {isAdmin && p.status === "PENDING" && (
+                                <Button
+                                  variant="outline-success"
+                                  size="sm"
+                                  onClick={() => quickMarkPaid(p)}
+                                  className="px-2 py-1"
+                                >
+                                  <IconCheck size={14} className="me-1" /> Pay
+                                </Button>
+                              )}
+                              {isAdmin && (
+                                <Button
+                                  variant="outline-primary"
+                                  size="sm"
+                                  onClick={() => openEditModal(p)}
+                                  className="px-2 py-1"
+                                >
+                                  <IconPencil size={14} /> Edit
+                                </Button>
+                              )}
                               <Button
-                                variant="outline-success"
+                                variant="light"
                                 size="sm"
-                                onClick={() => quickMarkPaid(p)}
-                                className="px-2 py-1"
+                                onClick={() => {
+                                  setPayslipData(p);
+                                  setShowPayslipModal(true);
+                                }}
+                                className="d-flex align-items-center gap-1 border px-2 py-1"
                               >
-                                <IconCheck size={14} className="me-1" /> Pay
+                                <IconDownload size={14} /> Payslip
                               </Button>
-                            )}
-                            {isAdmin && (
-                              <Button
-                                variant="outline-primary"
-                                size="sm"
-                                onClick={() => openEditModal(p)}
-                                className="px-2 py-1"
-                              >
-                                <IconPencil size={14} /> Edit
-                              </Button>
-                            )}
-                            <Button
-                              variant="light"
-                              size="sm"
-                              onClick={() => {
-                                setPayslipData(p);
-                                setShowPayslipModal(true);
-                              }}
-                              className="d-flex align-items-center gap-1 border px-2 py-1"
-                            >
-                              <IconDownload size={14} /> Payslip
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </Table>
@@ -423,8 +437,7 @@ const SalaryPage = () => {
         <Form onSubmit={handleGenerate}>
           <Modal.Body>
             <p className="text-muted mb-4">
-              Select the Month and Year to generate payroll records for all **Active Employees** dynamically. 
-              The system will compute basic monthly payouts (`annual_salary / 12`) and default allowances/deductions to zero.
+              Select a month and year to generate or recalculate payroll for active employees. The system uses attendance status, auto-marked holidays, Sunday unpaid days, leave, and half-day records to calculate deductions and payable salary.
             </p>
             <Form.Group className="mb-3">
               <Form.Label className="fw-semibold">Payroll Month</Form.Label>
@@ -485,7 +498,7 @@ const SalaryPage = () => {
               </div>
 
               <Form.Group className="mb-3">
-                <Form.Label className="fw-semibold">Basic Monthly Salary (INR)</Form.Label>
+                <Form.Label className="fw-semibold">Basic Salary (INR)</Form.Label>
                 <Form.Control
                   type="number"
                   step="0.01"
@@ -588,6 +601,33 @@ const SalaryPage = () => {
                 </div>
               </div>
 
+              <div className="border rounded mb-4 overflow-hidden">
+                <table className="table mb-0 align-middle">
+                  <thead className="table-light">
+                    <tr>
+                      <th>Present</th>
+                      <th>Half Day</th>
+                      <th>Leave</th>
+                      <th>Paid Leave</th>
+                      <th>Holiday</th>
+                      <th>Sunday Unpaid</th>
+                      <th className="text-end">Unpaid Days</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>{payslipData.attendance_summary?.present ?? 0}</td>
+                      <td>{payslipData.attendance_summary?.half_day ?? 0}</td>
+                      <td>{payslipData.attendance_summary?.leave ?? 0}</td>
+                      <td>{payslipData.attendance_summary?.paid_leave ?? 0}</td>
+                      <td>{payslipData.attendance_summary?.holiday ?? 0}</td>
+                      <td>{payslipData.attendance_summary?.sunday_unpaid ?? 0}</td>
+                      <td className="text-end text-danger fw-semibold">{formatDays(payslipData.attendance_summary?.unpaid_days)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
               {/* Salary Breakdown table */}
               <div className="border rounded mb-4 overflow-hidden">
                 <table className="table mb-0 align-middle">
@@ -600,7 +640,7 @@ const SalaryPage = () => {
                   </thead>
                   <tbody>
                     <tr>
-                      <td className="py-3">Basic Monthly Salary</td>
+                      <td className="py-3">Monthly Salary</td>
                       <td className="text-end text-success py-3">Earnings</td>
                       <td className="text-end py-3">{formatCurrency(payslipData.basic_salary)}</td>
                     </tr>
@@ -610,14 +650,14 @@ const SalaryPage = () => {
                       <td className="text-end py-3">{formatCurrency(payslipData.allowances)}</td>
                     </tr>
                     <tr className="border-bottom">
-                      <td className="py-3">Leave Deductions / Taxes</td>
+                      <td className="py-3">Attendance Deductions</td>
                       <td className="text-end text-danger py-3">Deductions</td>
                       <td className="text-end text-danger py-3">-{formatCurrency(payslipData.deductions)}</td>
                     </tr>
                     <tr className="table-light fw-bold fs-5 border-top">
-                      <td className="py-3 text-dark">Net Salary Pay</td>
+                      <td className="py-3 text-dark">Payable Salary</td>
                       <td className="text-end text-muted py-3">Total Payout</td>
-                      <td className="text-end text-success py-3">{formatCurrency(payslipData.net_salary)}</td>
+                      <td className="text-end text-success py-3">{formatCurrency(payslipData.payable_salary ?? payslipData.net_salary)}</td>
                     </tr>
                   </tbody>
                 </table>

@@ -1,6 +1,7 @@
 from django.db.models import Q
 from django.utils import timezone
 from rest_framework import status, viewsets
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.permissions import IsAuthenticated
@@ -11,12 +12,20 @@ from employees.models import Employee, EmployeeStatus
 from .models import AttendanceRecord, AttendanceStatus, LeaveRequest
 from .permissions import IsAdminOrReadOnly
 from .serializers import AttendanceRecordSerializer, TodayAttendanceSerializer, LeaveRequestSerializer
+from .services import auto_mark_calendar_days
+
+
+class StandardResultsSetPagination(PageNumberPagination):
+    page_size = 31
+    page_size_query_param = 'page_size'
+    max_page_size = 100
 
 
 class AttendanceRecordViewSet(viewsets.ModelViewSet):
     serializer_class = AttendanceRecordSerializer
     permission_classes = [IsAdminOrReadOnly]
     queryset = AttendanceRecord.objects.select_related("employee").all()
+    pagination_class = StandardResultsSetPagination
 
     def get_permissions(self):
         if self.action in ["check_in", "check_out"]:
@@ -41,6 +50,12 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
         status_filter = params.get("status")
         search = params.get("search")
 
+        if year and month:
+            try:
+                auto_mark_calendar_days(int(month), int(year))
+            except (TypeError, ValueError):
+                pass
+
         if date_from:
             queryset = queryset.filter(date__gte=date_from)
         if date_to:
@@ -61,6 +76,12 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
             )
 
         return queryset
+
+    def paginate_queryset(self, queryset):
+        # If filtering by month, return all results for that month without pagination.
+        if 'month' in self.request.query_params:
+            return None
+        return super().paginate_queryset(queryset)
 
     def _current_employee(self):
         employee = Employee.objects.filter(email__iexact=self.request.user.email).first()
@@ -104,6 +125,7 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["get"], url_path="today")
     def today(self, request):
         today = timezone.localdate()
+        auto_mark_calendar_days(today.month, today.year)
         records = {
             record.employee.id: record
             for record in AttendanceRecord.objects.select_related("employee").filter(date=today)
@@ -123,6 +145,8 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["get"], url_path="me/today")
     def me_today(self, request):
         employee = self._current_employee()
+        today = timezone.localdate()
+        auto_mark_calendar_days(today.month, today.year)
         record = self._today_record(employee)
         serializer = TodayAttendanceSerializer(self._today_payload(employee, record))
         return Response(serializer.data)
@@ -138,7 +162,7 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
 
         record.check_in = timezone.now()
         record.refresh_status()
-        record.save()
+        record.save(auto_refresh_status=False)
         serializer = self.get_serializer(record)
         return Response(serializer.data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
 
@@ -154,9 +178,42 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
 
         record.check_out = timezone.now()
         record.refresh_status()
-        record.save()
+        record.save(auto_refresh_status=False)
         serializer = self.get_serializer(record)
         return Response(serializer.data)
+
+    @action(detail=False, methods=["post"], url_path="auto-mark")
+    def auto_mark(self, request):
+        """Create missing Sunday and holiday records without overriding edits."""
+
+        month = request.data.get("month")
+        year = request.data.get("year")
+
+        if not month or not year:
+            return Response(
+                {"detail": "Both month and year are required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            month = int(month)
+            year = int(year)
+        except ValueError:
+            return Response(
+                {"detail": "Month and year must be valid integers."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        result = auto_mark_calendar_days(month, year)
+
+        return Response(
+            {
+                "detail": "Auto-marking completed successfully.",
+                "created": result["created"],
+                "skipped": result["skipped"],
+            },
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class LeaveRequestViewSet(viewsets.ModelViewSet):

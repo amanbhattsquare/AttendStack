@@ -36,18 +36,29 @@ const formatTime = (value?: string | null) =>
 
 const badgeClass = (status: string) => {
   switch (status) {
-    case "Clocked In":
-      return "success";
-    case "Clocked Out":
-      return "secondary";
-    case "Absent":
-      return "danger";
-    case "On Leave":
-      return "info";
+    case "PRESENT": return "success";
+    case "LATE": return "warning";
+    case "HALF_DAY": return "info";
+    case "ABSENT": return "danger";
+    case "LEAVE": return "danger";
+    case "PAID_LEAVE": return "primary";
+    case "HOLIDAY": return "success";
+    case "SUNDAY_UNPAID": return "secondary";
     default:
-      return "warning";
+      return "light";
   }
 };
+
+const attendanceStatuses = [
+  { value: "PRESENT", label: "Present" },
+  { value: "LATE", label: "Late Entry" },
+  { value: "HALF_DAY", label: "Half Day" },
+  { value: "ABSENT", label: "Absent" },
+  { value: "LEAVE", label: "Leave" },
+  { value: "PAID_LEAVE", label: "Paid Leave" },
+  { value: "HOLIDAY", label: "Holiday" },
+  { value: "SUNDAY_UNPAID", label: "Sunday Unpaid" },
+];
 
 const TodaysAttendanceClient = () => {
   const [records, setRecords] = useState<TodayAttendance[]>([]);
@@ -119,8 +130,8 @@ const TodaysAttendanceClient = () => {
 
   const summaryStats = useMemo(() => {
     const total = records.length;
-    const present = records.filter((record) => record.live_status === "Clocked In" || record.live_status === "Clocked Out").length;
-    const absent = records.filter((record) => record.live_status === "Absent").length;
+    const present = records.filter((record) => ["PRESENT", "LATE"].includes(record.status)).length;
+    const absent = records.filter((record) => record.status === "ABSENT").length;
     const late = records.filter((record) => record.status === "LATE").length;
 
     return [
@@ -139,7 +150,7 @@ const TodaysAttendanceClient = () => {
         record.employee_name.toLowerCase().includes(query) ||
         record.employee_email.toLowerCase().includes(query) ||
         record.employee_id.toLowerCase().includes(query);
-      const matchesStatus = statusFilter === "All" || record.live_status === statusFilter;
+      const matchesStatus = statusFilter === "All" || record.status === statusFilter;
       return matchesSearch && matchesStatus;
     });
   }, [nameQuery, records, statusFilter]);
@@ -164,9 +175,9 @@ const TodaysAttendanceClient = () => {
                 <Form.Label>Status</Form.Label>
                 <Form.Select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
                   <option value="All">All</option>
-                  <option value="Clocked In">Clocked In</option>
-                  <option value="Clocked Out">Clocked Out</option>
-                  <option value="Absent">Absent</option>
+                  {attendanceStatuses.map((attendanceStatus) => (
+                    <option key={attendanceStatus.value} value={attendanceStatus.value}>{attendanceStatus.label}</option>
+                  ))}
                 </Form.Select>
               </Form.Group>
             </Col>
@@ -211,7 +222,12 @@ const TodaysAttendanceClient = () => {
                     </div>
                   </td>
                   <td>{record.employee_department}</td>
-                  <td><Badge bg={badgeClass(record.live_status)}>{record.live_status}</Badge></td>
+                  <td>
+                    <Badge bg={badgeClass(record.status)}>{record.status_label}</Badge>
+                    {record.live_status !== record.status_label && (
+                      <div className="small text-muted mt-1">{record.live_status}</div>
+                    )}
+                  </td>
                   <td>{formatTime(record.check_in)}</td>
                   <td>{formatTime(record.check_out)}</td>
                   <td className="text-end">
@@ -229,7 +245,7 @@ const TodaysAttendanceClient = () => {
       {editingRecord && (
         <Modal show={!!editingRecord} onHide={() => setEditingRecord(null)}>
           <Modal.Header closeButton>
-            <Modal.Title>Edit Attendance – {editingRecord.employee_name}</Modal.Title>
+            <Modal.Title>Edit Attendance - {editingRecord.employee_name}</Modal.Title>
           </Modal.Header>
           <Modal.Body>
             <Form id="edit-today-attendance-form">
@@ -252,11 +268,9 @@ const TodaysAttendanceClient = () => {
               <Form.Group className="mb-3" controlId="formStatus">
                 <Form.Label>Status</Form.Label>
                 <Form.Select name="status" defaultValue={editingRecord.status || "PRESENT"}>
-                  <option value="PRESENT">Present</option>
-                  <option value="LATE">Late Entry</option>
-                  <option value="HALF_DAY">Half-day</option>
-                  <option value="ABSENT">Absent</option>
-                  <option value="ON_LEAVE">On Leave</option>
+                  {attendanceStatuses.map((attendanceStatus) => (
+                    <option key={attendanceStatus.value} value={attendanceStatus.value}>{attendanceStatus.label}</option>
+                  ))}
                 </Form.Select>
               </Form.Group>
             </Form>

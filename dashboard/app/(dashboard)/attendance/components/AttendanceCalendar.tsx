@@ -23,7 +23,16 @@ const eventStyleGetter = (event: any) => {
     case "ABSENT":
       backgroundColor = "#dc3545"; // Red
       break;
-    case "ON_LEAVE":
+    case "LEAVE":
+      backgroundColor = "#6c757d"; // Grey
+      break;
+    case "PAID_LEAVE":
+      backgroundColor = "#0d6efd"; // Blue
+      break;
+    case "HOLIDAY":
+      backgroundColor = "#198754"; // Green
+      break;
+    case "SUNDAY_UNPAID":
       backgroundColor = "#6c757d"; // Grey
       break;
   }

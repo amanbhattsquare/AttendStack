@@ -63,7 +63,7 @@ const AdminDashboard = () => {
         if (r.status === "PRESENT") presentCount++;
         else if (r.status === "ABSENT") absentCount++;
         else if (r.status === "LATE") lateCount++;
-        else if (r.status === "ON_LEAVE" || r.status === "PAID_LEAVE") leaveCount++;
+        else if (r.status === "LEAVE" || r.status === "PAID_LEAVE") leaveCount++;
         else if (r.status === "HALF_DAY") presentCount++; // counted as present for pie chart simplicity, or split it
       });
 
@@ -71,7 +71,7 @@ const AdminDashboard = () => {
         { status: "Present", count: presentCount, color: "#10b981" }, // success green
         { status: "Late", count: lateCount, color: "#f59e0b" }, // warning yellow
         { status: "Absent", count: absentCount, color: "#ef4444" }, // danger red
-        { status: "On Leave", count: leaveCount, color: "#64748b" }, // secondary gray
+        { status: "Leave", count: leaveCount, color: "#64748b" }, // secondary gray
       ]);
 
       // Process for Activity Log (Latest 5 records based on created/updated or just first 5)
@@ -91,8 +91,14 @@ const AdminDashboard = () => {
         } else if (r.status === "LATE") {
           desc = `${r.employee_name || 'Employee'} checked in late at ${timeStr}`;
           color = "warning";
-        } else if (r.status === "ON_LEAVE" || r.status === "PAID_LEAVE") {
+        } else if (r.status === "LEAVE" || r.status === "PAID_LEAVE") {
           desc = `${r.employee_name || 'Employee'} is on leave`;
+          color = "secondary";
+        } else if (r.status === "HOLIDAY") {
+          desc = `${r.employee_name || 'Employee'} has a holiday`;
+          color = "success";
+        } else if (r.status === "SUNDAY_UNPAID") {
+          desc = `${r.employee_name || 'Employee'} has Sunday unpaid`;
           color = "secondary";
         } else if (r.status === "ABSENT") {
           desc = `${r.employee_name || 'Employee'} was marked absent`;

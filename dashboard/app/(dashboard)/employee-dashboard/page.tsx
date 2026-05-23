@@ -240,21 +240,6 @@ const EmployeeDashboard = () => {
         </div>
       </div>
 
-      {/* Attendance Rules Section */}
-      {attendanceRules && (
-        <Card className="border-0 shadow-sm mb-5 overflow-hidden rounded-4 bg-white">
-          <Card.Header className="bg-light d-flex align-items-center gap-2 py-3 border-bottom-0">
-            <IconNotes size={20} className="text-primary" />
-            <h5 className="mb-0 fw-bold text-dark">Company Attendance Rules</h5>
-          </Card.Header>
-          <Card.Body className="p-4 bg-light-subtle">
-            <div className="rules-content text-secondary" style={{ whiteSpace: "pre-line", lineHeight: "1.6" }}>
-              {attendanceRules}
-            </div>
-          </Card.Body>
-        </Card>
-      )}
-
       {/* Attendance Punch In/Out Quick Action Panel */}
       {mounted && (
         <Card className="border-0 shadow-sm mb-5 overflow-hidden rounded-4 bg-white">
@@ -442,6 +427,21 @@ const EmployeeDashboard = () => {
           </div>
         ))}
       </div>
+
+      {/* Attendance Rules Section */}
+      {attendanceRules && (
+        <Card className="border-0 shadow-sm mt-5 overflow-hidden rounded-4 bg-white">
+          <Card.Header className="bg-light d-flex align-items-center gap-2 py-3 border-bottom-0">
+            <IconNotes size={20} className="text-primary" />
+            <h5 className="mb-0 fw-bold text-dark">My Attendance Rules</h5>
+          </Card.Header>
+          <Card.Body className="p-4 bg-light-subtle">
+            <div className="rules-content text-secondary" style={{ whiteSpace: "pre-line", lineHeight: "1.6" }}>
+              {attendanceRules}
+            </div>
+          </Card.Body>
+        </Card>
+      )}
 
       <style jsx global>{`
         .employee-dashboard-container {

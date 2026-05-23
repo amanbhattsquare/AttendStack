@@ -103,3 +103,12 @@ sudo systemctl status attendstack-backend
 
 bhattsquare1@gmail.com
 Admin@#12
+
+
+
+
+
+in attendance pages add "Present (P)	Half Day (HD)	Leave (L)	Paid Leave (PL)	HOLIDAY (H)	Sunday Unpaid" thease status also  . and admin can edit this status and also show this in status. and Monthly Employee Summary
+yaha  bhi show ho . and iss k acording salary bhi bane   Deductions bhi show ho and Salary & Payroll table me bhi show ho and ye bhi show ho ki payable salary kitni hai, make this profectional and indrusteary . and production ready
+maine isme yaha nhi update ho rha hai, and ek kaam aur kar dena sunday authometci and holidaye bhi mark ho jaye but any one overrider it . adn ussi accrding salary bhi count ho and '( )' isme andar jo shortcuts lage hai usko hata do sabhi jagah se ,
+ make this profectional and indrustry  ready

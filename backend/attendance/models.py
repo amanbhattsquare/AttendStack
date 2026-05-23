@@ -6,12 +6,24 @@ from django.utils import timezone
 from employees.models import Employee
 
 
+AUTO_PRESERVED_STATUSES = frozenset([
+    "LEAVE",
+    "PAID_LEAVE",
+    "HOLIDAY",
+    "SUNDAY_UNPAID",
+])
+
+
 class AttendanceStatus(models.TextChoices):
     PRESENT = "PRESENT", "Present"
     LATE = "LATE", "Late Entry"
-    HALF_DAY = "HALF_DAY", "Half-day"
+    HALF_DAY = "HALF_DAY", "Half Day"
     ABSENT = "ABSENT", "Absent"
-    ON_LEAVE = "ON_LEAVE", "On Leave"
+    LEAVE = "LEAVE", "Leave"
+    PAID_LEAVE = "PAID_LEAVE", "Paid Leave"
+    HOLIDAY = "HOLIDAY", "Holiday"
+    SUNDAY_PAID = "SUNDAY_PAID", "Sunday"
+    SUNDAY_UNPAID = "SUNDAY_UNPAID", "Sunday Unpaid"
 
 
 class AttendanceRecord(models.Model):
@@ -63,7 +75,7 @@ class AttendanceRecord(models.Model):
 
     @property
     def live_status(self):
-        if self.status in [AttendanceStatus.ABSENT, AttendanceStatus.ON_LEAVE]:
+        if self.status in [AttendanceStatus.ABSENT, AttendanceStatus.LEAVE, AttendanceStatus.PAID_LEAVE, AttendanceStatus.HOLIDAY, AttendanceStatus.SUNDAY_UNPAID]:
             return self.get_status_display()
         if self.check_in and not self.check_out:
             return "Clocked In"
@@ -72,6 +84,9 @@ class AttendanceRecord(models.Model):
         return self.get_status_display()
 
     def refresh_status(self):
+        """Auto-compute status from check-in/check-out times.
+        Only runs for time-based statuses. Admin-override statuses
+        (Leave, Paid Leave, Holiday, Sunday Unpaid) are never touched."""
         if not self.check_in:
             self.status = AttendanceStatus.ABSENT
             return
@@ -84,7 +99,9 @@ class AttendanceRecord(models.Model):
             self.status = AttendanceStatus.HALF_DAY
 
     def save(self, *args, **kwargs):
-        self.refresh_status()
+        auto_refresh_status = kwargs.pop("auto_refresh_status", True)
+        if auto_refresh_status and self.status not in AUTO_PRESERVED_STATUSES:
+            self.refresh_status()
         super().save(*args, **kwargs)
 
 

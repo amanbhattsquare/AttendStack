@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Step1_PersonalInfo from "./steps/Step1_PersonalInfo";
 import Step2_EmploymentDetails from "./steps/Step2_EmploymentDetails";
@@ -100,6 +100,12 @@ const EmployeeFormWizard = ({ mode = "add", initialData, employeeId, onSave, onC
   const [submitError, setSubmitError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const router = useRouter();
+
+  useEffect(() => {
+    if (initialData) {
+      setFormData({ ...initialEmployeeFormData, ...initialData });
+    }
+  }, [initialData]);
 
   const updateField = <TKey extends keyof EmployeeFormData>(
     field: TKey,

@@ -3,6 +3,8 @@ import string
 
 from accounts.models import UserRole
 from django.contrib.auth import get_user_model
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError, transaction
 from rest_framework.exceptions import ValidationError
 
@@ -32,7 +34,17 @@ def split_full_name(full_name):
     return first_name, last_name
 
 
-def create_employee_user(employee: Employee):
+def resolve_employee_password(password=None):
+    if password:
+        try:
+            validate_password(password)
+        except DjangoValidationError as exc:
+            raise ValidationError({"password": list(exc.messages)}) from exc
+        return password
+    return generate_temporary_password()
+
+
+def create_employee_user(employee: Employee, password=None):
     if User.objects.filter(email__iexact=employee.email).exists():
         raise ValidationError({"detail": "A login account already exists for this employee."})
 
@@ -40,13 +52,13 @@ def create_employee_user(employee: Employee):
         raise ValidationError({"detail": "Employee ID must be 20 characters or fewer to create a login account."})
 
     first_name, last_name = split_full_name(employee.full_name)
-    temporary_password = generate_temporary_password()
+    employee_password = resolve_employee_password(password)
 
     try:
         with transaction.atomic():
             user = User.objects.create_user(
                 email=employee.email,
-                password=temporary_password,
+                password=employee_password,
                 first_name=first_name,
                 last_name=last_name,
                 phone=employee.phone,
@@ -56,17 +68,17 @@ def create_employee_user(employee: Employee):
     except IntegrityError as exc:
         raise ValidationError({"detail": "Unable to create login account because employee credentials conflict with an existing user."}) from exc
 
-    return user, temporary_password
+    return user, employee_password
 
 
-def reset_employee_user_password(employee: Employee):
+def reset_employee_user_password(employee: Employee, password=None):
     try:
         user = User.objects.get(email__iexact=employee.email)
     except User.DoesNotExist as exc:
         raise ValidationError({"detail": "No login account exists for this employee. Create a password first."}) from exc
 
-    temporary_password = generate_temporary_password()
-    user.set_password(temporary_password)
+    employee_password = resolve_employee_password(password)
+    user.set_password(employee_password)
     user.is_active = True
     user.save(update_fields=["password", "is_active"])
-    return user, temporary_password
+    return user, employee_password

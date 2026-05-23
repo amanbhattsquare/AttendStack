@@ -7,7 +7,7 @@ class EmployeeMiniSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Employee
-        fields = ["id", "employee_id", "full_name", "email", "department", "designation", "profile_photo_url"]
+        fields = ["id", "employee_id", "full_name", "email", "department", "designation", "annual_salary", "profile_photo_url"]
 
     def get_profile_photo_url(self, obj):
         if obj.profile_photo:
@@ -25,6 +25,8 @@ class PayrollSerializer(serializers.ModelSerializer):
         write_only=True
     )
     month_name = serializers.SerializerMethodField()
+    payable_salary = serializers.SerializerMethodField()
+    attendance_summary = serializers.SerializerMethodField()
 
     class Meta:
         model = Payroll
@@ -39,6 +41,8 @@ class PayrollSerializer(serializers.ModelSerializer):
             "allowances",
             "deductions",
             "net_salary",
+            "payable_salary",
+            "attendance_summary",
             "status",
             "paid_on",
             "created_at",
@@ -51,3 +55,22 @@ class PayrollSerializer(serializers.ModelSerializer):
             return calendar.month_name[obj.month]
         except (IndexError, TypeError):
             return ""
+
+    def get_payable_salary(self, obj):
+        return obj.net_salary
+
+    def get_attendance_summary(self, obj):
+        from .services import calculate_attendance_payroll
+
+        payroll = calculate_attendance_payroll(
+            obj.employee,
+            obj.month,
+            obj.year,
+            allowances=obj.allowances,
+        )
+        return {
+            **payroll["attendance_summary"],
+            "unpaid_days": payroll["unpaid_days"],
+            "days_in_month": payroll["days_in_month"],
+            "per_day_salary": payroll["per_day_salary"],
+        }

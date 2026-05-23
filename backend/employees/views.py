@@ -115,27 +115,33 @@ class EmployeeViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"], url_path="create-password")
     def create_password(self, request, pk=None):
         employee = self.get_object()
-        user, temporary_password = create_employee_user(employee)
+        user, employee_password = create_employee_user(
+            employee,
+            password=request.data.get("password"),
+        )
         return Response(
             {
                 "detail": "Login account created successfully.",
                 "employee_id": employee.employee_id,
                 "user_id": str(user.id),
                 "email": user.email,
-                "temporary_password": temporary_password,
+                "temporary_password": employee_password,
             }
         )
 
     @action(detail=True, methods=["post"], url_path="reset-password")
     def reset_password(self, request, pk=None):
         employee = self.get_object()
-        user, temporary_password = reset_employee_user_password(employee)
+        user, employee_password = reset_employee_user_password(
+            employee,
+            password=request.data.get("password"),
+        )
         return Response(
             {
                 "detail": "Password reset successfully.",
                 "employee_id": employee.employee_id,
                 "user_id": str(user.id),
                 "email": user.email,
-                "temporary_password": temporary_password,
+                "temporary_password": employee_password,
             }
         )

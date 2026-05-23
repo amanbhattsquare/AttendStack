@@ -2,7 +2,8 @@
 
 import React, { useEffect, useState } from "react";
 import { Card, Button, Table, Badge, Modal, Form, Row, Col, Alert, Spinner } from "react-bootstrap";
-import { IconCalendarPlus, IconCalendarEvent, IconMessage, IconInfoCircle, IconClock, IconCircleCheck, IconCircleX } from "@tabler/icons-react";
+import { IconCalendarPlus, IconCalendarEvent, IconMessage, IconInfoCircle, IconClock, IconCircleCheck, IconCircleX, IconEdit, IconTrash } from "@tabler/icons-react";
+import Swal from "sweetalert2";
 
 interface LeaveRequest {
   id: number;
@@ -25,6 +26,7 @@ const EmployeeLeavesClient = () => {
 
   // Modal State
   const [showModal, setShowModal] = useState(false);
+  const [editingLeave, setEditingLeave] = useState<LeaveRequest | null>(null);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [leaveType, setLeaveType] = useState("CASUAL");
@@ -61,6 +63,52 @@ const EmployeeLeavesClient = () => {
     fetchLeaves();
   }, []);
 
+  const resetFormAndCloseModal = () => {
+    setShowModal(false);
+    setEditingLeave(null);
+    setStartDate("");
+    setEndDate("");
+    setLeaveType("CASUAL");
+    setReason("");
+  };
+
+  const handleEdit = (leave: LeaveRequest) => {
+    setEditingLeave(leave);
+    setStartDate(leave.start_date);
+    setEndDate(leave.end_date);
+    setLeaveType(leave.leave_type);
+    setReason(leave.reason);
+    setShowModal(true);
+  };
+
+  const handleDelete = async (leaveId: number) => {
+    const result = await Swal.fire({
+      title: "Are you sure?",
+      text: "You won't be able to revert this!",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#3085d6",
+      cancelButtonColor: "#d33",
+      confirmButtonText: "Yes, delete it!"
+    });
+
+    if (result.isConfirmed) {
+      const token = localStorage.getItem("authToken");
+      try {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/attendance/leaves/${leaveId}/`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (!res.ok) throw new Error("Failed to delete leave request.");
+
+        Swal.fire("Deleted!", "Your leave request has been deleted.", "success");
+        fetchLeaves();
+      } catch (err) {
+        Swal.fire("Error!", err.message, "error");
+      }
+    }
+  };
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -84,8 +132,14 @@ const EmployeeLeavesClient = () => {
 
     setIsSubmitting(true);
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/attendance/leaves/`, {
-        method: "POST",
+      const url = editingLeave
+        ? `${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/attendance/leaves/${editingLeave.id}/`
+        : `${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/attendance/leaves/`;
+      
+      const method = editingLeave ? "PUT" : "POST";
+
+      const res = await fetch(url, {
+        method: method,
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
@@ -103,16 +157,9 @@ const EmployeeLeavesClient = () => {
         throw new Error(errData.detail || "Unable to submit leave request.");
       }
 
-      setSuccessMsg("Your leave request has been submitted successfully for HR review!");
-      setShowModal(false);
+      setSuccessMsg(editingLeave ? "Your leave request has been updated successfully!" : "Your leave request has been submitted successfully for HR review!");
+      resetFormAndCloseModal();
       
-      // Reset Form fields
-      setStartDate("");
-      setEndDate("");
-      setLeaveType("CASUAL");
-      setReason("");
-
-      // Reload
       await fetchLeaves();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error submitting request.");
@@ -255,6 +302,7 @@ const EmployeeLeavesClient = () => {
                     <th className="py-3">Reason</th>
                     <th className="py-3">Status</th>
                     <th className="px-4 py-3">HR Remarks</th>
+                    <th className="px-4 py-3 text-end">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -290,6 +338,18 @@ const EmployeeLeavesClient = () => {
                             <span className="text-muted small italic" style={{ fontSize: "0.78rem" }}>No remarks yet</span>
                           )}
                         </td>
+                        <td className="px-4 py-3.5 text-end">
+                          {leave.status === 'PENDING' && (
+                            <div className="d-flex justify-content-end gap-2">
+                              <Button variant="outline-secondary" size="sm" onClick={() => handleEdit(leave)}>
+                                <IconEdit size={16} />
+                              </Button>
+                              <Button variant="outline-danger" size="sm" onClick={() => handleDelete(leave.id)}>
+                                <IconTrash size={16} />
+                              </Button>
+                            </div>
+                          )}
+                        </td>
                       </tr>
                     );
                   })}
@@ -301,9 +361,9 @@ const EmployeeLeavesClient = () => {
       </Card>
 
       {/* Floating Apply Modal */}
-      <Modal show={showModal} onHide={() => setShowModal(false)} centered className="border-0 shadow-lg" size="lg">
+      <Modal show={showModal} onHide={resetFormAndCloseModal} centered className="border-0 shadow-lg" size="lg">
         <Modal.Header closeButton className="border-0 px-4 pt-4 pb-2">
-          <Modal.Title className="fw-bold text-dark">Submit Leave Application</Modal.Title>
+          <Modal.Title className="fw-bold text-dark">{editingLeave ? "Edit Leave Application" : "Submit Leave Application"}</Modal.Title>
         </Modal.Header>
         <Form onSubmit={handleSubmit}>
           <Modal.Body className="px-4 py-3">
@@ -381,17 +441,17 @@ const EmployeeLeavesClient = () => {
             </Form.Group>
           </Modal.Body>
           <Modal.Footer className="border-0 px-4 pb-4 pt-2">
-            <Button variant="outline-secondary" onClick={() => setShowModal(false)} className="px-4 py-2.5 rounded-3 fw-semibold">
+            <Button variant="outline-secondary" onClick={resetFormAndCloseModal} className="px-4 py-2.5 rounded-3 fw-semibold">
               Cancel
             </Button>
             <Button variant="primary" type="submit" disabled={isSubmitting} className="px-4 py-2.5 rounded-3 fw-semibold">
               {isSubmitting ? (
                 <>
                   <Spinner size="sm" animation="border" className="me-2" />
-                  Submitting...
+                  {editingLeave ? "Updating..." : "Submitting..."}
                 </>
               ) : (
-                "Submit Application"
+                editingLeave ? "Update Application" : "Submit Application"
               )}
             </Button>
           </Modal.Footer>

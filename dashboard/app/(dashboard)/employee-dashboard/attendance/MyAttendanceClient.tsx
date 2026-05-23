@@ -42,20 +42,29 @@ const formatTime = (value?: string | null) =>
 
 const getStatusBadge = (status: string) => {
   switch (status) {
-    case "PRESENT":
-      return "success";
-    case "LATE":
-      return "warning";
-    case "HALF_DAY":
-      return "info";
-    case "ABSENT":
-      return "danger";
-    case "ON_LEAVE":
-      return "secondary";
+    case "PRESENT": return "success";
+    case "LATE": return "warning";
+    case "HALF_DAY": return "info";
+    case "ABSENT": return "danger";
+    case "LEAVE": return "danger";
+    case "PAID_LEAVE": return "primary";
+    case "HOLIDAY": return "success";
+    case "SUNDAY_UNPAID": return "secondary";
     default:
       return "light";
   }
 };
+
+const attendanceStatuses = [
+  { value: "PRESENT", label: "Present" },
+  { value: "LATE", label: "Late Entry" },
+  { value: "HALF_DAY", label: "Half Day" },
+  { value: "ABSENT", label: "Absent" },
+  { value: "LEAVE", label: "Leave" },
+  { value: "PAID_LEAVE", label: "Paid Leave" },
+  { value: "HOLIDAY", label: "Holiday" },
+  { value: "SUNDAY_UNPAID", label: "Sunday Unpaid" },
+];
 
 const MyAttendanceClient = () => {
   const [mounted, setMounted] = useState(false);
@@ -163,6 +172,8 @@ const MyAttendanceClient = () => {
   const summary = useMemo(() => {
     const s = {
       present: 0,
+      late: 0,
+      absent: 0,
       halfDay: 0,
       leave: 0,
       paidLeave: 0,
@@ -172,11 +183,15 @@ const MyAttendanceClient = () => {
     };
     monthFilteredRecords.forEach((record) => {
       if (record.status === "PRESENT") s.present += 1;
+      if (record.status === "LATE") s.late += 1;
+      if (record.status === "ABSENT") s.absent += 1;
       if (record.status === "HALF_DAY") s.halfDay += 1;
-      if (record.status === "ON_LEAVE") s.leave += 1;
+      if (record.status === "LEAVE") s.leave += 1;
       if (record.status === "PAID_LEAVE") s.paidLeave += 1;
       if (record.status === "HOLIDAY") s.holiday += 1;
-      if (record.status === "UNPAID_DAY") s.unpaidDays += 1;
+      if (record.status === "SUNDAY_UNPAID") s.sundayUnpaid += 1;
+      if (["ABSENT", "LEAVE", "SUNDAY_UNPAID"].includes(record.status)) s.unpaidDays += 1;
+      if (record.status === "HALF_DAY") s.unpaidDays += 0.5;
     });
     return s;
   }, [monthFilteredRecords]);
@@ -201,7 +216,7 @@ const MyAttendanceClient = () => {
                   : "Loading current date..."}
               </p>
               <span className="badge bg-primary-subtle text-primary border border-primary-subtle mt-2 px-3 py-1.5 rounded-pill fw-semibold">
-                Shift Timing: 10:00 AM – 06:00 PM
+                Shift Timing: 10:00 AM - 06:00 PM
               </span>
             </div>
             <div className="text-lg-end">
@@ -285,18 +300,22 @@ const MyAttendanceClient = () => {
           <Table hover responsive className="text-nowrap align-middle mb-0">
             <thead className="table-light">
               <tr>
-                <th className="text-center">Present (P)</th>
-                <th className="text-center">Half Day (HD)</th>
-                <th className="text-center">Leave (L)</th>
-                <th className="text-center">Paid Leave (PL)</th>
-                <th className="text-center">HOLIDAY (H)</th>
+                <th className="text-center">Present</th>
+                <th className="text-center">Late Entry</th>
+                <th className="text-center">Absent</th>
+                <th className="text-center">Half Day</th>
+                <th className="text-center">Leave</th>
+                <th className="text-center">Paid Leave</th>
+                <th className="text-center">Holiday</th>
                 <th className="text-center">Sunday Unpaid</th>
-                <th className="text-center">Unpaid Days (UD)</th>
+                <th className="text-center">Unpaid Days</th>
               </tr>
             </thead>
             <tbody>
               <tr>
                 <td className="text-center fw-bold text-success">{summary.present}</td>
+                <td className="text-center fw-bold text-warning">{summary.late}</td>
+                <td className="text-center fw-bold text-danger">{summary.absent}</td>
                 <td className="text-center fw-bold text-info">{summary.halfDay}</td>
                 <td className="text-center fw-bold text-secondary">{summary.leave}</td>
                 <td className="text-center fw-bold text-primary">{summary.paidLeave}</td>
@@ -324,13 +343,9 @@ const MyAttendanceClient = () => {
               style={{ minWidth: "140px" }}
             >
               <option value="all">All Statuses</option>
-              <option value="PRESENT">Present</option>
-              <option value="HALF_DAY">Half Day</option>
-              <option value="ON_LEAVE">Leave</option>
-              <option value="PAID_LEAVE">Paid Leave</option>
-              <option value="HOLIDAY">Holiday</option>
-              <option value="ABSENT">Absent</option>
-              <option value="LATE">Late</option>
+              {attendanceStatuses.map((attendanceStatus) => (
+                <option key={attendanceStatus.value} value={attendanceStatus.value}>{attendanceStatus.label}</option>
+              ))}
             </Form.Select>
           </div>
         </Card.Header>

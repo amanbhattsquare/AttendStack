@@ -6,6 +6,7 @@ from attendance.permissions import IsAdminOrReadOnly
 from employees.models import Employee, EmployeeStatus
 from .models import Payroll, PayrollStatus
 from .serializers import PayrollSerializer
+from .services import calculate_attendance_payroll
 
 class PayrollViewSet(viewsets.ModelViewSet):
     queryset = Payroll.objects.select_related("employee").all()
@@ -58,28 +59,38 @@ class PayrollViewSet(viewsets.ModelViewSet):
 
         active_employees = Employee.objects.filter(status=EmployeeStatus.ACTIVE)
         generated_count = 0
+        updated_count = 0
         skipped_count = 0
 
         for emp in active_employees:
-            # Skip if payroll already exists for this month/year
-            if Payroll.objects.filter(employee=emp, month=month, year=year).exists():
+            existing = Payroll.objects.filter(employee=emp, month=month, year=year).first()
+            if existing and existing.status == PayrollStatus.PAID:
                 skipped_count += 1
                 continue
 
-            basic_salary = emp.annual_salary / 12
-            Payroll.objects.create(
-                employee=emp,
-                month=month,
-                year=year,
-                basic_salary=basic_salary,
-                allowances=0,
-                deductions=0,
-                status=PayrollStatus.PENDING
-            )
-            generated_count += 1
+            allowances = existing.allowances if existing else 0
+            payroll_values = calculate_attendance_payroll(emp, month, year, allowances=allowances)
+
+            if existing:
+                existing.basic_salary = payroll_values["basic_salary"]
+                existing.deductions = payroll_values["deductions"]
+                existing.save()
+                updated_count += 1
+            else:
+                Payroll.objects.create(
+                    employee=emp,
+                    month=month,
+                    year=year,
+                    basic_salary=payroll_values["basic_salary"],
+                    allowances=payroll_values["allowances"],
+                    deductions=payroll_values["deductions"],
+                    status=PayrollStatus.PENDING
+                )
+                generated_count += 1
 
         return Response({
-            "detail": f"Payroll generation completed successfully.",
+            "detail": "Payroll generation completed successfully.",
             "generated": generated_count,
+            "updated": updated_count,
             "skipped": skipped_count
         }, status=status.HTTP_201_CREATED)

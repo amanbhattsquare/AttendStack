@@ -31,16 +31,14 @@ const formatTime = (value?: string | null) =>
 
 const getStatusBadge = (status: string) => {
   switch (status) {
-    case "PRESENT":
-      return "success";
-    case "LATE":
-      return "warning";
-    case "HALF_DAY":
-      return "info";
-    case "ABSENT":
-      return "danger";
-    case "ON_LEAVE":
-      return "secondary";
+    case "PRESENT": return "success";
+    case "LATE": return "warning";
+    case "HALF_DAY": return "info";
+    case "ABSENT": return "danger";
+    case "LEAVE": return "danger";
+    case "PAID_LEAVE": return "primary";
+    case "HOLIDAY": return "success";
+    case "SUNDAY_UNPAID": return "secondary";
     default:
       return "light";
   }

@@ -17,6 +17,9 @@ const authHeaders = (): HeadersInit => {
 const formatCurrency = (val: number | string) =>
   new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(Number(val));
 
+const formatDays = (val: number | string | undefined) =>
+  Number(val || 0).toLocaleString("en-IN", { maximumFractionDigits: 1 });
+
 const MySalaryClient = () => {
   const [payrolls, setPayrolls] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -87,7 +90,7 @@ const MySalaryClient = () => {
             </Col>
             <Col md={4}>
               <div className="p-3 border rounded bg-light-subtle">
-                <span className="text-muted d-block small fw-semibold text-uppercase mb-1">Estimated Monthly Basic</span>
+                <span className="text-muted d-block small fw-semibold text-uppercase mb-1">Monthly Salary</span>
                 <strong className="fs-4 text-dark">
                   {monthlyEst ? formatCurrency(monthlyEst) : "Fetching profile..."}
                 </strong>
@@ -121,7 +124,7 @@ const MySalaryClient = () => {
                 <thead className="table-light">
                   <tr>
                     <th>Payroll Period</th>
-                    <th>Basic Salary</th>
+                    <th>Monthly Salary</th>
                     <th>Allowances</th>
                     <th>Deductions</th>
                     <th>Net Payout</th>
@@ -138,7 +141,10 @@ const MySalaryClient = () => {
                       <td>{formatCurrency(p.basic_salary)}</td>
                       <td>{formatCurrency(p.allowances)}</td>
                       <td className="text-danger">-{formatCurrency(p.deductions)}</td>
-                      <td className="fw-bold text-success">{formatCurrency(p.net_salary)}</td>
+                      <td>
+                        <div className="fw-bold text-success">{formatCurrency(p.payable_salary ?? p.net_salary)}</div>
+                        <small className="text-danger">Unpaid Days: {formatDays(p.attendance_summary?.unpaid_days)}</small>
+                      </td>
                       <td>
                         <Badge bg={p.status === "PAID" ? "success" : "warning"}>
                           {p.status}
@@ -207,6 +213,33 @@ const MySalaryClient = () => {
                 </div>
               </div>
 
+              <div className="border rounded mb-4 overflow-hidden">
+                <table className="table mb-0 align-middle">
+                  <thead className="table-light">
+                    <tr>
+                      <th>Present</th>
+                      <th>Half Day</th>
+                      <th>Leave</th>
+                      <th>Paid Leave</th>
+                      <th>Holiday</th>
+                      <th>Sunday Unpaid</th>
+                      <th className="text-end">Unpaid Days</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>{payslipData.attendance_summary?.present ?? 0}</td>
+                      <td>{payslipData.attendance_summary?.half_day ?? 0}</td>
+                      <td>{payslipData.attendance_summary?.leave ?? 0}</td>
+                      <td>{payslipData.attendance_summary?.paid_leave ?? 0}</td>
+                      <td>{payslipData.attendance_summary?.holiday ?? 0}</td>
+                      <td>{payslipData.attendance_summary?.sunday_unpaid ?? 0}</td>
+                      <td className="text-end text-danger fw-semibold">{formatDays(payslipData.attendance_summary?.unpaid_days)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
               {/* Salary Breakdown table */}
               <div className="border rounded mb-4 overflow-hidden">
                 <table className="table mb-0 align-middle">
@@ -219,7 +252,7 @@ const MySalaryClient = () => {
                   </thead>
                   <tbody>
                     <tr>
-                      <td className="py-3">Basic Monthly Salary</td>
+                      <td className="py-3">Monthly Salary</td>
                       <td className="text-end text-success py-3">Earnings</td>
                       <td className="text-end py-3">{formatCurrency(payslipData.basic_salary)}</td>
                     </tr>
@@ -229,14 +262,14 @@ const MySalaryClient = () => {
                       <td className="text-end py-3">{formatCurrency(payslipData.allowances)}</td>
                     </tr>
                     <tr className="border-bottom">
-                      <td className="py-3">Leave Deductions / Taxes</td>
+                      <td className="py-3">Attendance Deductions</td>
                       <td className="text-end text-danger py-3">Deductions</td>
                       <td className="text-end text-danger py-3">-{formatCurrency(payslipData.deductions)}</td>
                     </tr>
                     <tr className="table-light fw-bold fs-5 border-top">
-                      <td className="py-3 text-dark">Net Salary Pay</td>
+                      <td className="py-3 text-dark">Net Payout</td>
                       <td className="text-end text-muted py-3">Total Payout</td>
-                      <td className="text-end text-success py-3">{formatCurrency(payslipData.net_salary)}</td>
+                      <td className="text-end text-success py-3">{formatCurrency(payslipData.payable_salary ?? payslipData.net_salary)}</td>
                     </tr>
                   </tbody>
                 </table>

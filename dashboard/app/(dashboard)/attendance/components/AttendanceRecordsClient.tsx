@@ -29,8 +29,17 @@ type AttendanceRecord = {
   live_status: string;
 };
 
-type AttendanceListResponse = AttendanceRecord[] | {
+type AttendanceListResponse = {
   results: AttendanceRecord[];
+  count: number;
+};
+
+type EmployeeOption = {
+  id: string;
+  employee_id: string;
+  full_name: string;
+  email: string;
+  annual_salary?: number | string;
 };
 
 type EmployeeSummary = {
@@ -38,19 +47,23 @@ type EmployeeSummary = {
   name: string;
   email: string;
   avatar: string | null;
-  present: number; // P
+  present: number;
   late: number;
   absent: number;
-  halfDay: number; // HD
-  leave: number; // L
-  paidLeave: number; // PL
-  holiday: number; // H
+  halfDay: number;
+  leave: number;
+  paidLeave: number;
+  holiday: number;
+  sundayPaid: number;
   sundayUnpaid: number;
-  unpaidDays: number; // UD
+  unpaidDays: number;
+  monthlySalary: number | null;
+  deductions: number | null;
+  payableSalary: number | null;
 };
 
 const API_URL = `${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/attendance/`;
-const recordsPerPage = 20;
+const recordsPerPage = 31;
 
 const authHeaders = (): HeadersInit => {
   const token = localStorage.getItem("authToken");
@@ -63,22 +76,35 @@ const formatDate = (value: string) =>
 const formatTime = (value?: string | null) =>
   value ? new Intl.DateTimeFormat("en-IN", { hour: "2-digit", minute: "2-digit" }).format(new Date(value)) : "--";
 
+const formatCurrency = (value: number | string) =>
+  new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(Number(value || 0));
+
 const getStatusBadge = (status: string) => {
   switch (status) {
-    case "PRESENT":
-      return "success";
-    case "LATE":
-      return "warning";
-    case "HALF_DAY":
-      return "info";
-    case "ABSENT":
-      return "danger";
-    case "ON_LEAVE":
-      return "secondary";
-    default:
-      return "light";
+    case "PRESENT": return "success";
+    case "LATE": return "warning";
+    case "HALF_DAY": return "info";
+    case "ABSENT": return "danger";
+    case "LEAVE": return "danger";
+    case "PAID_LEAVE": return "primary";
+    case "HOLIDAY": return "success";
+    case "SUNDAY_PAID": return "primary";
+    case "SUNDAY_UNPAID": return "secondary";
+    default: return "light";
   }
 };
+
+const attendanceStatuses = [
+  { value: "PRESENT", label: "Present" },
+  { value: "LATE", label: "Late Entry" },
+  { value: "HALF_DAY", label: "Half Day" },
+  { value: "ABSENT", label: "Absent" },
+  { value: "LEAVE", label: "Leave" },
+  { value: "PAID_LEAVE", label: "Paid Leave" },
+  { value: "HOLIDAY", label: "Holiday" },
+  { value: "SUNDAY_PAID", label: "Sunday" },
+  { value: "SUNDAY_UNPAID", label: "Sunday Unpaid" },
+];
 
 const monthOptions = [
   { value: 1, name: "January" },
@@ -108,6 +134,8 @@ const AttendanceRecordsClient = () => {
   const [selectedMonth, setSelectedMonth] = useState(today.getMonth() + 1);
   const [selectedDay, setSelectedDay] = useState("All");
 
+  const [totalRecords, setTotalRecords] = useState(0);
+
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(nameQuery);
@@ -124,7 +152,7 @@ const AttendanceRecordsClient = () => {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isRulesModalOpen, setIsRulesModalOpen] = useState(false);
   const [attendanceRules, setAttendanceRules] = useState("");
-  const [employeesList, setEmployeesList] = useState<any[]>([]);
+  const [employeesList, setEmployeesList] = useState<EmployeeOption[]>([]);
 
   useEffect(() => {
     const savedRules = localStorage.getItem("attendance_rules");
@@ -247,12 +275,26 @@ const AttendanceRecordsClient = () => {
       if (statusFilter !== "All") params.set("status", statusFilter);
       if (debouncedSearch.trim()) params.set("search", debouncedSearch.trim());
 
+      // Only add pagination params if not in month view
+      if (filterMode !== "month") {
+        params.set("page", String(currentPage));
+        params.set("page_size", String(recordsPerPage));
+      }
+
       const response = await fetch(`${API_URL}?${params.toString()}`, { headers: authHeaders() });
       if (!response.ok) throw new Error("Unable to load attendance records.");
 
-      const data = (await response.json()) as AttendanceListResponse;
-      setRecords(Array.isArray(data) ? data : data.results);
-      setCurrentPage(1);
+      const data = await response.json();
+
+      // Check if the response is paginated or a direct array
+      if (Array.isArray(data)) {
+        setRecords(data);
+        setTotalRecords(data.length);
+        setCurrentPage(1); // Reset to first page
+      } else {
+        setRecords(data.results);
+        setTotalRecords(data.count);
+      }
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Unable to load attendance records.");
     } finally {
@@ -262,10 +304,16 @@ const AttendanceRecordsClient = () => {
 
   useEffect(() => {
     loadRecords();
-  }, [selectedYear, selectedMonth, selectedDay, statusFilter, debouncedSearch, filterMode, startDate, endDate]);
+  }, [selectedYear, selectedMonth, selectedDay, statusFilter, debouncedSearch, filterMode, startDate, endDate, currentPage]);
+
+  const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
 
   const employeeSummary = useMemo(() => {
     const summary: Record<string, EmployeeSummary> = {};
+    const salaryByEmployeeId = new Map<string, number>(
+      employeesList.map((employee) => [employee.employee_id, Number(employee.annual_salary || 0)] as [string, number])
+    );
+
     records.forEach((record) => {
       if (!summary[record.employee_id]) {
         summary[record.employee_id] = {
@@ -280,27 +328,42 @@ const AttendanceRecordsClient = () => {
           leave: 0,
           paidLeave: 0,
           holiday: 0,
+          sundayPaid: 0,
           sundayUnpaid: 0,
           unpaidDays: 0,
+          monthlySalary: null,
+          deductions: null,
+          payableSalary: null,
         };
       }
       if (record.status === "PRESENT") summary[record.employee_id].present += 1;
       if (record.status === "LATE") summary[record.employee_id].late += 1;
       if (record.status === "ABSENT") summary[record.employee_id].absent += 1;
       if (record.status === "HALF_DAY") summary[record.employee_id].halfDay += 1;
-      if (record.status === "ON_LEAVE") summary[record.employee_id].leave += 1;
-      // Note: Add additional logic here for Paid Leave, Holiday, Sunday Unpaid, Unpaid Days when available from backend
+      if (record.status === "LEAVE") summary[record.employee_id].leave += 1;
       if (record.status === "PAID_LEAVE") summary[record.employee_id].paidLeave += 1;
       if (record.status === "HOLIDAY") summary[record.employee_id].holiday += 1;
-      if (record.status === "UNPAID_DAY") summary[record.employee_id].unpaidDays += 1;
+      if (record.status === "SUNDAY_PAID") summary[record.employee_id].sundayPaid += 1;
+      if (record.status === "SUNDAY_UNPAID") summary[record.employee_id].sundayUnpaid += 1;
+      
+      if (["ABSENT", "LEAVE", "SUNDAY_UNPAID"].includes(record.status)) summary[record.employee_id].unpaidDays += 1;
+      if (record.status === "HALF_DAY") summary[record.employee_id].unpaidDays += 0.5;
     });
-    return Object.values(summary);
-  }, [records]);
 
-  const currentRecords = useMemo(() => {
-    const first = (currentPage - 1) * recordsPerPage;
-    return records.slice(first, first + recordsPerPage);
-  }, [currentPage, records]);
+    return Object.values(summary).map((item) => {
+      const annualSalary = salaryByEmployeeId.get(item.id) || 0;
+      if (!annualSalary || filterMode !== "month") return item;
+
+      const monthlySalary = annualSalary / 12;
+      const deductions = item.unpaidDays * (monthlySalary / daysInMonth);
+      return {
+        ...item,
+        monthlySalary,
+        deductions,
+        payableSalary: monthlySalary - deductions,
+      };
+    });
+  }, [records, employeesList, filterMode, daysInMonth]);
 
   const calendarEvents = useMemo(() => {
     const filteredRecords = selectedEmployee ? records.filter((record) => record.employee_id === selectedEmployee) : records;
@@ -314,9 +377,8 @@ const AttendanceRecordsClient = () => {
   }, [records, selectedEmployee]);
 
   const years = Array.from({ length: 5 }, (_, index) => today.getFullYear() - index);
-  const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
   const days = Array.from({ length: daysInMonth }, (_, index) => index + 1);
-  const totalPages = Math.ceil(records.length / recordsPerPage);
+  const totalPages = filterMode === 'month' ? 1 : Math.ceil(totalRecords / recordsPerPage);
 
   return (
     <Fragment>
@@ -406,11 +468,9 @@ const AttendanceRecordsClient = () => {
                 <Form.Label>Status</Form.Label>
                 <Form.Select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
                   <option value="All">All</option>
-                  <option value="PRESENT">Present</option>
-                  <option value="LATE">Late Entry</option>
-                  <option value="HALF_DAY">Half-day</option>
-                  <option value="ABSENT">Absent</option>
-                  <option value="ON_LEAVE">On Leave</option>
+                  {attendanceStatuses.map((attendanceStatus) => (
+                    <option key={attendanceStatus.value} value={attendanceStatus.value}>{attendanceStatus.label}</option>
+                  ))}
                 </Form.Select>
               </Form.Group>
             </Col>
@@ -441,109 +501,174 @@ const AttendanceRecordsClient = () => {
               <thead className="table-light">
                 <tr>
                   <th>Employee</th>
-                  <th className="text-center">Present (P)</th>
-                  <th className="text-center">Half Day (HD)</th>
-                  <th className="text-center">Leave (L)</th>
-                  <th className="text-center">Paid Leave (PL)</th>
-                  <th className="text-center">HOLIDAY (H)</th>
+                  <th className="text-center">Present</th>
+                  <th className="text-center">Late Entry</th>
+                  <th className="text-center">Absent</th>
+                  <th className="text-center">Half Day</th>
+                  <th className="text-center">Leave</th>
+                  <th className="text-center">Paid Leave</th>
+                  <th className="text-center">Holiday</th>
+                  <th className="text-center">Sunday Paid</th>
                   <th className="text-center">Sunday Unpaid</th>
-                  <th className="text-center">Unpaid Days (UD)</th>
-                <th className="text-end">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {employeeSummary.length === 0 && <tr><td colSpan={6} className="text-center py-4 text-secondary">No summary available for selected filters.</td></tr>}
-              {employeeSummary.map((summary) => (
-                <tr key={summary.id}>
-                  <td>
-                    <div className="d-flex align-items-center">
-                      <img src={summary.avatar || "/images/avatar/avatar-fallback.jpg"} alt={summary.name} className="avatar avatar-sm rounded-circle me-3" />
-                      <div>
-                        <div className="fw-semibold">{summary.name}</div>
-                        <small className="text-muted">{summary.id} - {summary.email}</small>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="text-center fw-bold text-success">{summary.present}</td>
-                  <td className="text-center fw-bold text-info">{summary.halfDay}</td>
-                  <td className="text-center fw-bold text-secondary">{summary.leave}</td>
-                  <td className="text-center fw-bold text-primary">{summary.paidLeave}</td>
-                  <td className="text-center fw-bold text-warning">{summary.holiday}</td>
-                  <td className="text-center fw-bold text-muted">{summary.sundayUnpaid}</td>
-                  <td className="text-center fw-bold text-danger">{summary.unpaidDays}</td>
-                  <td className="text-end">
-                    <Button variant="outline-secondary" size="sm" onClick={() => { setSelectedEmployee(summary.id); setView("calendar"); }}>
-                      View Calendar
-                    </Button>
-                  </td>
+                  <th className="text-center">Unpaid Days</th>
+                  <th className="text-end">Monthly Salary</th>
+                  <th className="text-end">Deductions</th>
+                  <th className="text-end">Payable Salary</th>
+                  <th className="text-end">Actions</th>
                 </tr>
-              ))}
-            </tbody>
+              </thead>
+            <tbody>
+                {employeeSummary.length === 0 && (
+                  <tr>
+                    <td colSpan={16} className="text-center py-4 text-secondary">
+                      No summary available for selected filters.
+                    </td>
+                  </tr>
+                )}
+                {employeeSummary.map((summary) => (
+                  <tr key={summary.id}>
+                    <td>
+                      <div className="d-flex align-items-center">
+                        <img
+                          src={summary.avatar || "/images/avatar/avatar-fallback.jpg"}
+                          alt={summary.name}
+                          className="avatar avatar-sm rounded-circle me-3"
+                        />
+                        <div>
+                          <div className="fw-semibold">{summary.name}</div>
+                          <small className="text-muted">
+                            {summary.id} - {summary.email}
+                          </small>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="text-center fw-bold text-success">{summary.present}</td>
+                    <td className="text-center fw-bold text-warning">{summary.late}</td>
+                    <td className="text-center fw-bold text-danger">{summary.absent}</td>
+                    <td className="text-center fw-bold text-info">{summary.halfDay}</td>
+                    <td className="text-center fw-bold text-secondary">{summary.leave}</td>
+                    <td className="text-center fw-bold text-primary">{summary.paidLeave}</td>
+                    <td className="text-center fw-bold text-success">{summary.holiday}</td>
+                    <td className="text-center fw-bold text-primary">{summary.sundayPaid}</td>
+                    <td className="text-center fw-bold text-muted">{summary.sundayUnpaid}</td>
+                    <td className="text-center fw-bold text-danger">{summary.unpaidDays}</td>
+                    <td className="text-end">{summary.monthlySalary !== null ? formatCurrency(summary.monthlySalary) : "N/A"}</td>
+                    <td className="text-end">{summary.deductions ? formatCurrency(summary.deductions) : "N/A"}</td>
+                    <td className="text-end fw-bold">{summary.payableSalary ? formatCurrency(summary.payableSalary) : "N/A"}</td>
+                    <td className="text-end">
+                      <Button
+                        variant="outline-primary"
+                        size="sm"
+                        onClick={() => {
+                          setView("calendar");
+                          setSelectedEmployee(summary.id);
+                        }}
+                      >
+                        View Calendar
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
             </Table>
           ) : (
-            <AttendanceCalendar events={calendarEvents} onSelectEvent={(event) => setEditingRecord(event.resource)} />
+            <AttendanceCalendar
+              events={calendarEvents}
+              initialDate={new Date(selectedYear, selectedMonth - 1)}
+            />
           )}
         </CardBody>
       </Card>
 
       <Card className="border-0 shadow-sm">
         <CardHeader className="bg-white d-flex justify-content-between align-items-center">
-          <h4 className="mb-0">Detailed Daily Log</h4>
-          <Button variant="primary" size="sm" onClick={() => setIsCreateOpen(true)}>Mark Attendance</Button>
+          <h4 className="mb-0">Attendance Log</h4>
+          <Button variant="primary" onClick={() => setIsCreateOpen(true)}>
+            + Add Record
+          </Button>
         </CardHeader>
         <CardBody>
-          {error && <div className="alert alert-danger">{error}</div>}
-          <Table hover responsive className="text-nowrap align-middle">
-            <thead className="table-light">
-              <tr>
-                <th>Date</th>
-                <th>Employee</th>
-                <th>Department</th>
-                <th>Check In</th>
-                <th>Check Out</th>
-                <th>Status</th>
-                <th className="text-end">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {isLoading && <tr><td colSpan={8} className="text-center py-4 text-secondary">Loading records...</td></tr>}
-              {!isLoading && currentRecords.length === 0 && <tr><td colSpan={8} className="text-center py-4 text-secondary">No attendance records found.</td></tr>}
-              {!isLoading && currentRecords.map((record) => (
-                <tr key={record.id}>
-                  <td>{formatDate(record.date)}</td>
-                  <td>
-                    <div className="d-flex align-items-center">
-                      <img src={record.employee_avatar_url || "/images/avatar/avatar-fallback.jpg"} alt={record.employee_name} className="avatar avatar-sm rounded-circle me-3" />
-                      <div>
-                        <div className="fw-semibold">{record.employee_name}</div>
-                        <small className="text-muted">{record.employee_id}</small>
-                      </div>
-                    </div>
-                  </td>
-                  <td>{record.employee_department}</td>
-                  <td>{formatTime(record.check_in)}</td>
-                  <td>{formatTime(record.check_out)}</td>
-                  <td><Badge bg={getStatusBadge(record.status)}>{record.status_label}</Badge></td>
-                  <td className="text-end">
-                    <Button variant="white" size="sm" className="btn-icon" onClick={() => setEditingRecord(record)}>
-                      <IconPencil size={16} />
-                    </Button>
-                    <Button variant="white" size="sm" className="btn-icon" onClick={() => setDeletingRecord(record)}>
-                      <IconTrash size={16} />
-                    </Button>
-                  </td>
+          {isLoading ? (
+            <div className="text-center py-5">
+              <div className="spinner-border text-primary" role="status">
+                <span className="visually-hidden">Loading...</span>
+              </div>
+            </div>
+          ) : error ? (
+            <Alert variant="danger">{error}</Alert>
+          ) : (
+            <Table hover responsive className="text-nowrap align-middle">
+              <thead className="table-light">
+                <tr>
+                  <th>Date</th>
+                  <th>Employee</th>
+                  <th>Department</th>
+                  <th>Check In</th>
+                  <th>Check Out</th>
+                  <th>Status</th>
+                  <th className="text-end">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </Table>
-          <CustomPagination currentPage={currentPage} totalPages={totalPages || 1} onPageChange={setCurrentPage} />
+              </thead>
+              <tbody>
+                {records.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="text-center py-4 text-secondary">
+                      No attendance records found.
+                    </td>
+                  </tr>
+                ) : (
+                  records.map((record) => (
+                    <tr key={record.id}>
+                      <td>{formatDate(record.date)}</td>
+                      <td>
+                        <div className="d-flex align-items-center">
+                          <img
+                            src={record.employee_avatar_url || "/images/avatar/avatar-fallback.jpg"}
+                            alt={record.employee_name}
+                            className="avatar avatar-sm rounded-circle me-3"
+                          />
+                          <div>
+                            <div className="fw-semibold">{record.employee_name}</div>
+                            <small className="text-muted">{record.employee_id}</small>
+                          </div>
+                        </div>
+                      </td>
+                      <td>{record.employee_department}</td>
+                      <td>{formatTime(record.check_in)}</td>
+                      <td>{formatTime(record.check_out)}</td>
+                      <td>
+                        <Badge bg={getStatusBadge(record.status)}>{record.status_label}</Badge>
+                      </td>
+                      <td className="text-end">
+                        <Button variant="white" size="sm" className="btn-icon" onClick={() => setEditingRecord(record)}>
+                          <IconPencil size={16} />
+                        </Button>
+                        <Button variant="white" size="sm" className="btn-icon" onClick={() => setDeletingRecord(record)}>
+                          <IconTrash size={16} />
+                        </Button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </Table>
+          )}
         </CardBody>
+        {filterMode !== 'month' && totalPages > 1 && (
+          <Card.Footer className="bg-white d-flex justify-content-end">
+            <CustomPagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={setCurrentPage}
+            />
+          </Card.Footer>
+        )}
       </Card>
 
       {isCreateOpen && (
         <Modal show={isCreateOpen} onHide={() => setIsCreateOpen(false)}>
           <Modal.Header closeButton>
-            <Modal.Title>Mark Attendance (New Record)</Modal.Title>
+            <Modal.Title>Create Attendance Record</Modal.Title>
           </Modal.Header>
           <Modal.Body>
             <Form id="create-attendance-form">
@@ -573,11 +698,9 @@ const AttendanceRecordsClient = () => {
               <Form.Group className="mb-3" controlId="formStatus">
                 <Form.Label>Status</Form.Label>
                 <Form.Select name="status" defaultValue="PRESENT">
-                  <option value="PRESENT">Present</option>
-                  <option value="LATE">Late Entry</option>
-                  <option value="HALF_DAY">Half-day</option>
-                  <option value="ABSENT">Absent</option>
-                  <option value="ON_LEAVE">On Leave</option>
+                  {attendanceStatuses.map((attendanceStatus) => (
+                    <option key={attendanceStatus.value} value={attendanceStatus.value}>{attendanceStatus.label}</option>
+                  ))}
                 </Form.Select>
               </Form.Group>
               <Form.Group className="mb-3" controlId="formNotes">
@@ -652,11 +775,9 @@ const AttendanceRecordsClient = () => {
               <Form.Group className="mb-3" controlId="formStatus">
                 <Form.Label>Status</Form.Label>
                 <Form.Select name="status" defaultValue={editingRecord.status}>
-                  <option value="PRESENT">Present</option>
-                  <option value="LATE">Late Entry</option>
-                  <option value="HALF_DAY">Half-day</option>
-                  <option value="ABSENT">Absent</option>
-                  <option value="ON_LEAVE">On Leave</option>
+                  {attendanceStatuses.map((attendanceStatus) => (
+                    <option key={attendanceStatus.value} value={attendanceStatus.value}>{attendanceStatus.label}</option>
+                  ))}
                 </Form.Select>
               </Form.Group>
             </Form>

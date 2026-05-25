@@ -50,11 +50,11 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
         status_filter = params.get("status")
         search = params.get("search")
 
-        if year and month:
-            try:
-                auto_mark_calendar_days(int(month), int(year))
-            except (TypeError, ValueError):
-                pass
+        # if year and month:
+        #     try:
+        #         auto_mark_calendar_days(int(month), int(year))
+        #     except (TypeError, ValueError):
+        #         pass
 
         if date_from:
             queryset = queryset.filter(date__gte=date_from)

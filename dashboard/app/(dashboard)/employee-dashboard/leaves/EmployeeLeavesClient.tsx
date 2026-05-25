@@ -105,7 +105,7 @@ const EmployeeLeavesClient = () => {
         Swal.fire("Deleted!", "Your leave request has been deleted.", "success");
         fetchLeaves();
       } catch (err) {
-        Swal.fire("Error!", err.message, "error");
+        Swal.fire("Error!", err instanceof Error ? err.message : "An unknown error occurred.", "error");
       }
     }
   };

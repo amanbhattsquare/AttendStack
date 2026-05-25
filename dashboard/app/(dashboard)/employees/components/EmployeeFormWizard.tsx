@@ -234,7 +234,7 @@ const EmployeeFormWizard = ({ mode = "add", initialData, employeeId, onSave, onC
 
     try {
       const token = localStorage.getItem("authToken");
-      const url = mode === "edit" ? `${API_URL}${employeeId}/` : API_URL;
+      const url = mode === "edit" ? `${API_URL}${formData.id}/` : API_URL;
       const method = mode === "edit" ? "PATCH" : "POST";
 
       const response = await fetch(url, {

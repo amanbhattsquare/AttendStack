@@ -357,6 +357,12 @@ const SalaryPage = () => {
                         ? p.employee_details.annual_salary / 12
                         : p.basic_salary;
 
+                      const daysInMonth = new Date(p.year, p.month, 0).getDate();
+                      const unpaidDays = p.attendance_summary?.unpaid_days ?? 0;
+                      const dailyRate = monthlySalary > 0 ? monthlySalary / daysInMonth : 0;
+                      const calculatedDeductions = unpaidDays * dailyRate;
+                      const netSalary = monthlySalary + (p.allowances || 0) - calculatedDeductions;
+
                       return (
                         <tr key={p.id}>
                           <td>
@@ -376,8 +382,8 @@ const SalaryPage = () => {
                           </td>
                           <td>{formatCurrency(monthlySalary)}</td>
                           <td>{formatCurrency(p.allowances)}</td>
-                          <td className="text-danger">-{formatCurrency(p.deductions)}</td>
-                          <td className="fw-bold text-success">{formatCurrency(p.payable_salary ?? p.net_salary)}</td>
+                          <td className="text-danger">-{formatCurrency(calculatedDeductions)}</td>
+                          <td className="fw-bold text-success">{formatCurrency(netSalary)}</td>
                           <td>
                             <Badge bg={p.status === "PAID" ? "success" : "warning"}>
                               {p.status}

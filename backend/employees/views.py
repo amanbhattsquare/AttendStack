@@ -1,3 +1,4 @@
+from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework import filters, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -10,7 +11,7 @@ from django.db.models import Exists, OuterRef
 
 from organizations.models import Organization
 from .models import Employee
-from .serializers import EmployeeSerializer, EmployeeProfileSerializer
+from .serializers import EmployeeSerializer, EmployeeProfileSerializer, EmployeeListSerializer
 from .services import create_employee_user, reset_employee_user_password
 
 User = get_user_model()
@@ -18,6 +19,7 @@ User = get_user_model()
 
 class EmployeeViewSet(viewsets.ModelViewSet):
     serializer_class = EmployeeSerializer
+    parser_classes = (MultiPartParser, FormParser)
     permission_classes = [IsAdminOrHR]
     queryset = Employee.objects.all()
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
@@ -81,6 +83,8 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         serializer.save(organization=organization)
 
     def get_serializer_class(self):
+        if self.action == "list":
+            return EmployeeListSerializer
         if self.action == "me":
             return EmployeeProfileSerializer
         return super().get_serializer_class()

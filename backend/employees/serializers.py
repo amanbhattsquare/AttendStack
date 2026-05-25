@@ -27,6 +27,33 @@ class EmployeeProfileSerializer(serializers.ModelSerializer):
         return value
 
 
+class EmployeeListSerializer(serializers.ModelSerializer):
+    profile_photo_url = serializers.SerializerMethodField()
+    status_label = serializers.CharField(source="get_status_display", read_only=True)
+
+    class Meta:
+        model = Employee
+        fields = [
+            "id",
+            "employee_id",
+            "full_name",
+            "email",
+            "department",
+            "designation",
+            "profile_photo_url",
+            "status",
+            "status_label",
+            "annual_salary",
+        ]
+
+    def get_profile_photo_url(self, obj):
+        if not obj.profile_photo:
+            return None
+        request = self.context.get("request")
+        url = obj.profile_photo.url
+        return request.build_absolute_uri(url) if request else url
+
+
 class EmployeeSerializer(serializers.ModelSerializer):
     profile_photo_url = serializers.SerializerMethodField()
     aadhaar_document_url = serializers.SerializerMethodField()

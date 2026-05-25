@@ -143,7 +143,7 @@ const EmployeePageClient = () => {
     setEditingEmployee(null);
     try {
       const details = await fetchEmployeeDetails(employee.id);
-      setEditingEmployee(details);
+      setEditingEmployee({ ...details, id: employee.id });
     } catch (error) {
       Swal.fire("Error", "Could not load employee details.", "error");
       setIsEditModalOpen(false);
@@ -333,13 +333,22 @@ const EmployeePageClient = () => {
 
     try {
       const token = localStorage.getItem("authToken");
+      const body = new FormData();
+
+      Object.entries(formData).forEach(([key, value]) => {
+        if (value instanceof File) {
+          body.append(key, value, value.name);
+        } else if (value !== null && value !== undefined) {
+          body.append(key, String(value));
+        }
+      });
+
       const response = await fetch(`${API_URL}${editingEmployee.id}/`, {
         method: "PATCH",
         headers: {
-          "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(formData),
+        body: body,
       });
 
       if (!response.ok) {
@@ -347,12 +356,12 @@ const EmployeePageClient = () => {
         throw new Error(errorData.detail || "Failed to update employee.");
       }
 
-      await loadEmployees(); 
+      await loadEmployees();
       setIsEditModalOpen(false);
       Swal.fire("Success", "Employee updated successfully!", "success");
 
     } catch (error) {
-      Swal.fire("Error", error.message, "error");
+      Swal.fire("Error", error instanceof Error ? error.message : "An unknown error occurred.", "error");
     }
   };
 
@@ -611,10 +620,10 @@ const EmployeePageClient = () => {
             <div className="text-center">Loading...</div>
           ) : (
             <EmployeeFormWizard
-              initialData={editingEmployee}
-              onSubmit={handleUpdate}
-              isUpdateMode={true}
-            />
+                initialData={editingEmployee || undefined}
+                onSave={() => handleUpdate(editingEmployee as EmployeeFormData)}
+                mode="edit"
+              />
           )}
         </Modal.Body>
       </Modal>

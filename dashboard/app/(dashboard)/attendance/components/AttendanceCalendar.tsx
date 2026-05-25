@@ -48,7 +48,7 @@ const eventStyleGetter = (event: any) => {
   };
 };
 
-const AttendanceCalendar = ({ events, onSelectEvent }: { events: any[]; onSelectEvent: (event: any) => void }) => {
+const AttendanceCalendar = ({ events, onSelectEvent, date }: { events: any[]; onSelectEvent: (event: any) => void; date: Date }) => {
   return (
     <div>
       <Calendar
@@ -59,6 +59,7 @@ const AttendanceCalendar = ({ events, onSelectEvent }: { events: any[]; onSelect
         style={{ height: 500 }}
         eventPropGetter={eventStyleGetter}
         onSelectEvent={onSelectEvent}
+        date={date}
       />
     </div>
   );

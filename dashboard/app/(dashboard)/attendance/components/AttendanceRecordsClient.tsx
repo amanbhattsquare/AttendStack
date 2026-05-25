@@ -70,14 +70,22 @@ const authHeaders = (): HeadersInit => {
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
-const formatDate = (value: string) =>
-  new Intl.DateTimeFormat("en-IN", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(value));
+const formatDate = (value: string) => {
+  const date = new Date(value);
+  const formattedDate = new Intl.DateTimeFormat("en-IN", { day: "2-digit", month: "short", year: "numeric" }).format(date);
+  if (date.getDay() === 0) { // 0 is Sunday
+    return `${formattedDate} (Sunday)`;
+  }
+  return formattedDate;
+};
 
 const formatTime = (value?: string | null) =>
   value ? new Intl.DateTimeFormat("en-IN", { hour: "2-digit", minute: "2-digit" }).format(new Date(value)) : "--";
 
-const formatCurrency = (value: number | string) =>
-  new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(Number(value || 0));
+const formatCurrency = (value: number | string | null) => {
+  if (value === null || value === "N/A") return "N/A";
+  return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(Number(value || 0));
+}
 
 const getStatusBadge = (status: string) => {
   switch (status) {
@@ -129,7 +137,7 @@ const AttendanceRecordsClient = () => {
   const [statusFilter, setStatusFilter] = useState("All");
   const [filterMode, setFilterMode] = useState<"month" | "range">("month");
   const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
+  const [endDate, setEndDate] = useState(today.toISOString().slice(0, 10));
   const [selectedYear, setSelectedYear] = useState(today.getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(today.getMonth() + 1);
   const [selectedDay, setSelectedDay] = useState("All");
@@ -172,7 +180,7 @@ const AttendanceRecordsClient = () => {
       const data = await response.json();
       setEmployeesList(Array.isArray(data) ? data : data.results || []);
     } catch (err) {
-      console.error("Failed to load employees list:", err);
+      // console.error("Failed to load employees list:", err);
     }
   };
 
@@ -264,10 +272,29 @@ const AttendanceRecordsClient = () => {
 
     try {
       const params = new URLSearchParams();
+      const today = new Date();
+      
       if (filterMode === "month") {
         params.set("year", String(selectedYear));
         params.set("month", String(selectedMonth));
-        if (selectedDay !== "All") params.set("day", selectedDay);
+        if (selectedDay !== "All") {
+          params.set("day", selectedDay);
+        }
+        
+        const currentYear = today.getFullYear();
+        const currentMonth = today.getMonth() + 1;
+
+        if (Number(selectedYear) > currentYear || (Number(selectedYear) === currentYear && Number(selectedMonth) > currentMonth)) {
+          setRecords([]);
+          setTotalRecords(0);
+          setIsLoading(false);
+          return;
+        }
+
+        if (Number(selectedYear) === currentYear && Number(selectedMonth) === currentMonth) {
+          params.set("date_to", today.toISOString().split('T')[0]);
+        }
+
       } else {
         if (startDate) params.set("date_from", startDate);
         if (endDate) params.set("date_to", endDate);
@@ -352,7 +379,14 @@ const AttendanceRecordsClient = () => {
 
     return Object.values(summary).map((item) => {
       const annualSalary = salaryByEmployeeId.get(item.id) || 0;
-      if (!annualSalary || filterMode !== "month") return item;
+      if (!annualSalary || filterMode !== "month") {
+        return {
+          ...item,
+          monthlySalary: "N/A",
+          deductions: "N/A",
+          payableSalary: "N/A",
+        };
+      }
 
       const monthlySalary = annualSalary / 12;
       const deductions = item.unpaidDays * (monthlySalary / daysInMonth);
@@ -574,7 +608,8 @@ const AttendanceRecordsClient = () => {
           ) : (
             <AttendanceCalendar
               events={calendarEvents}
-              initialDate={new Date(selectedYear, selectedMonth - 1)}
+              date={new Date(selectedYear, selectedMonth - 1)}
+              onSelectEvent={(event) => setEditingRecord(event.resource)}
             />
           )}
         </CardBody>
@@ -634,8 +669,16 @@ const AttendanceRecordsClient = () => {
                         </div>
                       </td>
                       <td>{record.employee_department}</td>
-                      <td>{formatTime(record.check_in)}</td>
-                      <td>{formatTime(record.check_out)}</td>
+                      <td>
+                        {["PRESENT", "LATE", "HALF_DAY"].includes(record.status)
+                          ? formatTime(record.check_in)
+                          : "--"}
+                      </td>
+                      <td>
+                        {["PRESENT", "LATE", "HALF_DAY"].includes(record.status)
+                          ? formatTime(record.check_out)
+                          : "--"}
+                      </td>
                       <td>
                         <Badge bg={getStatusBadge(record.status)}>{record.status_label}</Badge>
                       </td>

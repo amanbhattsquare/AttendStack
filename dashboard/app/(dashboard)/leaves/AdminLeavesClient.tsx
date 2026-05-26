@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { Card, Button, Table, Badge, Modal, Form, Row, Col, Alert, Spinner, InputGroup } from "react-bootstrap";
-import { IconSearch, IconCalendarEvent, IconMessage, IconInfoCircle, IconClock, IconCircleCheck, IconCircleX, IconEye, IconSettings } from "@tabler/icons-react";
+import { IconSearch, IconCalendarEvent, IconMessage, IconInfoCircle, IconClock, IconCircleCheck, IconCircleX, IconEye, IconSettings, IconTrash } from "@tabler/icons-react";
 import { Avatar } from "components/common/Avatar";
 import { getAssetPath } from "helper/assetPath";
 
@@ -42,6 +42,26 @@ const AdminLeavesClient = () => {
   const [adminNotes, setAdminNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const handleDelete = async (id: number) => {
+    if (!window.confirm('Are you sure you want to delete this leave request?')) return;
+    const token = localStorage.getItem('authToken');
+    if (!token) { setError('Session expired. Please sign in again.'); return; }
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/attendance/leaves/${id}/`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.detail || 'Failed to delete leave request');
+      }
+      setSuccessMsg('Leave request deleted successfully');
+      await fetchLeaves();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error deleting leave request');
+    }
+  };
+
   const fetchLeaves = async () => {
     setIsLoading(true);
     setError("");
@@ -73,6 +93,7 @@ const AdminLeavesClient = () => {
   }, []);
 
   const handleOpenReview = (leave: LeaveRequest) => {
+    console.log('Opening review modal for leave id:', leave.id);
     setSelectedLeave(leave);
     setReviewStatus(leave.status === "PENDING" ? "APPROVED" : leave.status);
     setAdminNotes(leave.admin_notes || "");
@@ -349,24 +370,37 @@ const AdminLeavesClient = () => {
                           {getStatusBadge(leave.status)}
                         </td>
                         <td className="px-4 py-3 text-end">
-                          <Button
-                            variant={leave.status === "PENDING" ? "primary" : "outline-secondary"}
-                            size="sm"
-                            onClick={() => handleOpenReview(leave)}
-                            className="d-inline-flex align-items-center gap-1.5 px-3 py-1.5 rounded-3 fw-semibold small"
-                          >
-                            {leave.status === "PENDING" ? (
-                              <>
-                                <IconSettings size={14} />
-                                Review
-                              </>
-                            ) : (
-                              <>
-                                <IconEye size={14} />
-                                Details
-                              </>
-                            )}
-                          </Button>
+                          <div className="d-flex gap-2 justify-content-end">
+                            <Button
+                              type="button"
+                              variant={leave.status === "PENDING" ? "primary" : "outline-secondary"}
+                              size="sm"
+                              onClick={() => handleOpenReview(leave)}
+                              className="d-inline-flex align-items-center gap-1.5 px-3 py-1.5 rounded-3 fw-semibold small"
+                            >
+                              {leave.status === "PENDING" ? (
+                                <>
+                                  <IconSettings size={14} />
+                                  Review
+                                </>
+                              ) : (
+                                <>
+                                  <IconEye size={14} />
+                                  Details
+                                </>
+                              )}
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="danger"
+                              size="sm"
+                              onClick={() => handleDelete(leave.id)}
+                              className="d-inline-flex align-items-center gap-1.5 px-3 py-1.5 rounded-3 fw-semibold small"
+                            >
+                              <IconTrash size={14} />
+                              Delete
+                            </Button>
+                          </div>
                         </td>
                       </tr>
                     );

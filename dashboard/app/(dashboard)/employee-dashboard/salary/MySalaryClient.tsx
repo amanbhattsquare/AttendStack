@@ -31,6 +31,12 @@ const MySalaryClient = () => {
   const [showDeductionModal, setShowDeductionModal] = useState(false);
   const [deductionData, setDeductionData] = useState<any | null>(null);
 
+  // Debug effect to monitor deduction modal visibility
+  useEffect(() => {
+    if (showDeductionModal) {
+      console.log('Deduction modal opened', deductionData);
+    }
+  }, [showDeductionModal, deductionData]);
   // Load employee profile from localStorage to render CTC details
   useEffect(() => {
     const userData = localStorage.getItem("user");
@@ -145,9 +151,11 @@ const MySalaryClient = () => {
                       <td className="text-danger">
                         -{formatCurrency(p.deductions)}
                         <Button
+                          type="button"
                           variant="link"
                           size="sm"
                           onClick={() => {
+                            console.log('Deduction button clicked for', p);
                             setDeductionData(p);
                             setShowDeductionModal(true);
                           }}
@@ -326,6 +334,7 @@ const MySalaryClient = () => {
         <Modal.Body>
           {deductionData && (
             <div>
+            <pre style={{ maxHeight: "200px", overflow: "auto", background: "#f8f9fa", padding: "10px", borderRadius: "4px" }}>{JSON.stringify(deductionData, null, 2)}</pre>
               <p>
                 Here is a breakdown of the deductions for{" "}
                 <strong>

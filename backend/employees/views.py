@@ -1,4 +1,4 @@
-from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework import filters, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -19,7 +19,7 @@ User = get_user_model()
 
 class EmployeeViewSet(viewsets.ModelViewSet):
     serializer_class = EmployeeSerializer
-    parser_classes = (MultiPartParser, FormParser)
+    parser_classes = (MultiPartParser, FormParser, JSONParser)
     permission_classes = [IsAdminOrHR]
     queryset = Employee.objects.all()
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
@@ -119,6 +119,23 @@ class EmployeeViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"], url_path="create-password")
     def create_password(self, request, pk=None):
         employee = self.get_object()
+        user_exists = User.objects.filter(email__iexact=employee.email).exists()
+
+        if user_exists:
+            user, employee_password = reset_employee_user_password(
+                employee,
+                password=request.data.get("password"),
+            )
+            return Response(
+                {
+                    "detail": "Login account password updated successfully.",
+                    "employee_id": employee.employee_id,
+                    "user_id": str(user.id),
+                    "email": user.email,
+                    "temporary_password": employee_password,
+                }
+            )
+
         user, employee_password = create_employee_user(
             employee,
             password=request.data.get("password"),

@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useState, useEffect } from "react";
-import { IconDownload, IconPrinter } from "@tabler/icons-react";
+import { IconDownload, IconPrinter, IconInfoCircle } from "@tabler/icons-react";
 import { Spinner, Alert, Badge, Table, Button, Modal, Row, Col } from "react-bootstrap";
 
 const BASE_URL = `${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/payroll/`;
@@ -28,6 +28,8 @@ const MySalaryClient = () => {
 
   const [showPayslipModal, setShowPayslipModal] = useState(false);
   const [payslipData, setPayslipData] = useState<any | null>(null);
+  const [showDeductionModal, setShowDeductionModal] = useState(false);
+  const [deductionData, setDeductionData] = useState<any | null>(null);
 
   // Load employee profile from localStorage to render CTC details
   useEffect(() => {
@@ -140,7 +142,20 @@ const MySalaryClient = () => {
                       </td>
                       <td>{formatCurrency(p.basic_salary)}</td>
                       <td>{formatCurrency(p.allowances)}</td>
-                      <td className="text-danger">-{formatCurrency(p.deductions)}</td>
+                      <td className="text-danger">
+                        -{formatCurrency(p.deductions)}
+                        <Button
+                          variant="link"
+                          size="sm"
+                          onClick={() => {
+                            setDeductionData(p);
+                            setShowDeductionModal(true);
+                          }}
+                          className="d-inline-flex align-items-center gap-1 ms-1 border-0 p-0"
+                        >
+                          <IconInfoCircle size={16} />
+                        </Button>
+                      </td>
                       <td>
                         <div className="fw-bold text-success">{formatCurrency(p.payable_salary ?? p.net_salary)}</div>
                         <small className="text-danger">Unpaid Days: {formatDays(p.attendance_summary?.unpaid_days)}</small>
@@ -302,6 +317,62 @@ const MySalaryClient = () => {
           </Button>
         </Modal.Footer>
       </Modal>
+
+      {/* Deduction Details Modal */}
+      <Modal show={showDeductionModal} onHide={() => setShowDeductionModal(false)} centered>
+        <Modal.Header closeButton>
+          <Modal.Title className="fw-bold">Deduction Details</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {deductionData && (
+            <div>
+              <p>
+                Here is a breakdown of the deductions for{" "}
+                <strong>
+                  {deductionData.month_name} {deductionData.year}
+                </strong>
+                .
+              </p>
+              <Table striped bordered hover>
+                <thead>
+                  <tr>
+                    <th>Reason</th>
+                    <th className="text-end">Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {deductionData.deduction_details && Object.keys(deductionData.deduction_details).length > 0 ? (
+                    Object.entries(deductionData.deduction_details).map(([reason, amount]) => (
+                      <tr key={reason}>
+                        <td>{reason}</td>
+                        <td className="text-end">{formatCurrency(amount as number)}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={2} className="text-center text-muted">
+                        No deduction details available.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+                <tfoot className="table-light">
+                  <tr>
+                    <td className="fw-bold">Total Deductions</td>
+                    <td className="text-end fw-bold">{formatCurrency(deductionData.deductions)}</td>
+                  </tr>
+                </tfoot>
+              </Table>
+            </div>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="outline-secondary" onClick={() => setShowDeductionModal(false)}>
+            Close
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
 
       <style>{`
         @media print {

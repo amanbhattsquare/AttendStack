@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useState, useEffect } from "react";
-import { IconDownload, IconSearch, IconPlus, IconPencil, IconCheck, IconPrinter } from "@tabler/icons-react";
+import { IconDownload, IconSearch, IconPlus, IconPencil, IconCheck, IconPrinter, IconInfoCircle } from "@tabler/icons-react";
 import { Spinner, Alert, Modal, Button, Form, Badge, Table } from "react-bootstrap";
 import Swal from "sweetalert2";
 
@@ -63,6 +63,8 @@ const SalaryPage = () => {
 
   const [showPayslipModal, setShowPayslipModal] = useState(false);
   const [payslipData, setPayslipData] = useState<any | null>(null);
+  const [showDeductionModal, setShowDeductionModal] = useState(false);
+  const [deductionData, setDeductionData] = useState<any | null>(null);
 
   // Parse User Credentials
   useEffect(() => {
@@ -382,7 +384,20 @@ const SalaryPage = () => {
                           </td>
                           <td>{formatCurrency(monthlySalary)}</td>
                           <td>{formatCurrency(p.allowances)}</td>
-                          <td className="text-danger">-{formatCurrency(calculatedDeductions)}</td>
+                          <td className="text-danger">
+                            -{formatCurrency(calculatedDeductions)}
+                            <Button
+                              variant="link"
+                              size="sm"
+                              onClick={() => {
+                                setDeductionData(p);
+                                setShowDeductionModal(true);
+                              }}
+                              className="d-inline-flex align-items-center gap-1 ms-1 border-0 p-0"
+                            >
+                              <IconInfoCircle size={16} />
+                            </Button>
+                          </td>
                           <td className="fw-bold text-success">{formatCurrency(netSalary)}</td>
                           <td>
                             <Badge bg={p.status === "PAID" ? "success" : "warning"}>
@@ -693,6 +708,61 @@ const SalaryPage = () => {
           </Button>
           <Button variant="primary" onClick={handlePrint} className="d-flex align-items-center gap-2">
             <IconPrinter size={18} /> Print Payslip
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Deduction Details Modal */}
+      <Modal show={showDeductionModal} onHide={() => setShowDeductionModal(false)} centered>
+        <Modal.Header closeButton>
+          <Modal.Title className="fw-bold">Deduction Details</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {deductionData && (
+            <div>
+              <p>
+                Here is a breakdown of the deductions for{" "}
+                <strong>
+                  {deductionData.employee_details.full_name} ({deductionData.month_name} {deductionData.year})
+                </strong>
+                .
+              </p>
+              <Table striped bordered hover>
+                <thead>
+                  <tr>
+                    <th>Reason</th>
+                    <th className="text-end">Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {deductionData.deduction_details && Object.keys(deductionData.deduction_details).length > 0 ? (
+                    Object.entries(deductionData.deduction_details).map(([reason, amount]) => (
+                      <tr key={reason}>
+                        <td>{reason}</td>
+                        <td className="text-end">{formatCurrency(amount as number)}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={2} className="text-center text-muted">
+                        No deduction details available.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+                <tfoot className="table-light">
+                  <tr>
+                    <td className="fw-bold">Total Deductions</td>
+                    <td className="text-end fw-bold">{formatCurrency(deductionData.deductions)}</td>
+                  </tr>
+                </tfoot>
+              </Table>
+            </div>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="outline-secondary" onClick={() => setShowDeductionModal(false)}>
+            Close
           </Button>
         </Modal.Footer>
       </Modal>

@@ -39,6 +39,8 @@ def calculate_attendance_payroll(employee, month: int, year: int, allowances=0) 
         date__month=month,
     )
 
+    deduction_details = {}
+
     for record in records:
         if record.status == AttendanceStatus.PRESENT:
             summary["present"] += 1
@@ -47,12 +49,15 @@ def calculate_attendance_payroll(employee, month: int, year: int, allowances=0) 
         elif record.status == AttendanceStatus.ABSENT:
             summary["absent"] += 1
             unpaid_days += Decimal("1")
+            deduction_details["Absent Day"] = deduction_details.get("Absent Day", 0) + per_day_salary
         elif record.status == AttendanceStatus.HALF_DAY:
             summary["half_day"] += 1
             unpaid_days += Decimal("0.5")
+            deduction_details["Half Day"] = deduction_details.get("Half Day", 0) + (per_day_salary / 2)
         elif record.status == AttendanceStatus.LEAVE:
             summary["leave"] += 1
             unpaid_days += Decimal("1")
+            deduction_details["Unpaid Leave"] = deduction_details.get("Unpaid Leave", 0) + per_day_salary
         elif record.status == AttendanceStatus.PAID_LEAVE:
             summary["paid_leave"] += 1
         elif record.status == AttendanceStatus.HOLIDAY:
@@ -60,6 +65,7 @@ def calculate_attendance_payroll(employee, month: int, year: int, allowances=0) 
         elif record.status == AttendanceStatus.SUNDAY_UNPAID:
             summary["sunday_unpaid"] += 1
             unpaid_days += Decimal("1")
+            deduction_details["Unpaid Sunday"] = deduction_details.get("Unpaid Sunday", 0) + per_day_salary
         elif record.status == AttendanceStatus.SUNDAY_PAID:
             summary["sunday_paid"] += 1
 
@@ -70,6 +76,7 @@ def calculate_attendance_payroll(employee, month: int, year: int, allowances=0) 
         "basic_salary": basic_salary,
         "allowances": allowances,
         "deductions": deductions,
+        "deduction_details": deduction_details,
         "payable_salary": payable_salary,
         "unpaid_days": float(unpaid_days),
         "days_in_month": days_in_month,

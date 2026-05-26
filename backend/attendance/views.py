@@ -39,6 +39,8 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
         # Enforce data isolation: Employees can only view their own records
         if user.is_authenticated and user.role == "EMPLOYEE":
             queryset = queryset.filter(employee__email__iexact=user.email)
+        
+        queryset = queryset.filter(date__lte=timezone.now().date())
             
         params = self.request.query_params
 
@@ -201,6 +203,13 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
         except ValueError:
             return Response(
                 {"detail": "Month and year must be valid integers."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        today = timezone.now().date()
+        if year > today.year or (year == today.year and month > today.month):
+            return Response(
+                {"detail": "Cannot auto-mark attendance for future months."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 

@@ -17,6 +17,7 @@ class Payroll(models.Model):
     basic_salary = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
     allowances = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
     deductions = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+    deduction_details = models.JSONField(default=dict, blank=True, null=True)
     net_salary = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
     status = models.CharField(
         max_length=20,

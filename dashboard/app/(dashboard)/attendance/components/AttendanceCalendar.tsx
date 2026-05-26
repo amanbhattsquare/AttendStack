@@ -9,39 +9,43 @@ import "react-big-calendar/lib/css/react-big-calendar.css";
 const localizer = momentLocalizer(moment);
 
 const eventStyleGetter = (event: any) => {
-  let backgroundColor = "#808080"; // Default grey
+  let backgroundColor = "#f8f9fa"; // light
+  let color = "white";
+
   switch (event.resource.status) {
     case "PRESENT":
-      backgroundColor = "#28a745"; // Green
+      backgroundColor = "#198754"; // success
       break;
     case "LATE":
-      backgroundColor = "#ffc107"; // Yellow
+      backgroundColor = "#ffc107"; // warning
+      color = "#000";
       break;
     case "HALF_DAY":
-      backgroundColor = "#17a2b8"; // Blue
+      backgroundColor = "#0dcaf0"; // info
+      color = "#000";
       break;
     case "ABSENT":
-      backgroundColor = "#dc3545"; // Red
+      backgroundColor = "#dc3545"; // danger
       break;
     case "LEAVE":
-      backgroundColor = "#6c757d"; // Grey
+      backgroundColor = "#dc3545"; // danger
       break;
     case "PAID_LEAVE":
-      backgroundColor = "#0d6efd"; // Blue
+      backgroundColor = "#0d6efd"; // primary
       break;
     case "HOLIDAY":
-      backgroundColor = "#198754"; // Green
+      backgroundColor = "#198754"; // success
       break;
     case "SUNDAY_UNPAID":
-      backgroundColor = "#6c757d"; // Grey
+      backgroundColor = "#6c757d"; // secondary
       break;
   }
   return {
     style: {
       backgroundColor,
       borderRadius: "5px",
-      opacity: 0.8,
-      color: "white",
+      opacity: 0.9,
+      color: color,
       border: "0px",
       display: "block",
     },

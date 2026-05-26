@@ -356,14 +356,11 @@ const SalaryPage = () => {
                   ) : (
                     payrolls.map((p) => {
                       const monthlySalary = p.employee_details.annual_salary
-                        ? p.employee_details.annual_salary / 12
-                        : p.basic_salary;
+                        ? Number(p.employee_details.annual_salary) / 12
+                        : Number(p.basic_salary || 0);
 
-                      const daysInMonth = new Date(p.year, p.month, 0).getDate();
-                      const unpaidDays = p.attendance_summary?.unpaid_days ?? 0;
-                      const dailyRate = monthlySalary > 0 ? monthlySalary / daysInMonth : 0;
-                      const calculatedDeductions = unpaidDays * dailyRate;
-                      const netSalary = monthlySalary + (p.allowances || 0) - calculatedDeductions;
+                      const calculatedDeductions = Number(p.deductions || 0);
+                      const netSalary = Number(p.payable_salary ?? p.net_salary ?? 0);
 
                       return (
                         <tr key={p.id}>

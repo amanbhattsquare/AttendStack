@@ -59,19 +59,23 @@ const AdminDashboard = () => {
       let lateCount = 0;
       let leaveCount = 0;
 
+      let paidLeaveCount = 0;
+
       todaysRecords.forEach((r: any) => {
         if (r.status === "PRESENT") presentCount++;
         else if (r.status === "ABSENT") absentCount++;
         else if (r.status === "LATE") lateCount++;
-        else if (r.status === "LEAVE" || r.status === "PAID_LEAVE") leaveCount++;
+        else if (r.status === "LEAVE") leaveCount++;
+        else if (r.status === "PAID_LEAVE") paidLeaveCount++;
         else if (r.status === "HALF_DAY") presentCount++; // counted as present for pie chart simplicity, or split it
       });
 
       setAttendanceChartData([
-        { status: "Present", count: presentCount, color: "#10b981" }, // success green
-        { status: "Late", count: lateCount, color: "#f59e0b" }, // warning yellow
-        { status: "Absent", count: absentCount, color: "#ef4444" }, // danger red
-        { status: "Leave", count: leaveCount, color: "#64748b" }, // secondary gray
+        { status: "Present", count: presentCount, color: "#198754" }, // success green
+        { status: "Late", count: lateCount, color: "#ffc107" }, // warning yellow
+        { status: "Absent", count: absentCount, color: "#dc3545" }, // danger red
+        { status: "Leave", count: leaveCount, color: "#dc3545" }, // danger red
+        { status: "Paid Leave", count: paidLeaveCount, color: "#0d6efd" }, // primary blue
       ]);
 
       // Process for Activity Log (Latest 5 records based on created/updated or just first 5)
@@ -91,9 +95,12 @@ const AdminDashboard = () => {
         } else if (r.status === "LATE") {
           desc = `${r.employee_name || 'Employee'} checked in late at ${timeStr}`;
           color = "warning";
-        } else if (r.status === "LEAVE" || r.status === "PAID_LEAVE") {
+        } else if (r.status === "LEAVE") {
           desc = `${r.employee_name || 'Employee'} is on leave`;
-          color = "secondary";
+          color = "danger";
+        } else if (r.status === "PAID_LEAVE") {
+          desc = `${r.employee_name || 'Employee'} is on paid leave`;
+          color = "primary";
         } else if (r.status === "HOLIDAY") {
           desc = `${r.employee_name || 'Employee'} has a holiday`;
           color = "success";

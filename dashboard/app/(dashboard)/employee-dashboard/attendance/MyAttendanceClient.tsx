@@ -317,10 +317,10 @@ const MyAttendanceClient = () => {
                 <td className="text-center fw-bold text-warning">{summary.late}</td>
                 <td className="text-center fw-bold text-danger">{summary.absent}</td>
                 <td className="text-center fw-bold text-info">{summary.halfDay}</td>
-                <td className="text-center fw-bold text-secondary">{summary.leave}</td>
+                <td className="text-center fw-bold text-danger">{summary.leave}</td>
                 <td className="text-center fw-bold text-primary">{summary.paidLeave}</td>
-                <td className="text-center fw-bold text-warning">{summary.holiday}</td>
-                <td className="text-center fw-bold text-muted">{summary.sundayUnpaid}</td>
+                <td className="text-center fw-bold text-success">{summary.holiday}</td>
+                <td className="text-center fw-bold text-secondary">{summary.sundayUnpaid}</td>
                 <td className="text-center fw-bold text-danger">{summary.unpaidDays}</td>
               </tr>
             </tbody>

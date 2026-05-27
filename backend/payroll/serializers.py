@@ -40,6 +40,7 @@ class PayrollSerializer(serializers.ModelSerializer):
             "basic_salary",
             "allowances",
             "deductions",
+            "deduction_details",
             "net_salary",
             "payable_salary",
             "attendance_summary",

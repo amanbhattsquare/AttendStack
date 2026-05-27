@@ -1,12 +1,9 @@
-from django.urls import path, include
-from rest_framework.routers import DefaultRouter
+from django.urls import path
 from .views import HolidayViewSet
 
-router = DefaultRouter()
-router.register(r'', HolidayViewSet, basename='holiday')
-
-app_name = 'holidays'
+app_name = "holidays"
 
 urlpatterns = [
-    path('', include(router.urls)),
+    path('', HolidayViewSet.as_view({'get': 'list', 'post': 'create'}), name='holiday-list'),
+    path('<int:pk>/', HolidayViewSet.as_view({'get': 'retrieve', 'put': 'update', 'delete': 'destroy'}), name='holiday-detail'),
 ]

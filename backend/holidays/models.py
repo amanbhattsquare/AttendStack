@@ -17,6 +17,7 @@ class Holiday(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    is_processed = models.BooleanField(default=False, help_text="Indicates if the holiday has been processed for attendance")
 
     class Meta:
         ordering = ["date"]

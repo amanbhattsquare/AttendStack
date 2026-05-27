@@ -9,7 +9,7 @@ import EditHolidayModal from "./EditHolidayModal";
 import { useHolidays } from "./useHolidays";
 import { flexRender } from "@tanstack/react-table";
 import Pagination from "./Pagination";
-import { Spinner, Button, Alert } from "react-bootstrap";
+import { Spinner, Button, Alert, Form } from "react-bootstrap";
 
 const BASE_URL = `${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/holidays/`;
 
@@ -194,6 +194,51 @@ const HolidaysPage = () => {
       {error && <Alert variant="danger">{error}</Alert>}
 
       <div className="card border-0 shadow-sm mb-6">
+        <div className="card-header bg-white border-bottom-0 pt-4 pb-4">
+          <div className="row g-3">
+            <div className="col-lg-3 col-md-4">
+              <Form.Control
+                type="search"
+                placeholder="Search Holidays..."
+                value={(table.getColumn("name")?.getFilterValue() as string) ?? ""}
+                onChange={(e) =>
+                  table.getColumn("name")?.setFilterValue(e.target.value)
+                }
+              />
+            </div>
+            <div className="col-lg-3 col-md-4">
+              <Form.Select
+                onChange={(e) =>
+                  table.getColumn("date")?.setFilterValue(e.target.value)
+                }
+              >
+                <option value="">Filter by Year</option>
+                {Array.from(
+                  new Set(holidays.map((h) => new Date(h.date).getFullYear()))
+                )
+                  .sort((a, b) => b - a)
+                  .map((year) => (
+                    <option key={year} value={year}>
+                      {year}
+                    </option>
+                  ))}
+              </Form.Select>
+            </div>
+            <div className="col-lg-3 col-md-4">
+              <Form.Select
+                onChange={(e) =>
+                  table.getColumn("type")?.setFilterValue(e.target.value)
+                }
+              >
+                <option value="">Filter by Type</option>
+                <option value="Public Holiday">Public Holiday</option>
+                <option value="National Holiday">National Holiday</option>
+                <option value="Festival">Festival</option>
+                <option value="Optional Holiday">Optional Holiday</option>
+              </Form.Select>
+            </div>
+          </div>
+        </div>
         <div className="card-body p-0">
           <div className="table-responsive">
             {isLoading ? (

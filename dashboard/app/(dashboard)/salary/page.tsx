@@ -735,7 +735,7 @@ const SalaryPage = () => {
                   {deductionData.deduction_details && Object.keys(deductionData.deduction_details).length > 0 ? (
                     Object.entries(deductionData.deduction_details).map(([reason, amount]) => (
                       <tr key={reason}>
-                        <td>{reason}</td>
+                        <td>{reason.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase())}</td>
                         <td className="text-end">{formatCurrency(amount as number)}</td>
                       </tr>
                     ))

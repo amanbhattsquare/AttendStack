@@ -35,6 +35,10 @@ export const useHolidays = (data: Holiday[], isAdmin: boolean) => {
         const val = props.getValue();
         return <span>{new Intl.DateTimeFormat("en-IN", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(val))}</span>;
       },
+      filterFn: (row: any, columnId: any, filterValue: any) => {
+        const year = new Date(row.getValue(columnId)).getFullYear();
+        return year === parseInt(filterValue);
+      },
     },
     {
       accessorKey: "day",
@@ -50,6 +54,20 @@ export const useHolidays = (data: Holiday[], isAdmin: boolean) => {
         else if (type === "National Holiday") bg = "success";
         else if (type === "Festival") bg = "warning";
         return <span className={`badge bg-${bg}`}>{type}</span>;
+      },
+    },
+    {
+      accessorKey: "is_processed",
+      header: "Processed",
+      cell: (props: any) => {
+        const isProcessed = props.getValue();
+        return (
+          <span
+            className={`badge bg-${isProcessed ? "success" : "secondary"}`}
+          >
+            {isProcessed ? "Yes" : "No"}
+          </span>
+        );
       },
     },
   ];

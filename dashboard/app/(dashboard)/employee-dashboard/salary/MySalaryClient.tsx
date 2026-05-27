@@ -334,7 +334,6 @@ const MySalaryClient = () => {
         <Modal.Body>
           {deductionData && (
             <div>
-            <pre style={{ maxHeight: "200px", overflow: "auto", background: "#f8f9fa", padding: "10px", borderRadius: "4px" }}>{JSON.stringify(deductionData, null, 2)}</pre>
               <p>
                 Here is a breakdown of the deductions for{" "}
                 <strong>

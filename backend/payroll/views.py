@@ -74,6 +74,7 @@ class PayrollViewSet(viewsets.ModelViewSet):
             if existing:
                 existing.basic_salary = payroll_values["basic_salary"]
                 existing.deductions = payroll_values["deductions"]
+                existing.deduction_details = payroll_values["deduction_details"]
                 existing.save()
                 updated_count += 1
             else:
@@ -84,6 +85,7 @@ class PayrollViewSet(viewsets.ModelViewSet):
                     basic_salary=payroll_values["basic_salary"],
                     allowances=payroll_values["allowances"],
                     deductions=payroll_values["deductions"],
+                    deduction_details=payroll_values["deduction_details"],
                     status=PayrollStatus.PENDING
                 )
                 generated_count += 1

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { Card, Button, Table, Badge, Modal, Form, Row, Col, Alert, Spinner } from "react-bootstrap";
-import { IconCalendarPlus, IconCalendarEvent, IconMessage, IconInfoCircle, IconClock, IconCircleCheck, IconCircleX, IconEdit, IconTrash } from "@tabler/icons-react";
+import { IconCalendarPlus, IconCalendarEvent, IconMessage, IconInfoCircle, IconClock, IconCircleCheck, IconCircleX, IconEdit, IconTrash, IconBriefcase, IconHeart, IconUser, IconBook } from "@tabler/icons-react";
 import Swal from "sweetalert2";
 
 interface LeaveRequest {
@@ -187,6 +187,16 @@ const EmployeeLeavesClient = () => {
         return <Badge bg="primary-subtle" className="text-primary-emphasis px-2 py-1 rounded">Annual Leave</Badge>;
       case "CASUAL":
         return <Badge bg="info-subtle" className="text-info-emphasis px-2 py-1 rounded">Casual Leave</Badge>;
+      case "MATERNITY":
+        return <Badge bg="pink-subtle" className="text-pink-emphasis px-2 py-1 rounded">Maternity Leave</Badge>;
+      case "PATERNITY":
+        return <Badge bg="blue-subtle" className="text-blue-emphasis px-2 py-1 rounded">Paternity Leave</Badge>;
+      case "BEREAVEMENT":
+        return <Badge bg="secondary-subtle" className="text-secondary-emphasis px-2 py-1 rounded">Bereavement Leave</Badge>;
+      case "MARRIAGE":
+        return <Badge bg="success-subtle" className="text-success-emphasis px-2 py-1 rounded">Marriage Leave</Badge>;
+      case "STUDY":
+        return <Badge bg="warning-subtle" className="text-warning-emphasis px-2 py-1 rounded">Study Leave</Badge>;
       default:
         return <Badge bg="secondary-subtle" className="text-secondary-emphasis px-2 py-1 rounded">Other</Badge>;
     }
@@ -199,6 +209,33 @@ const EmployeeLeavesClient = () => {
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
     return diffDays;
   };
+
+  // Load company leave settings
+  const [leaveSettings, setLeaveSettings] = useState(null);
+  
+  useEffect(() => {
+    const fetchSettings = async () => {
+      const token = localStorage.getItem("authToken");
+      if (!token) return;
+      try {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/settings/`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setLeaveSettings(data);
+        }
+      } catch (err) {
+        console.error("Failed to load settings:", err);
+      }
+    };
+    fetchSettings();
+  }, []);
+
+  // Calculate used leave days
+  const usedAnnual = leaves.filter(l => l.leave_type === "ANNUAL" && l.status === "APPROVED").reduce((acc, l) => acc + calculateDays(l.start_date, l.end_date), 0);
+  const usedSick = leaves.filter(l => l.leave_type === "SICK" && l.status === "APPROVED").reduce((acc, l) => acc + calculateDays(l.start_date, l.end_date), 0);
+  const usedCasual = leaves.filter(l => l.leave_type === "CASUAL" && l.status === "APPROVED").reduce((acc, l) => acc + calculateDays(l.start_date, l.end_date), 0);
 
   // Metrics
   const totalRequested = leaves.length;
@@ -226,6 +263,46 @@ const EmployeeLeavesClient = () => {
           </Button>
         </Card.Body>
       </Card>
+
+      {/* Leave Balance Overview */}
+      {leaveSettings && (
+        <Card className="border-0 shadow-sm mb-4 rounded-4">
+          <Card.Header className="bg-white border-0 py-3 px-4">
+            <h5 className="fw-bold text-dark mb-0">Your Leave Balance</h5>
+          </Card.Header>
+          <Card.Body className="px-4 pb-4">
+            <Row className="g-4">
+              <Col md={4}>
+                <div className="d-flex align-items-center justify-content-between p-3 bg-primary-subtle rounded-3">
+                  <div>
+                    <p className="text-primary small fw-semibold mb-1">Annual Leave</p>
+                    <p className="text-primary mb-0"><strong>{leaveSettings.annual_paid_leave_days - usedAnnual}</strong> / {leaveSettings.annual_paid_leave_days} days left</p>
+                  </div>
+                  <IconBriefcase size={24} className="text-primary" />
+                </div>
+              </Col>
+              <Col md={4}>
+                <div className="d-flex align-items-center justify-content-between p-3 bg-danger-subtle rounded-3">
+                  <div>
+                    <p className="text-danger small fw-semibold mb-1">Sick Leave</p>
+                    <p className="text-danger mb-0"><strong>{leaveSettings.sick_leave_days - usedSick}</strong> / {leaveSettings.sick_leave_days} days left</p>
+                  </div>
+                  <IconHeart size={24} className="text-danger" />
+                </div>
+              </Col>
+              <Col md={4}>
+                <div className="d-flex align-items-center justify-content-between p-3 bg-info-subtle rounded-3">
+                  <div>
+                    <p className="text-info small fw-semibold mb-1">Casual Leave</p>
+                    <p className="text-info mb-0"><strong>{leaveSettings.casual_leave_days - usedCasual}</strong> / {leaveSettings.casual_leave_days} days left</p>
+                  </div>
+                  <IconUser size={24} className="text-info" />
+                </div>
+              </Col>
+            </Row>
+          </Card.Body>
+        </Card>
+      )}
 
       {/* Metrics Row */}
       <Row className="mb-4 g-3">
@@ -260,10 +337,10 @@ const EmployeeLeavesClient = () => {
             <div className="d-flex align-items-center gap-3">
               <div className="p-3 bg-warning-subtle text-warning rounded-3">
                 <IconClock size={24} />
-              </div>
-              <div>
-                <h5 className="text-secondary small fw-semibold mb-0">Pending HR Reviews</h5>
-                <h3 className="fw-bold text-dark mb-0 mt-1">{pendingLeaves}</h3>
+                <div>
+                  <h5 className="text-secondary small fw-semibold mb-0">Pending HR Reviews</h5>
+                  <h3 className="fw-bold text-dark mb-0 mt-1">{pendingLeaves}</h3>
+                </div>
               </div>
             </div>
           </Card>
@@ -384,6 +461,11 @@ const EmployeeLeavesClient = () => {
                     <option value="CASUAL">Casual Leave</option>
                     <option value="SICK">Sick / Medical Leave</option>
                     <option value="ANNUAL">Annual Leave</option>
+                    <option value="MATERNITY">Maternity Leave</option>
+                    <option value="PATERNITY">Paternity Leave</option>
+                    <option value="BEREAVEMENT">Bereavement Leave</option>
+                    <option value="MARRIAGE">Marriage Leave</option>
+                    <option value="STUDY">Study Leave</option>
                     <option value="OTHER">Other / Unpaid</option>
                   </Form.Select>
                 </Form.Group>

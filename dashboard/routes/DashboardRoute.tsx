@@ -15,6 +15,7 @@ import {
   IconChartBar,
   IconWallet,
   IconCalendarTime,
+  IconSettings,
 } from "@tabler/icons-react";
 
 //import custom type
@@ -79,6 +80,12 @@ export const DashboardMenu: MenuItemType[] = [
     id: uuid(),
     title: "SYSTEM",
     grouptitle: true,
+  },
+  {
+    id: uuid(),
+    title: "Settings",
+    link: "/settings",
+    icon: <IconSettings size={20} strokeWidth={1.5} />,
   },
   {
     id: uuid(),

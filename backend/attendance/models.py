@@ -1,9 +1,10 @@
-from datetime import timedelta
+from datetime import timedelta, datetime
 
 from django.db import models
 from django.utils import timezone
 
 from employees.models import Employee
+from settings.models import SystemSettings
 
 
 AUTO_PRESERVED_STATUSES = frozenset([
@@ -42,6 +43,7 @@ class AttendanceRecord(models.Model):
         db_index=True,
     )
     notes = models.TextField(blank=True)
+    is_paid = models.BooleanField(default=True, help_text="Whether this day is paid in payroll")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -91,12 +93,55 @@ class AttendanceRecord(models.Model):
             self.status = AttendanceStatus.ABSENT
             return
 
+        # Get current system settings for dynamic thresholds
+        settings = SystemSettings.get_settings()
         local_check_in = timezone.localtime(self.check_in)
-        late_cutoff = local_check_in.replace(hour=10, minute=15, second=0, microsecond=0)
+        
+        # Parse late cutoff time from settings
+        late_cutoff_time = settings.late_cutoff_time
+        late_hour, late_minute = map(int, late_cutoff_time.strftime("%H:%M").split(":"))
+        late_cutoff = local_check_in.replace(
+            hour=late_hour, 
+            minute=late_minute, 
+            second=0, 
+            microsecond=0
+        )
+        
+        # Set status to LATE if check-in is after cutoff, else PRESENT
         self.status = AttendanceStatus.LATE if local_check_in > late_cutoff else AttendanceStatus.PRESENT
 
-        if self.check_out and self.total_duration and self.total_duration < timedelta(hours=4):
+        # Check for half day (if total duration is less than threshold)
+        if self.check_out and self.total_duration and self.total_duration < timedelta(hours=settings.half_day_threshold):
             self.status = AttendanceStatus.HALF_DAY
+          
+        # Apply Sunday Unpaid Rule if enabled
+        if settings.sunday_unpaid_rule_enabled:
+            # Get the date of this attendance record
+            attendance_date = local_check_in.date()
+            
+            # Check if this is a Sunday
+            if attendance_date.weekday() == 6:  # 6 = Sunday
+                # Check previous day (Saturday) and next day (Monday)
+                prev_day = attendance_date - timedelta(days=1)
+                next_day = attendance_date + timedelta(days=1)
+                
+                # Check if there's an absence/leave on Saturday OR Monday
+                prev_day_absent = AttendanceRecord.objects.filter(
+                    employee=self.employee,
+                    check_in__date=prev_day,
+                    status__in=[AttendanceStatus.ABSENT, AttendanceStatus.LEAVE]
+                ).exists()
+                
+                next_day_absent = AttendanceRecord.objects.filter(
+                    employee=self.employee,
+                    check_in__date=next_day,
+                    status__in=[AttendanceStatus.ABSENT, AttendanceStatus.LEAVE]
+                ).exists()
+                
+                # If either previous or next day is absent/leave, mark this Sunday as unpaid
+                if prev_day_absent or next_day_absent:
+                    self.status = AttendanceStatus.SUNDAY_UNPAID
+                    self.is_paid = False
 
     def save(self, *args, **kwargs):
         auto_refresh_status = kwargs.pop("auto_refresh_status", True)

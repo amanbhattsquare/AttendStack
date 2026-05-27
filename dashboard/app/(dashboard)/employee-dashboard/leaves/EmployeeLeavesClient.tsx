@@ -18,6 +18,12 @@ interface LeaveRequest {
   created_at: string;
 }
 
+interface LeaveSettings {
+  annual_paid_leave_days: number;
+  sick_leave_days: number;
+  casual_leave_days: number;
+}
+
 const EmployeeLeavesClient = () => {
   const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -211,7 +217,7 @@ const EmployeeLeavesClient = () => {
   };
 
   // Load company leave settings
-  const [leaveSettings, setLeaveSettings] = useState(null);
+  const [leaveSettings, setLeaveSettings] = useState<LeaveSettings | null>(null);
   
   useEffect(() => {
     const fetchSettings = async () => {
@@ -337,10 +343,10 @@ const EmployeeLeavesClient = () => {
             <div className="d-flex align-items-center gap-3">
               <div className="p-3 bg-warning-subtle text-warning rounded-3">
                 <IconClock size={24} />
-                <div>
-                  <h5 className="text-secondary small fw-semibold mb-0">Pending HR Reviews</h5>
-                  <h3 className="fw-bold text-dark mb-0 mt-1">{pendingLeaves}</h3>
-                </div>
+              </div>
+              <div>
+                <h5 className="text-secondary small fw-semibold mb-0">Pending HR Reviews</h5>
+                <h3 className="fw-bold text-dark mb-0 mt-1">{pendingLeaves}</h3>
               </div>
             </div>
           </Card>

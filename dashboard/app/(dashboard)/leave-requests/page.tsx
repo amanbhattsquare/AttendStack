@@ -1,9 +1,31 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { Card, Badge, Spinner, Button, Row, Col, Form, Alert } from "react-bootstrap";
+import { Card, Badge, Spinner, Button, Row, Col, Form, Alert, InputGroup } from "react-bootstrap";
 import { IconCheck, IconX, IconSearch, IconUserCheck, IconClock, IconCircleX, IconCircleCheck } from "@tabler/icons-react";
 import Swal from 'sweetalert2';
+
+interface LeaveApplication {
+  id: number;
+  employee_name: string;
+  leave_type: string;
+  start_date: string;
+  end_date: string;
+  reason: string;
+  status: string;
+  admin_notes?: string;
+}
+
+interface LeaveApplication {
+  id: number;
+  employee_name: string;
+  leave_type: string;
+  start_date: string;
+  end_date: string;
+  reason: string;
+  status: string;
+  admin_notes?: string;
+}
 
 // API utility to get auth headers
 const authHeaders = () => {
@@ -15,7 +37,7 @@ const authHeaders = () => {
 };
 
 const LeaveRequestsPage = () => {
-  const [leaveApplications, setLeaveApplications] = useState([]);
+  const [leaveApplications, setLeaveApplications] = useState<LeaveApplication[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -45,7 +67,7 @@ const LeaveRequestsPage = () => {
     fetchLeaveApplications();
   }, []);
 
-  const handleApprove = async (leaveId) => {
+  const handleApprove = async (leaveId: number) => {
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/attendance/leaves/${leaveId}/`, {
         method: "PATCH",
@@ -62,7 +84,7 @@ const LeaveRequestsPage = () => {
     }
   };
 
-  const handleReject = async (leaveId) => {
+  const handleReject = async (leaveId: number) => {
     const { value: reason } = await Swal.fire({
       title: "Reject Leave",
       input: "textarea",
@@ -204,15 +226,18 @@ const LeaveRequestsPage = () => {
         <Card.Header className="bg-white border-0 py-3 px-4 d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
           <h5 className="fw-bold text-dark mb-0">All Leave Applications</h5>
           <div className="d-flex gap-2">
-            <Form.Control
-              type="text"
-              placeholder="Search..."
-              className="rounded-3"
-              style={{ maxWidth: "200px" }}
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              prefix={<IconSearch size={16} />}
-            />
+            <InputGroup style={{ maxWidth: "200px" }}>
+              <InputGroup.Text className="rounded-start-3 border-0 bg-light">
+                <IconSearch size={16} />
+              </InputGroup.Text>
+              <Form.Control
+                type="text"
+                placeholder="Search..."
+                className="rounded-end-3 ps-0 border-0"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </InputGroup>
             <Form.Select
               className="rounded-3"
               style={{ maxWidth: "150px" }}

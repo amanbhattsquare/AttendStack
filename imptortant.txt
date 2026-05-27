@@ -17,29 +17,11 @@ npm run build
 
 
 
-# 1. Navigate to your frontend project directory
-cd /home/squarefit/AttendStack/dashboard
-
-# 2. Install PM2 globally (if you haven't already)
-sudo npm install pm2 -g
-
-# 3. Tell PM2 to start your Next.js app on port 3001
-#    Note the use of -p for the port
-pm2 start npm --name "attendstack-frontend" -- start -- -p 3001
-
-# 4. Save the PM2 process list to be restored on reboot
-pm2 save
-
-# 5. Generate the command to make PM2 start on boot
-pm2 startup
-
-
-
-
-
-
 sudo nano /etc/nginx/sites-available/attendance.nextgenapplication.com
 
+
+
+ python3 manage.py migrate
 sudo systemctl restart nginx
 
 
@@ -52,15 +34,6 @@ python3 manage.py changepassword bhattsquare1@gmail.com
 sudo ln -s /etc/nginx/sites-available/attendstack /etc/nginx/sites-enabled/
 
 sudo nginx -t
-
-
-
-
-# Install Certbot and the Nginx plugin
-sudo apt install certbot python3-certbot-nginx -y
-
-# Run Certbot, which will automatically modify your Nginx config
-sudo certbot --nginx -d attendance.nextgenapplication.com
 
 
 

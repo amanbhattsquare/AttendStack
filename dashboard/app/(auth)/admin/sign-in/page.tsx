@@ -16,8 +16,8 @@ import Link from "next/link";
 import axios from "axios";
 
 const AdminSignIn = () => {
-  const [email, setEmail] = useState("superadmin@gmail.com");
-  const [password, setPassword] = useState("superadmin123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();

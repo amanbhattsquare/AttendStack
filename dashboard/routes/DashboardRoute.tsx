@@ -91,7 +91,7 @@ export const DashboardMenu: MenuItemType[] = [
   {
     id: uuid(),
     title: "Rulebook",
-    link: "/admin/system/rulebook",
+    link: "/system/rulebook",
     icon: <IconBook size={20} strokeWidth={1.5} />,
   },
   {

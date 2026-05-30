@@ -49,7 +49,7 @@ const getStatusBadge = (status: string) => {
     case "LEAVE": return "danger";
     case "PAID_LEAVE": return "primary";
     case "HOLIDAY": return "success";
-    case "SUNDAY_UNPAID": return "secondary";
+    case "SUNDAY_UNPAID": return "dark";
     default:
       return "light";
   }
@@ -84,17 +84,30 @@ const MyAttendanceClient = () => {
     setError("");
 
     try {
+      const today = new Date();
+      const year = today.getFullYear();
+      const date_from = `${year}-01-01`;
+      const date_to = `${year}-12-31`;
+      const params = new URLSearchParams({ date_from, date_to, page_size: "365" });
+
       const [todayResponse, recordsResponse] = await Promise.all([
         fetch(`${API_URL}me/today/`, { headers: authHeaders() }),
-        fetch(`${API_URL}me/`, { headers: authHeaders() }),
+        fetch(`${API_URL}me/?${params.toString()}`, { headers: authHeaders() }),
       ]);
 
-      if (!todayResponse.ok || !recordsResponse.ok) {
-        throw new Error("Unable to load your attendance.");
+      if (!todayResponse.ok) {
+        throw new Error("Unable to load today's attendance summary.");
+      }
+      if (!recordsResponse.ok) {
+        throw new Error("Unable to load your attendance history.");
       }
 
       setToday((await todayResponse.json()) as TodayAttendance);
-      setRecords((await recordsResponse.json()) as AttendanceRecord[]);
+      
+      const recordsData = await recordsResponse.json();
+      const allRecords = Array.isArray(recordsData) ? recordsData : recordsData.results || [];
+      setRecords(allRecords);
+
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Unable to load your attendance.");
     } finally {

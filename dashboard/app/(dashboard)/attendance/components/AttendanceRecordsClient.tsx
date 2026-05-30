@@ -224,7 +224,7 @@ const AttendanceRecordsClient = () => {
   const handleUpdateRecord = async (updatedRecord: AttendanceRecord) => {
     try {
       const response = await fetch(`${API_URL}${updatedRecord.id}/`, {
-        method: "PUT",
+        method: "PATCH",
         headers: {
           ...authHeaders(),
           "Content-Type": "application/json",

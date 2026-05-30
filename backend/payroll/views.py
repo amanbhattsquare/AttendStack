@@ -1,12 +1,12 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from django.utils import timezone
+from django.db.models import Q
 from attendance.permissions import IsAdminOrReadOnly
 from employees.models import Employee, EmployeeStatus
-from .models import Payroll, PayrollStatus
+from .models import Payroll
 from .serializers import PayrollSerializer
-from .services import calculate_attendance_payroll
+from .services import build_employee_payroll_summary, calculate_attendance_payroll
 
 class PayrollViewSet(viewsets.ModelViewSet):
     queryset = Payroll.objects.select_related("employee").all()
@@ -64,14 +64,11 @@ class PayrollViewSet(viewsets.ModelViewSet):
 
         for emp in active_employees:
             existing = Payroll.objects.filter(employee=emp, month=month, year=year).first()
-            if existing and existing.status == PayrollStatus.PAID:
-                skipped_count += 1
-                continue
 
-            # Securely calculate payroll, handling cases with no prior records
+            # Recalculate all stored amounts from the single attendance payroll service.
+            # Existing PAID rows keep their status/paid_on, but stale buggy amounts are repaired.
             allowances = existing.allowances if existing else 0
-            deductions = existing.deductions if existing else 0
-            payroll_values = calculate_attendance_payroll(emp, month, year, allowances=allowances, deductions=deductions)
+            payroll_values = calculate_attendance_payroll(emp, month, year, allowances=allowances)
 
             if existing:
                 existing.basic_salary = payroll_values["basic_salary"]
@@ -98,3 +95,38 @@ class PayrollViewSet(viewsets.ModelViewSet):
             "updated": updated_count,
             "skipped": skipped_count
         }, status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=["get"], url_path="summary")
+    def monthly_summary(self, request):
+        month = request.query_params.get("month")
+        year = request.query_params.get("year")
+        search = request.query_params.get("search")
+
+        if not month or not year:
+            return Response(
+                {"detail": "Both month and year are required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            month = int(month)
+            year = int(year)
+        except ValueError:
+            return Response(
+                {"detail": "Month and year must be valid integers."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        employees = Employee.objects.filter(status=EmployeeStatus.ACTIVE).order_by("full_name")
+        if search:
+            employees = employees.filter(
+                Q(full_name__icontains=search)
+                | Q(employee_id__icontains=search)
+                | Q(email__icontains=search)
+            )
+
+        user = request.user
+        if user.is_authenticated and user.role not in ["SUPER_ADMIN", "HR"] and not user.is_staff:
+            employees = employees.filter(email__iexact=user.email)
+
+        return Response([build_employee_payroll_summary(employee, month, year, request) for employee in employees])

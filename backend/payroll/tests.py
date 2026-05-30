@@ -1,5 +1,6 @@
 from datetime import date
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.test import TestCase
 
@@ -48,7 +49,21 @@ class PayrollCalculationTests(TestCase):
         self.assertEqual(payroll["attendance_summary"]["leave"], 1)
         self.assertEqual(payroll["attendance_summary"]["paid_leave"], 1)
         self.assertEqual(payroll["attendance_summary"]["holiday"], 1)
-        self.assertEqual(payroll["attendance_summary"]["sunday_unpaid"], 5)
-        self.assertEqual(payroll["unpaid_days"], 6.5)
-        self.assertEqual(payroll["deductions"], Decimal("2096.77"))
-        self.assertEqual(payroll["payable_salary"], Decimal("7903.23"))
+        self.assertEqual(payroll["attendance_summary"]["sunday_unpaid"], 0)
+        self.assertEqual(payroll["unpaid_days"], 1.5)
+        self.assertEqual(payroll["deductions"], Decimal("483.87"))
+        self.assertEqual(payroll["payable_salary"], Decimal("9516.13"))
+
+    @patch("payroll.services.timezone.localdate")
+    def test_current_month_payroll_ignores_future_attendance_records(self, localdate_mock):
+        localdate_mock.return_value = date(2026, 5, 30)
+        employee = create_employee()
+        create_attendance(employee, 30, AttendanceStatus.PRESENT)
+        create_attendance(employee, 31, AttendanceStatus.ABSENT)
+
+        payroll = calculate_attendance_payroll(employee, 5, 2026)
+
+        self.assertEqual(payroll["attendance_summary"]["present"], 1)
+        self.assertEqual(payroll["attendance_summary"]["absent"], 0)
+        self.assertEqual(payroll["unpaid_days"], 0.0)
+        self.assertEqual(payroll["deductions"], Decimal("0.00"))

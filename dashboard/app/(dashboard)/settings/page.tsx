@@ -104,6 +104,7 @@ const SettingsPage = () => {
             setLeaveSettings({
               sundayUnpaidRuleEnabled: data.sunday_unpaid_rule_enabled,
               burgerRuleEnabled: data.burger_rule_enabled,
+              monthlyPaidLeaveDays: data.monthly_paid_leave_days ?? 1,
               annualPaidLeaveDays: data.annual_paid_leave_days,
               sickLeaveDays: data.sick_leave_days,
               casualLeaveDays: data.casual_leave_days,
@@ -161,6 +162,7 @@ const SettingsPage = () => {
   // Leave settings state - comprehensive for corporate startup
   const [leaveSettings, setLeaveSettings] = useState({
     // Core leave balances
+    monthlyPaidLeaveDays: 1,
     annualPaidLeaveDays: 21,
     sickLeaveDays: 12,
     casualLeaveDays: 6,
@@ -277,6 +279,7 @@ const SettingsPage = () => {
         // Full leave settings (comprehensive for startup)
         sunday_unpaid_rule_enabled: leaveSettings.sundayUnpaidRuleEnabled,
         burger_rule_enabled: leaveSettings.burgerRuleEnabled,
+        monthly_paid_leave_days: leaveSettings.monthlyPaidLeaveDays,
         annual_paid_leave_days: leaveSettings.annualPaidLeaveDays,
         sick_leave_days: leaveSettings.sickLeaveDays,
         casual_leave_days: leaveSettings.casualLeaveDays,
@@ -648,6 +651,19 @@ const SettingsPage = () => {
                             </h5>
                             <p className="text-muted small mb-4">Standard leave allocations for all full-time employees .</p>
                             <Row className="g-3">
+                              <Col md={6}>
+                                <Form.Group>
+                                  <Form.Label className="fw-semibold">Monthly Paid Leave</Form.Label>
+                                  <Form.Control
+                                    type="number"
+                                    min={0}
+                                    max={31}
+                                    value={leaveSettings.monthlyPaidLeaveDays}
+                                    onChange={(e) => setLeaveSettings({ ...leaveSettings, monthlyPaidLeaveDays: parseInt(e.target.value) || 0 })}
+                                  />
+                                  <Form.Text>Paid leave days allowed per employee each month</Form.Text>
+                                </Form.Group>
+                              </Col>
                               <Col md={6}>
                                 <Form.Group>
                                   <Form.Label className="fw-semibold">Annual Paid Leave</Form.Label>

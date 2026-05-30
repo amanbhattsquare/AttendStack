@@ -11,6 +11,7 @@ AUTO_PRESERVED_STATUSES = frozenset([
     "LEAVE",
     "PAID_LEAVE",
     "HOLIDAY",
+    "SUNDAY_PAID",
     "SUNDAY_UNPAID",
 ])
 
@@ -44,6 +45,14 @@ class AttendanceRecord(models.Model):
     )
     notes = models.TextField(blank=True)
     is_paid = models.BooleanField(default=True, help_text="Whether this day is paid in payroll")
+    leave_request = models.ForeignKey(
+        "attendance.LeaveRequest",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="attendance_records",
+        help_text="Leave request that created this attendance entry, when applicable",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

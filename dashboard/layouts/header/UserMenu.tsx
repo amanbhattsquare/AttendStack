@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Dropdown, Image } from "react-bootstrap";
 import Link from "next/link";
-import { IconLogin2, IconHome2, IconSettings, IconActivity } from "@tabler/icons-react";
+import { IconLogin2, IconHome2, IconSettings, IconActivity, IconBook } from "@tabler/icons-react";
 import { Avatar } from "components/common/Avatar";
 import { getAssetPath } from "helper/assetPath";
 
@@ -92,6 +92,12 @@ const UserMenu = () => {
           title: "My Profile",
           link: "/employee-dashboard/profile",
           icon: <IconSettings size={18} strokeWidth={1.5} className="text-secondary" />,
+        },
+        {
+          id: "emp-rulebook",
+          title: "Company Rulebook",
+          link: "/employee-dashboard/rulebook",
+          icon: <IconBook size={18} strokeWidth={1.5} className="text-secondary" />,
         },
         {
           id: "emp-salary",

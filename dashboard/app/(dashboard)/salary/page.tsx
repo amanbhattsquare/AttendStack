@@ -161,8 +161,7 @@ const SalaryPage = () => {
   // Open Edit Modal
   const openEditModal = (p: any) => {
     setSelectedPayroll(p);
-    const monthlySalary = p.employee_details.annual_salary ? p.employee_details.annual_salary / 12 : 0;
-    setEditBasic(monthlySalary.toFixed(2));
+    setEditBasic(Number(p.basic_salary || 0).toFixed(2));
     setEditAllowances(p.allowances);
     setEditDeductions(p.deductions);
     setEditStatus(p.status);
@@ -355,10 +354,7 @@ const SalaryPage = () => {
                     </tr>
                   ) : (
                     payrolls.map((p) => {
-                      const monthlySalary = p.employee_details.annual_salary
-                        ? Number(p.employee_details.annual_salary) / 12
-                        : Number(p.basic_salary || 0);
-
+                      const monthlySalary = Number(p.basic_salary || 0);
                       const calculatedDeductions = Number(p.deductions || 0);
                       const netSalary = Number(p.payable_salary ?? p.net_salary ?? 0);
 

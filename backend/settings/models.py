@@ -36,6 +36,7 @@ class SystemSettings(models.Model):
     company_address = models.TextField(default="123 Business Park, Mumbai, Maharashtra 400001")
     company_email = models.EmailField(default="admin@bhattsquare.com")
     company_phone = models.CharField(max_length=20, default="+91 98765 43210")
+    attendance_rules = models.TextField(blank=True, null=True)
     timezone = models.CharField(max_length=50, default="Asia/Kolkata")
     currency = models.CharField(max_length=10, default="INR")
     date_format = models.CharField(max_length=20, default="DD/MM/YYYY")
@@ -65,6 +66,11 @@ class SystemSettings(models.Model):
     
     
     # Paid Leave Allocation Settings
+    monthly_paid_leave_days = models.IntegerField(
+        default=1,
+        validators=[MinValueValidator(0), MaxValueValidator(31)],
+        help_text="Number of approved leave days per employee that are paid each month",
+    )
     annual_paid_leave_days = models.IntegerField(default=21, help_text="Default number of annual paid leave days per employee")
     sick_leave_days = models.IntegerField(default=12, help_text="Default number of annual sick leave days per employee")
     casual_leave_days = models.IntegerField(default=6, help_text="Default number of annual casual leave days per employee")

@@ -1,3 +1,4 @@
+from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 from rest_framework import status, viewsets
@@ -9,10 +10,10 @@ from rest_framework.response import Response
 
 from accounts.permissions import IsAdminOrHR
 from employees.models import Employee, EmployeeStatus
-from .models import AttendanceRecord, AttendanceStatus, LeaveRequest
+from .models import AttendanceRecord, AttendanceStatus, LeaveRequest, LeaveStatus
 from .permissions import IsAdminOrReadOnly
 from .serializers import AttendanceRecordSerializer, TodayAttendanceSerializer, LeaveRequestSerializer
-from .services import auto_mark_calendar_days
+from .services import auto_mark_calendar_days, sync_leave_request_attendance
 
 
 class StandardResultsSetPagination(PageNumberPagination):
@@ -36,12 +37,6 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
         queryset = super().get_queryset()
         user = self.request.user
         
-        # Enforce data isolation: Employees can only view their own records
-        if user.is_authenticated and user.role == "EMPLOYEE":
-            queryset = queryset.filter(employee__email__iexact=user.email)
-        
-        queryset = queryset.filter(date__lte=timezone.now().date())
-            
         params = self.request.query_params
 
         date_from = params.get("date_from")
@@ -51,6 +46,16 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
         day = params.get("day")
         status_filter = params.get("status")
         search = params.get("search")
+
+        # By default, only return today's records unless specific filters are provided
+        if not any([date_from, date_to, year, month, day, search]):
+            queryset = queryset.filter(date=timezone.now().date())
+
+        # Enforce data isolation: Employees can only view their own records
+        if user.is_authenticated and user.role == "EMPLOYEE":
+            queryset = queryset.filter(employee__email__iexact=user.email)
+
+        queryset = queryset.filter(date__lte=timezone.now().date())
 
         # if year and month:
         #     try:
@@ -219,6 +224,7 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
             {
                 "detail": "Auto-marking completed successfully.",
                 "created": result["created"],
+                "updated": result.get("updated", 0),
                 "skipped": result["skipped"],
             },
             status=status.HTTP_201_CREATED,
@@ -243,16 +249,36 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
                 queryset = queryset.none()
         return queryset
 
+    def _raise_if_leave_overlaps(self, employee, start_date, end_date, instance=None):
+        overlapping_requests = LeaveRequest.objects.filter(
+            employee=employee,
+            start_date__lte=end_date,
+            end_date__gte=start_date,
+        ).exclude(status=LeaveStatus.REJECTED)
+        if instance:
+            overlapping_requests = overlapping_requests.exclude(pk=instance.pk)
+        if overlapping_requests.exists():
+            raise ValidationError(
+                {"detail": "A pending or approved leave request already exists for this date range."}
+            )
+
     def perform_create(self, serializer):
         user = self.request.user
         if user.role not in ["SUPER_ADMIN", "HR"] and not user.is_staff:
             try:
                 employee = Employee.objects.get(email=user.email)
-                serializer.save(employee=employee, status="PENDING")
+                self._raise_if_leave_overlaps(
+                    employee,
+                    serializer.validated_data["start_date"],
+                    serializer.validated_data["end_date"],
+                )
+                leave_request = serializer.save(employee=employee, status=LeaveStatus.PENDING)
             except Employee.DoesNotExist:
                 raise ValidationError({"detail": "No employee profile is linked to this user account."})
         else:
-            serializer.save()
+            leave_request = serializer.save()
+
+        sync_leave_request_attendance(leave_request)
 
     def perform_update(self, serializer):
         user = self.request.user
@@ -261,6 +287,16 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         if user.role not in ["SUPER_ADMIN", "HR"] and not user.is_staff:
             if "status" in self.request.data or "admin_notes" in self.request.data:
                 raise ValidationError({"detail": "Employees are not authorized to approve/reject leave requests or edit admin notes."})
-            serializer.save()
+            if serializer.instance.status != LeaveStatus.PENDING:
+                raise ValidationError({"detail": "Only pending leave requests can be edited by employees."})
+            leave_request = serializer.save()
         else:
-            serializer.save()
+            leave_request = serializer.save()
+
+        sync_leave_request_attendance(leave_request)
+
+    def perform_destroy(self, instance):
+        with transaction.atomic():
+            instance.status = LeaveStatus.REJECTED
+            sync_leave_request_attendance(instance)
+            instance.delete()

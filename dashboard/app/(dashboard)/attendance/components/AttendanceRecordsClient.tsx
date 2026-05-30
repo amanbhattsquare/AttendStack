@@ -57,12 +57,13 @@ type EmployeeSummary = {
   sundayPaid: number;
   sundayUnpaid: number;
   unpaidDays: number;
-  monthlySalary: number | null;
-  deductions: number | null;
-  payableSalary: number | null;
+  monthlySalary: number | string | null;
+  deductions: number | string | null;
+  payableSalary: number | string | null;
 };
 
 const API_URL = `${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/attendance/`;
+const PAYROLL_SUMMARY_URL = `${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/payroll/summary/`;
 const recordsPerPage = 31;
 
 const authHeaders = (): HeadersInit => {
@@ -161,6 +162,7 @@ const AttendanceRecordsClient = () => {
   const [isRulesModalOpen, setIsRulesModalOpen] = useState(false);
   const [attendanceRules, setAttendanceRules] = useState("");
   const [employeesList, setEmployeesList] = useState<EmployeeOption[]>([]);
+  const [monthlySummary, setMonthlySummary] = useState<EmployeeSummary[]>([]);
 
   useEffect(() => {
     const savedRules = localStorage.getItem("attendance_rules");
@@ -329,9 +331,34 @@ const AttendanceRecordsClient = () => {
     }
   };
 
+  const loadMonthlySummary = async () => {
+    if (filterMode !== "month") {
+      setMonthlySummary([]);
+      return;
+    }
+
+    try {
+      const params = new URLSearchParams();
+      params.set("year", String(selectedYear));
+      params.set("month", String(selectedMonth));
+      if (debouncedSearch.trim()) params.set("search", debouncedSearch.trim());
+
+      const response = await fetch(`${PAYROLL_SUMMARY_URL}?${params.toString()}`, { headers: authHeaders() });
+      if (!response.ok) throw new Error("Unable to load monthly payroll summary.");
+      const data = await response.json();
+      setMonthlySummary(Array.isArray(data) ? data : data.results || []);
+    } catch (summaryError) {
+      setError(summaryError instanceof Error ? summaryError.message : "Unable to load monthly payroll summary.");
+    }
+  };
+
   useEffect(() => {
     loadRecords();
   }, [selectedYear, selectedMonth, selectedDay, statusFilter, debouncedSearch, filterMode, startDate, endDate, currentPage]);
+
+  useEffect(() => {
+    loadMonthlySummary();
+  }, [selectedYear, selectedMonth, debouncedSearch, filterMode]);
 
   const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
 
@@ -377,9 +404,13 @@ const AttendanceRecordsClient = () => {
       if (record.status === "HALF_DAY") summary[record.employee_id].unpaidDays += 0.5;
     });
 
+    if (filterMode === "month") {
+      return monthlySummary;
+    }
+
     return Object.values(summary).map((item) => {
       const annualSalary = salaryByEmployeeId.get(item.id) || 0;
-      if (!annualSalary || filterMode !== "month") {
+      if (!annualSalary) {
         return {
           ...item,
           monthlySalary: "N/A",
@@ -397,7 +428,7 @@ const AttendanceRecordsClient = () => {
         payableSalary: monthlySalary - deductions,
       };
     });
-  }, [records, employeesList, filterMode, daysInMonth]);
+  }, [records, employeesList, filterMode, daysInMonth, monthlySummary]);
 
   const calendarEvents = useMemo(() => {
     const filteredRecords = selectedEmployee ? records.filter((record) => record.employee_id === selectedEmployee) : records;
@@ -587,8 +618,8 @@ const AttendanceRecordsClient = () => {
                     <td className="text-center fw-bold text-secondary">{summary.sundayUnpaid}</td>
                     <td className="text-center fw-bold text-danger">{summary.unpaidDays}</td>
                     <td className="text-end">{summary.monthlySalary !== null ? formatCurrency(summary.monthlySalary) : "N/A"}</td>
-                    <td className="text-end">{summary.deductions ? formatCurrency(summary.deductions) : "N/A"}</td>
-                    <td className="text-end fw-bold">{summary.payableSalary ? formatCurrency(summary.payableSalary) : "N/A"}</td>
+                    <td className="text-end">{summary.deductions !== null ? formatCurrency(summary.deductions) : "N/A"}</td>
+                    <td className="text-end fw-bold">{summary.payableSalary !== null ? formatCurrency(summary.payableSalary) : "N/A"}</td>
                     <td className="text-end">
                       <Button
                         variant="outline-primary"

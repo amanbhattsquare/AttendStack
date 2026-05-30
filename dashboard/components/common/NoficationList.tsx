@@ -10,6 +10,7 @@ import {
   IconSettings,
   IconActivity,
   IconNotebook,
+  IconCalendarTime,
 } from "@tabler/icons-react";
 
 interface NotificationItem {
@@ -17,8 +18,9 @@ interface NotificationItem {
   title: string;
   description: string;
   timeLabel: string;
-  type: "attendance" | "holiday" | "payroll" | "system";
+  type: "attendance" | "holiday" | "payroll" | "system" | "leave";
   unread: boolean;
+  href?: string;
 }
 
 interface NotificationProps {
@@ -59,6 +61,12 @@ const NoficationList: React.FC<NotificationProps> = ({
             <IconActivity size={18} stroke={1.5} />
           </div>
         );
+      case "leave":
+        return (
+          <div className="icon-shape icon-md bg-danger-subtle text-danger-emphasis rounded-circle d-flex align-items-center justify-content-center p-2.5">
+            <IconCalendarTime size={18} stroke={1.5} />
+          </div>
+        );
       default:
         return (
           <div className="icon-shape icon-md bg-info-subtle text-info-emphasis rounded-circle d-flex align-items-center justify-content-center p-2.5">
@@ -80,14 +88,9 @@ const NoficationList: React.FC<NotificationProps> = ({
 
     return (
       <ListGroup variant="flush">
-        {items.map((item) => (
-          <ListGroup.Item
-            key={item.id}
-            action
-            onClick={() => onMarkAsRead(item.id)}
-            className="p-4 border-dashed border-bottom d-flex justify-content-between align-items-start gap-3"
-            style={{ cursor: "pointer", transition: "all 0.15s ease" }}
-          >
+        {items.map((item) => {
+          const content = (
+            <>
             <div className="d-flex gap-3 align-items-center">
               {getIcon(item.type)}
               <div className="d-flex flex-column gap-0.5">
@@ -105,8 +108,33 @@ const NoficationList: React.FC<NotificationProps> = ({
                 <IconCircleFilled size={8} className="text-danger" />
               </div>
             )}
-          </ListGroup.Item>
-        ))}
+            </>
+          );
+
+          return (
+            <ListGroup.Item
+              key={item.id}
+              action
+              onClick={() => onMarkAsRead(item.id)}
+              className="p-0 border-dashed border-bottom"
+              style={{ cursor: "pointer", transition: "all 0.15s ease" }}
+            >
+              {item.href ? (
+                <Link
+                  href={item.href}
+                  onClick={onClose}
+                  className="d-flex justify-content-between align-items-start gap-3 p-4 text-decoration-none"
+                >
+                  {content}
+                </Link>
+              ) : (
+                <div className="d-flex justify-content-between align-items-start gap-3 p-4">
+                  {content}
+                </div>
+              )}
+            </ListGroup.Item>
+          );
+        })}
       </ListGroup>
     );
   };

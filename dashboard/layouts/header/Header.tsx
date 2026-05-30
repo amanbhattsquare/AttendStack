@@ -8,7 +8,6 @@ import {
   IconArrowBarRight,
   IconBell,
   IconMenu2,
-  IconSearch,
 } from "@tabler/icons-react";
 import { Container, ListGroup, Navbar, Button } from "react-bootstrap";
 
@@ -26,9 +25,29 @@ interface NotificationItem {
   title: string;
   description: string;
   timeLabel: string;
-  type: "attendance" | "holiday" | "payroll" | "system";
+  type: "attendance" | "holiday" | "payroll" | "system" | "leave";
   unread: boolean;
+  href?: string;
+  createdAt?: string;
 }
+
+const API_ENDPOINT = process.env.NEXT_PUBLIC_API_ENDPOINT;
+
+const toArray = (payload: any) => Array.isArray(payload) ? payload : payload?.results || [];
+
+const formatDate = (value: string) =>
+  new Intl.DateTimeFormat("en-IN", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(value));
+
+const formatTimeAgo = (value?: string) => {
+  if (!value) return "Just now";
+  const diffMs = Date.now() - new Date(value).getTime();
+  const diffMinutes = Math.max(0, Math.floor(diffMs / 60000));
+  if (diffMinutes < 1) return "Just now";
+  if (diffMinutes < 60) return `${diffMinutes} min ago`;
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours} hr ago`;
+  return formatDate(value);
+};
 
 const Header = () => {
   const [isNoficationOpen, setIsNotificationOpen] = useState<boolean>(false);
@@ -38,6 +57,35 @@ const Header = () => {
 
   const isTablet = useMediaQuery({ maxWidth: 990 });
 
+  const getReadStorageKey = () => {
+    const userData = localStorage.getItem("user");
+    if (!userData) return "attendstack_notification_reads_guest";
+    try {
+      const user = JSON.parse(userData);
+      return `attendstack_notification_reads_${user.email || user.id || user.role || "user"}`;
+    } catch {
+      return "attendstack_notification_reads_user";
+    }
+  };
+
+  const getReadIds = () => {
+    try {
+      return new Set<string>(JSON.parse(localStorage.getItem(getReadStorageKey()) || "[]"));
+    } catch {
+      return new Set<string>();
+    }
+  };
+
+  const saveReadIds = (ids: Set<string>) => {
+    localStorage.setItem(getReadStorageKey(), JSON.stringify(Array.from(ids).slice(-200)));
+  };
+
+  const fetchJson = async (url: string, token: string) => {
+    const response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!response.ok) return null;
+    return response.json();
+  };
+
   const loadDynamicNotifications = async () => {
     const token = localStorage.getItem("authToken");
     const userData = localStorage.getItem("user");
@@ -46,112 +94,157 @@ const Header = () => {
     try {
       const parsedUser = JSON.parse(userData);
       const isEmployee = parsedUser.role === "EMPLOYEE";
+      const isAdmin = parsedUser.role === "SUPER_ADMIN" || parsedUser.role === "HR" || parsedUser.is_staff;
+      const readIds = getReadIds();
       const generatedNotifications: NotificationItem[] = [];
 
-      // 1. Fetch holidays (applicable to everyone)
-      try {
-        const holidaysRes = await fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/holidays/`, {
-          headers: { Authorization: `Bearer ${token}` },
+      const today = new Date();
+      const todayStr = today.toISOString().split("T")[0];
+      const month = today.getMonth() + 1;
+      const year = today.getFullYear();
+      const lastWeek = new Date(today);
+      lastWeek.setDate(today.getDate() - 7);
+
+      const holidays = toArray(await fetchJson(`${API_ENDPOINT}/api/v1/holidays/`, token));
+      holidays
+        .filter((holiday: any) => holiday.date >= todayStr)
+        .sort((a: any, b: any) => a.date.localeCompare(b.date))
+        .slice(0, 3)
+        .forEach((holiday: any) => {
+          const id = `holiday-${holiday.id}-${holiday.date}`;
+          generatedNotifications.push({
+            id,
+            title: "Upcoming Holiday",
+            description: `${holiday.name} is scheduled on ${formatDate(holiday.date)}.`,
+            timeLabel: "Holiday Calendar",
+            type: "holiday",
+            unread: !readIds.has(id),
+            href: isEmployee ? "/employee-dashboard/holidays" : "/holidays",
+            createdAt: holiday.date,
+          });
         });
-        if (holidaysRes.ok) {
-          const holidays = await holidaysRes.json();
-          const holidayList = Array.isArray(holidays) ? holidays : holidays.results || [];
-          const todayStr = new Date().toISOString().split("T")[0];
-          // Find upcoming holidays
-          const upcoming = holidayList
-            .filter((h: any) => h.date >= todayStr)
-            .sort((a: any, b: any) => a.date.localeCompare(b.date))
-            .slice(0, 2);
 
-          upcoming.forEach((holiday: any) => {
-            generatedNotifications.push({
-              id: `holiday-${holiday.id}`,
-              title: "Upcoming Holiday",
-              description: `${holiday.name} is scheduled on ${new Date(holiday.date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}.`,
-              timeLabel: "Holiday Calendar",
-              type: "holiday",
-              unread: true,
-            });
-          });
-        }
-      } catch (err) {
-        console.error("Error loading holiday notices", err);
-      }
-
-      // 2. Fetch Employee Specific Attendance and Payroll Logs
       if (isEmployee) {
-        // Attendance
-        try {
-          const attendanceRes = await fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/attendance/me/`, {
-            headers: { Authorization: `Bearer ${token}` },
+        const attendance = toArray(await fetchJson(`${API_ENDPOINT}/api/v1/attendance/me/?date_from=${lastWeek.toISOString().slice(0, 10)}`, token));
+        attendance.slice(0, 3).forEach((record: any) => {
+          const id = `attendance-${record.id}-${record.updated_at || record.date}`;
+          generatedNotifications.push({
+            id,
+            title: "Attendance Logged",
+            description: `Your ${formatDate(record.date)} attendance is ${record.status_label || record.status}.`,
+            timeLabel: record.check_in ? `Punched ${formatTimeAgo(record.check_in)}` : formatTimeAgo(record.updated_at || record.date),
+            type: "attendance",
+            unread: !readIds.has(id),
+            href: "/employee-dashboard/attendance",
+            createdAt: record.updated_at || record.check_in || record.date,
           });
-          if (attendanceRes.ok) {
-            const records = await attendanceRes.json();
-            const attendanceList = Array.isArray(records) ? records : records.results || [];
-            const recent = attendanceList.slice(0, 2);
-            recent.forEach((record: any) => {
-              const formattedDate = new Date(record.date).toLocaleDateString("en-IN", { day: "2-digit", month: "short" });
-              generatedNotifications.push({
-                id: `attendance-${record.id}`,
-                title: "Attendance Logged",
-                description: `Your daily log for ${formattedDate} is recorded as ${record.status_label || record.status}.`,
-                timeLabel: record.check_in ? `Punched at ${new Date(record.check_in).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}` : "Absent",
-                type: "attendance",
-                unread: true,
-              });
-            });
-          }
-        } catch (err) {
-          console.error("Error loading attendance notices", err);
+        });
+
+        const leaves = toArray(await fetchJson(`${API_ENDPOINT}/api/v1/attendance/leaves/`, token));
+        leaves.slice(0, 3).forEach((leave: any) => {
+          const id = `leave-${leave.id}-${leave.status}-${leave.updated_at}`;
+          generatedNotifications.push({
+            id,
+            title: leave.status === "PENDING" ? "Leave Awaiting Review" : `Leave ${leave.status_label || leave.status}`,
+            description: `${leave.leave_type_label || "Leave"} from ${formatDate(leave.start_date)} to ${formatDate(leave.end_date)}.`,
+            timeLabel: formatTimeAgo(leave.updated_at || leave.created_at),
+            type: "leave",
+            unread: !readIds.has(id),
+            href: "/employee-dashboard/leaves",
+            createdAt: leave.updated_at || leave.created_at,
+          });
+        });
+
+        const payrolls = toArray(await fetchJson(`${API_ENDPOINT}/api/v1/payroll/`, token));
+        payrolls.slice(0, 2).forEach((payroll: any) => {
+          const id = `payroll-${payroll.id}-${payroll.status}-${payroll.updated_at}`;
+          generatedNotifications.push({
+            id,
+            title: payroll.status === "PAID" ? "Salary Paid" : "Payslip Generated",
+            description: `${payroll.month_name || payroll.month} ${payroll.year} payout is ${payroll.status}.`,
+            timeLabel: payroll.paid_on ? formatTimeAgo(payroll.paid_on) : "Payroll Alert",
+            type: "payroll",
+            unread: !readIds.has(id),
+            href: "/employee-dashboard/salary",
+            createdAt: payroll.updated_at || payroll.created_at,
+          });
+        });
+      } else if (isAdmin) {
+        const attendance = toArray(await fetchJson(`${API_ENDPOINT}/api/v1/attendance/today/`, token));
+        const pendingLeaves = toArray(await fetchJson(`${API_ENDPOINT}/api/v1/attendance/leaves/?status=PENDING`, token))
+          .filter((leave: any) => leave.status === "PENDING");
+        const payrolls = toArray(await fetchJson(`${API_ENDPOINT}/api/v1/payroll/?month=${month}&year=${year}`, token));
+        const pendingPayrolls = payrolls.filter((payroll: any) => payroll.status === "PENDING");
+        const presentToday = attendance.filter((record: any) => ["PRESENT", "LATE", "HALF_DAY"].includes(record.status)).length;
+
+        const attendanceId = `admin-attendance-${todayStr}-${presentToday}-${attendance.length}`;
+        generatedNotifications.push({
+          id: attendanceId,
+          title: "Today's Attendance Snapshot",
+          description: `${presentToday} of ${attendance.length} active employees have a present, late, or half-day record today.`,
+          timeLabel: "Live Attendance",
+          type: "attendance",
+          unread: !readIds.has(attendanceId),
+          href: "/attendance/todays-attendance",
+          createdAt: today.toISOString(),
+        });
+
+        if (pendingLeaves.length > 0) {
+          const id = `admin-leaves-pending-${pendingLeaves.length}`;
+          generatedNotifications.push({
+            id,
+            title: "Leave Requests Need Review",
+            description: `${pendingLeaves.length} leave request${pendingLeaves.length === 1 ? "" : "s"} pending approval.`,
+            timeLabel: "HR Queue",
+            type: "leave",
+            unread: !readIds.has(id),
+            href: "/leaves",
+            createdAt: pendingLeaves[0]?.created_at || today.toISOString(),
+          });
         }
 
-        // Payslips
-        try {
-          const payrollRes = await fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/payroll/`, {
-            headers: { Authorization: `Bearer ${token}` },
+        if (pendingPayrolls.length > 0) {
+          const id = `admin-payroll-pending-${month}-${year}-${pendingPayrolls.length}`;
+          generatedNotifications.push({
+            id,
+            title: "Payroll Pending Payout",
+            description: `${pendingPayrolls.length} salary record${pendingPayrolls.length === 1 ? "" : "s"} pending payment for this month.`,
+            timeLabel: "Payroll",
+            type: "payroll",
+            unread: !readIds.has(id),
+            href: "/salary",
+            createdAt: pendingPayrolls[0]?.updated_at || today.toISOString(),
           });
-          if (payrollRes.ok) {
-            const payrolls = await payrollRes.json();
-            const payrollList = Array.isArray(payrolls) ? payrolls : payrolls.results || [];
-            if (payrollList.length > 0) {
-              const latest = payrollList[0];
-              generatedNotifications.push({
-                id: `payroll-${latest.id}`,
-                title: "Payslip Processed",
-                description: `Your monthly salary payslip for ${latest.month_name || latest.month} ${latest.year} has been released.`,
-                timeLabel: "Payroll Alert",
-                type: "payroll",
-                unread: true,
-              });
-            }
-          }
-        } catch (err) {
-          console.error("Error loading payroll notices", err);
         }
-      } else {
-        // 3. Admin System Setting Notice
+
         generatedNotifications.push({
           id: "admin-system-timing",
           title: "Timing Synced",
           description: "Standard corporate timing check-in limits set to 10:00 AM and check-out to 06:00 PM.",
           timeLabel: "Settings Check",
           type: "system",
-          unread: false,
+          unread: !readIds.has("admin-system-timing"),
+          href: "/settings",
+          createdAt: today.toISOString(),
         });
       }
 
-      // 4. Default portal welcoming item
       generatedNotifications.push({
         id: "system-welcome",
         title: "Welcome to AttendStack",
         description: "Keep tracking your logs daily and check your dashboard regularly for holiday schedules.",
         timeLabel: "System Welcome",
         type: "system",
-        unread: false,
+        unread: !readIds.has("system-welcome"),
+        createdAt: today.toISOString(),
       });
 
-      setNotifications(generatedNotifications);
-      setUnreadCount(generatedNotifications.filter((n) => n.unread).length);
+      const sortedNotifications = generatedNotifications
+        .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
+        .slice(0, 12);
+
+      setNotifications(sortedNotifications);
+      setUnreadCount(sortedNotifications.filter((n) => n.unread).length);
     } catch (err) {
       console.error("Error loading dynamic notifications", err);
     }
@@ -159,6 +252,8 @@ const Header = () => {
 
   useEffect(() => {
     loadDynamicNotifications();
+    const interval = window.setInterval(loadDynamicNotifications, 60000);
+    return () => window.clearInterval(interval);
   }, []);
 
   // Recalculate unread whenever notifications change
@@ -167,12 +262,18 @@ const Header = () => {
   }, [notifications]);
 
   const handleMarkAsRead = (id: string) => {
+    const readIds = getReadIds();
+    readIds.add(id);
+    saveReadIds(readIds);
     setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, unread: false } : n))
     );
   };
 
   const handleMarkAllAsRead = () => {
+    const readIds = getReadIds();
+    notifications.forEach((notification) => readIds.add(notification.id));
+    saveReadIds(readIds);
     setNotifications((prev) => prev.map((n) => ({ ...n, unread: false })));
   };
 

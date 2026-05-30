@@ -19,6 +19,7 @@ import {
   IconLogout2,
   IconCircleCheck,
   IconNotes,
+  IconActivity,
 } from "@tabler/icons-react";
 import { useCurrentEmployee } from "./useCurrentEmployee";
 import { Spinner, Alert, Badge, Card, Button, Row, Col } from "react-bootstrap";
@@ -84,6 +85,27 @@ const quickActions = [
   },
 ];
 
+type EmployeeActivity = {
+  id: string;
+  title: string;
+  description: string;
+  timeLabel: string;
+  color: string;
+  createdAt: string;
+};
+
+const toArray = (payload: any) => Array.isArray(payload) ? payload : payload?.results || [];
+
+const formatTimeLabel = (value?: string | null) => {
+  if (!value) return "Just now";
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
+};
+
 const EmployeeDashboard = () => {
   const { employee, isLoading, error } = useCurrentEmployee();
 
@@ -93,6 +115,7 @@ const EmployeeDashboard = () => {
   const [actionLoading, setActionLoading] = useState<"check-in" | "check-out" | null>(null);
   const [punchError, setPunchError] = useState("");
   const [punchSuccess, setPunchSuccess] = useState("");
+  const [activityFeed, setActivityFeed] = useState<EmployeeActivity[]>([]);
   const DEFAULT_RULES = `1. Core Working Hours: 10:00 AM to 6:00 PM.
 2. Late Entry: Arriving after 10:15 AM will be marked as Late.
 3. Half Day: Working less than 4 hours will be considered a Half Day.
@@ -100,6 +123,108 @@ const EmployeeDashboard = () => {
 5. Unpaid Leave: Absences without prior approval will be considered Unpaid.`;
 
   const [attendanceRules, setAttendanceRules] = useState("");
+  const [settings, setSettings] = useState<any>(null);
+
+  const loadSettings = async () => {
+    const token = localStorage.getItem("authToken");
+    if (!token) return;
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/settings/`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSettings(data);
+      }
+    } catch (err) {
+      console.error("Error loading settings:", err);
+    }
+  };
+
+  const loadActivityFeed = async () => {
+    const token = localStorage.getItem("authToken");
+    if (!token) return;
+
+    try {
+      const today = new Date();
+      const weekStart = new Date(today);
+      weekStart.setDate(today.getDate() - 7);
+      const headers = { Authorization: `Bearer ${token}` };
+
+      const [attendanceRes, leavesRes, payrollRes, holidaysRes] = await Promise.all([
+        fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/attendance/me/?date_from=${weekStart.toISOString().slice(0, 10)}`, { headers }),
+        fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/attendance/leaves/`, { headers }),
+        fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/payroll/`, { headers }),
+        fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/holidays/`, { headers }),
+      ]);
+
+      const activities: EmployeeActivity[] = [];
+
+      if (attendanceRes.ok) {
+        toArray(await attendanceRes.json()).slice(0, 4).forEach((record: any) => {
+          activities.push({
+            id: `attendance-${record.id}`,
+            title: "Attendance Updated",
+            description: `${formatDate(record.date)} marked as ${record.status_label || record.status}.`,
+            timeLabel: formatTimeLabel(record.updated_at || record.check_in || record.date),
+            color: record.status === "ABSENT" || record.status === "LEAVE" ? "danger" : record.status === "LATE" ? "warning" : "success",
+            createdAt: record.updated_at || record.check_in || record.date,
+          });
+        });
+      }
+
+      if (leavesRes.ok) {
+        toArray(await leavesRes.json()).slice(0, 4).forEach((leave: any) => {
+          activities.push({
+            id: `leave-${leave.id}`,
+            title: leave.status === "PENDING" ? "Leave Awaiting Review" : `Leave ${leave.status_label || leave.status}`,
+            description: `${leave.leave_type_label || "Leave"} from ${formatDate(leave.start_date)} to ${formatDate(leave.end_date)}.`,
+            timeLabel: formatTimeLabel(leave.updated_at || leave.created_at),
+            color: leave.status === "APPROVED" ? "success" : leave.status === "REJECTED" ? "danger" : "warning",
+            createdAt: leave.updated_at || leave.created_at,
+          });
+        });
+      }
+
+      if (payrollRes.ok) {
+        toArray(await payrollRes.json()).slice(0, 2).forEach((payroll: any) => {
+          activities.push({
+            id: `payroll-${payroll.id}`,
+            title: payroll.status === "PAID" ? "Salary Paid" : "Payslip Generated",
+            description: `${payroll.month_name || payroll.month} ${payroll.year} payroll is ${payroll.status}.`,
+            timeLabel: formatTimeLabel(payroll.paid_on || payroll.updated_at),
+            color: payroll.status === "PAID" ? "success" : "primary",
+            createdAt: payroll.paid_on || payroll.updated_at || payroll.created_at,
+          });
+        });
+      }
+
+      if (holidaysRes.ok) {
+        const todayStr = today.toISOString().slice(0, 10);
+        toArray(await holidaysRes.json())
+          .filter((holiday: any) => holiday.date >= todayStr)
+          .slice(0, 2)
+          .forEach((holiday: any) => {
+            activities.push({
+              id: `holiday-${holiday.id}`,
+              title: "Upcoming Holiday",
+              description: `${holiday.name} on ${formatDate(holiday.date)}.`,
+              timeLabel: "Holiday Calendar",
+              color: "info",
+              createdAt: holiday.date,
+            });
+          });
+      }
+
+      setActivityFeed(
+        activities
+          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+          .slice(0, 6)
+      );
+    } catch (err) {
+      console.error("Error loading employee activity feed:", err);
+    }
+  };
 
   const loadTodayAttendance = async () => {
     const token = localStorage.getItem("authToken");
@@ -120,16 +245,72 @@ const EmployeeDashboard = () => {
   useEffect(() => {
     setMounted(true);
     loadTodayAttendance();
+    loadActivityFeed();
+    loadSettings();
     const rules = localStorage.getItem("attendance_rules");
-    setAttendanceRules(rules || DEFAULT_RULES);
+    setAttendanceRules(rules || settings?.attendance_rules || DEFAULT_RULES);
     const timer = window.setInterval(() => setCurrentTime(new Date()), 1000);
-    return () => window.clearInterval(timer);
+    const activityTimer = window.setInterval(loadActivityFeed, 60000);
+    return () => {
+      window.clearInterval(timer);
+      window.clearInterval(activityTimer);
+    };
   }, []);
+
+  const [isCheckinActive, setCheckinActive] = useState(false);
+  const [isCheckoutActive, setCheckoutActive] = useState(false);
+
+  useEffect(() => {
+    const checkTime = () => {
+      if (!settings) return;
+
+      const now = new Date();
+      const [startHours, startMinutes] = settings.shift_start_time.split(':').map(Number);
+      const [endHours, endMinutes] = settings.shift_end_time.split(':').map(Number);
+
+      const shiftStart = new Date(now);
+      shiftStart.setHours(startHours, startMinutes, 0, 0);
+
+      const shiftEnd = new Date(now);
+      shiftEnd.setHours(endHours, endMinutes, 0, 0);
+
+      const checkinWindowStart = new Date(shiftStart);
+      checkinWindowStart.setHours(checkinWindowStart.getHours() - 1);
+
+      setCheckinActive(now >= checkinWindowStart && now <= shiftEnd);
+
+      if (today?.check_in) {
+        const checkinTime = new Date(today.check_in);
+        const minCheckoutTime = new Date(checkinTime);
+        minCheckoutTime.setHours(minCheckoutTime.getHours() + 3);
+        setCheckoutActive(now >= minCheckoutTime);
+      } else {
+        setCheckoutActive(false);
+      }
+    };
+
+    checkTime();
+    const timer = setInterval(checkTime, 60000); // Re-check every minute
+    return () => clearInterval(timer);
+  }, [currentTime, today, settings]);
 
   const markAttendance = async (action: "check-in" | "check-out") => {
     setActionLoading(action);
     setPunchError("");
     setPunchSuccess("");
+
+    if (action === "check-in" && !isCheckinActive) {
+      setPunchError("Check-in is not active at this time.");
+      setActionLoading(null);
+      return;
+    }
+
+    if (action === "check-out" && !isCheckoutActive) {
+      setPunchError("Checkout is not active at this time.");
+      setActionLoading(null);
+      return;
+    }
+
     const token = localStorage.getItem("authToken");
     if (!token) {
       setPunchError("Session expired. Please sign in again.");
@@ -153,6 +334,7 @@ const EmployeeDashboard = () => {
 
       setPunchSuccess(action === "check-in" ? "Checked in successfully!" : "Checked out successfully!");
       await loadTodayAttendance();
+      await loadActivityFeed();
     } catch (err) {
       setPunchError(err instanceof Error ? err.message : "Unable to mark attendance.");
     } finally {
@@ -236,7 +418,9 @@ const EmployeeDashboard = () => {
         <IconClock size={24} className="text-primary flex-shrink-0 animate-pulse" />
         <div>
           <strong className="text-primary-emphasis">Shift Schedule:</strong> 
-          <span className="text-secondary ms-1">Standard office timing is **10:00 AM to 06:00 PM**. Please check in and check out daily from your portal to track working hours accurately.</span>
+          <span className="text-secondary ms-1">
+            Standard office timing is <strong>{settings ? `${settings.shift_start_time} to ${settings.shift_end_time}` : "10:00 AM to 06:00 PM"}</strong>. Please check in and check out daily from your portal to track working hours accurately.
+          </span>
         </div>
       </div>
 
@@ -253,7 +437,7 @@ const EmployeeDashboard = () => {
                   <div>
                     <h4 className="fw-bold text-dark mb-1">Daily Attendance Punch</h4>
                     <p className="text-secondary small mb-0">
-                      Standard Timing: **10:00 AM — 06:00 PM**
+                      Standard timing: <strong>{settings ? `${settings.shift_start_time} to ${settings.shift_end_time}` : "10:00 AM to 06:00 PM"}</strong>
                     </p>
                   </div>
                 </div>
@@ -294,12 +478,15 @@ const EmployeeDashboard = () => {
                           variant="primary"
                           size="lg"
                           onClick={() => markAttendance("check-in")}
-                          disabled={actionLoading !== null}
+                          disabled={actionLoading !== null || !isCheckinActive}
                           className="d-inline-flex align-items-center gap-2 px-5 py-3 rounded-3 fw-bold shadow-sm text-white border-0"
                         >
                           <IconLogin2 size={22} />
                           {actionLoading === "check-in" ? "Punching In..." : "Clock In Now"}
                         </Button>
+                        {!isCheckinActive && (
+                          <p className="text-danger small mt-2">Check-in is only available 1 hour before and during the shift.</p>
+                        )}
                       </div>
                     ) : !today.check_out ? (
                       <div className="w-100 text-lg-end">
@@ -317,13 +504,16 @@ const EmployeeDashboard = () => {
                           variant="warning"
                           size="lg"
                           onClick={() => markAttendance("check-out")}
-                          disabled={actionLoading !== null}
+                          disabled={actionLoading !== null || !isCheckoutActive}
                           className="d-inline-flex align-items-center gap-2 px-5 py-3 rounded-3 fw-bold shadow-sm text-dark border-0"
                           style={{ backgroundColor: "#ffb020", color: "#1e293b" }}
                         >
                           <IconLogout2 size={22} />
                           {actionLoading === "check-out" ? "Punching Out..." : "Clock Out Now"}
                         </Button>
+                        {!isCheckoutActive && (
+                          <p className="text-danger small mt-2">Checkout is available only after 3 hours of work.</p>
+                        )}
                       </div>
                     ) : (
                       <div className="w-100 text-lg-end">
@@ -350,6 +540,73 @@ const EmployeeDashboard = () => {
           </Card.Body>
         </Card>
       )}
+
+      <Row className="g-4 mb-5">
+        <Col xs={12} xl={7}>
+          <Card className="border-0 shadow-sm h-100 rounded-4 employee-activity-card">
+            <Card.Header className="bg-white border-0 py-3 d-flex align-items-center justify-content-between">
+              <div className="d-flex align-items-center gap-2">
+                <IconActivity size={20} className="text-primary" />
+                <h5 className="mb-0 fw-bold text-dark">My Live Activity</h5>
+              </div>
+              <Badge bg="success-subtle" text="success" className="border border-success-subtle rounded-pill">
+                Live
+              </Badge>
+            </Card.Header>
+            <Card.Body className="pt-0">
+              {activityFeed.length === 0 ? (
+                <div className="text-center text-secondary py-4">
+                  No recent personal activity yet.
+                </div>
+              ) : (
+                <div className="d-flex flex-column gap-3">
+                  {activityFeed.map((activity) => (
+                    <div key={activity.id} className="d-flex gap-3 align-items-start p-3 rounded-3 bg-light-subtle border">
+                      <span className={`rounded-circle bg-${activity.color}-subtle text-${activity.color} d-flex align-items-center justify-content-center flex-shrink-0`} style={{ width: 34, height: 34 }}>
+                        <IconCircleCheck size={17} />
+                      </span>
+                      <div className="min-w-0">
+                        <div className="fw-semibold text-dark">{activity.title}</div>
+                        <div className="small text-secondary">{activity.description}</div>
+                        <div className="small text-muted mt-1">{activity.timeLabel}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card.Body>
+          </Card>
+        </Col>
+        <Col xs={12} xl={5}>
+          <Card className="border-0 shadow-sm h-100 rounded-4">
+            <Card.Body className="p-4">
+              <div className="d-flex align-items-center gap-3 mb-4">
+                <div className="metric-icon-box bg-success-subtle text-success">
+                  <IconShield size={24} />
+                </div>
+                <div>
+                  <h5 className="fw-bold text-dark mb-1">Work Readiness</h5>
+                  <p className="text-secondary small mb-0">Your profile, attendance, and payroll signals in one place.</p>
+                </div>
+              </div>
+              <div className="d-flex flex-column gap-3">
+                <div className="d-flex justify-content-between align-items-center border-bottom pb-3">
+                  <span className="text-secondary">Today status</span>
+                  <Badge bg={today?.status === "ABSENT" ? "danger" : "success"}>{today?.status_label || "Syncing"}</Badge>
+                </div>
+                <div className="d-flex justify-content-between align-items-center border-bottom pb-3">
+                  <span className="text-secondary">Employee status</span>
+                  <Badge bg={employee.status === "ACTIVE" ? "success" : "warning"}>{employee.status_label}</Badge>
+                </div>
+                <div className="d-flex justify-content-between align-items-center">
+                  <span className="text-secondary">Reporting manager</span>
+                  <strong className="text-dark">{employee.reporting_manager || "Admin Desk"}</strong>
+                </div>
+              </div>
+            </Card.Body>
+          </Card>
+        </Col>
+      </Row>
 
       {/* Key Metrics grid */}
       <div className="row g-4 mb-5">

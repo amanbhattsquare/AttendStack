@@ -13,7 +13,7 @@ interface ActivityLogProps {
 
 const ActivityLog = ({ logs }: ActivityLogProps) => {
   return (
-    <Card className="border-0 shadow-sm mb-6 h-100">
+    <Card className="border-0 shadow-sm mb-6 h-100 activity-feed-card">
       <Card.Header className="bg-white py-3 border-bottom-0 d-flex align-items-center gap-2">
         <IconClock size={20} className="text-primary" />
         <h5 className="mb-0 fw-bold text-dark">Live Activity Feed</h5>
@@ -54,7 +54,7 @@ const ActivityLog = ({ logs }: ActivityLogProps) => {
           )}
         </div>
         <div className="text-center">
-          <Button href="/admin/attendance" variant="light" className="w-100 text-primary fw-semibold">
+          <Button href="/attendance/records" variant="light" className="w-100 text-primary fw-semibold">
             View All Records
           </Button>
         </div>

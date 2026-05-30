@@ -3,7 +3,7 @@ from django.utils import timezone
 from rest_framework import serializers
 
 from employees.models import Employee
-from .models import AttendanceRecord, LeaveRequest
+from .models import AttendanceRecord, LeaveRequest, LeaveStatus
 
 
 def parse_time_or_datetime(value, date_val):
@@ -226,3 +226,28 @@ class LeaveRequestSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+
+    def validate(self, attrs):
+        start_date = attrs.get("start_date", getattr(self.instance, "start_date", None))
+        end_date = attrs.get("end_date", getattr(self.instance, "end_date", None))
+        employee = attrs.get("employee", getattr(self.instance, "employee", None))
+
+        if start_date and end_date and start_date > end_date:
+            raise serializers.ValidationError({"end_date": "End date cannot be before start date."})
+
+        if employee and start_date and end_date:
+            overlapping_requests = LeaveRequest.objects.filter(
+                employee=employee,
+                start_date__lte=end_date,
+                end_date__gte=start_date,
+            ).exclude(status=LeaveStatus.REJECTED)
+
+            if self.instance:
+                overlapping_requests = overlapping_requests.exclude(pk=self.instance.pk)
+
+            if overlapping_requests.exists():
+                raise serializers.ValidationError(
+                    {"detail": "A pending or approved leave request already exists for this date range."}
+                )
+
+        return attrs

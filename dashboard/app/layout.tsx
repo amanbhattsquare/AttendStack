@@ -30,7 +30,7 @@ export default function RootLayout({
 }>) {
   return (
     <ClientWrapper>
-      <html lang="en" className="expanded">
+      <html lang="en" className="expanded" data-scroll-behavior="smooth">
         <body className={`${publicSans.variable}`}>{children}</body>
       </html>
     </ClientWrapper>

@@ -68,8 +68,10 @@ class PayrollViewSet(viewsets.ModelViewSet):
                 skipped_count += 1
                 continue
 
+            # Securely calculate payroll, handling cases with no prior records
             allowances = existing.allowances if existing else 0
-            payroll_values = calculate_attendance_payroll(emp, month, year, allowances=allowances)
+            deductions = existing.deductions if existing else 0
+            payroll_values = calculate_attendance_payroll(emp, month, year, allowances=allowances, deductions=deductions)
 
             if existing:
                 existing.basic_salary = payroll_values["basic_salary"]

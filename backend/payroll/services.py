@@ -12,7 +12,7 @@ def money(value: Decimal) -> Decimal:
     return value.quantize(MONEY, rounding=ROUND_HALF_UP)
 
 
-def calculate_attendance_payroll(employee, month: int, year: int, allowances=0) -> dict:
+def calculate_attendance_payroll(employee, month: int, year: int, allowances=0, deductions=0) -> dict:
     auto_mark_calendar_days(month, year)
 
     basic_salary = money(Decimal(str(employee.annual_salary or 0)) / Decimal("12"))
@@ -69,9 +69,10 @@ def calculate_attendance_payroll(employee, month: int, year: int, allowances=0) 
         elif record.status == AttendanceStatus.SUNDAY_PAID:
             summary["sunday_paid"] += 1
 
-    deductions = money(unpaid_days * per_day_salary)
+    # Use Decimal for financial calculations to avoid floating-point errors
+    deductions = money(Decimal(str(deductions or 0)))
     payable_salary = money(basic_salary + allowances - deductions)
-
+    
     return {
         "basic_salary": basic_salary,
         "allowances": allowances,

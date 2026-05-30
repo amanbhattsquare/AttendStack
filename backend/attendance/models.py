@@ -154,6 +154,11 @@ class LeaveType(models.TextChoices):
     CASUAL = "CASUAL", "Casual Leave"
     SICK   = "SICK",   "Sick Leave"
     ANNUAL = "ANNUAL", "Annual Leave"
+    STUDY = "STUDY", "Study Leave"
+    MATERNITY = "MATERNITY", "Maternity Leave"
+    PATERNITY = "PATERNITY", "Paternity Leave"
+    BEREAVEMENT = "BEREAVEMENT", "Bereavement Leave"
+    MARRIAGE = "MARRIAGE", "Marriage Leave"
     OTHER  = "OTHER",  "Other"
 
 

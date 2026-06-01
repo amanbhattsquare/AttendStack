@@ -389,7 +389,7 @@ const EmployeeDashboard = () => {
                 </Badge>
               </div>
               <p className="text-secondary fw-medium mb-3 fs-5">
-                {employee.designation} <span className="mx-1 text-muted">•</span> {employee.department}
+                {employee.designation} <span className="mx-1 text-muted">•</span> {employee.department} <span className="mx-1 text-muted">•</span> Bhatt Square Pvt Ltd
               </p>
               
               <div className="d-flex flex-wrap gap-4 text-muted small mt-2">

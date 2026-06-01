@@ -218,6 +218,7 @@ const EmployeeProfileClient = ({ employeeId, employee: legacyEmployee }: Employe
           { label: "Joining Date", value: formatDate(employee.joining_date), icon: <IconCalendar size={18} /> },
           { label: "Department", value: employee.department, icon: <IconBriefcase size={18} /> },
           { label: "Designation", value: employee.designation, icon: <IconBriefcase size={18} /> },
+          { label: "Company", value: "Bhatt Square Pvt Ltd", icon: <IconBriefcase size={18} /> },
           { label: "Employment Type", value: employee.employment_type_label || employee.employment_type, icon: <IconUsers size={18} /> },
           { label: "Reporting Manager", value: employee.reporting_manager, icon: <IconUser size={18} /> },
           { label: "Login Account", value: employee.account_exists ? "Created" : "Not created", icon: <IconShieldCheck size={18} /> },

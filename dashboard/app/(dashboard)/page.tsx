@@ -359,6 +359,7 @@ const HomePage = () => {
                     <th>Employee</th>
                     <th>ID</th>
                     <th>Department</th>
+                    <th>Company</th>
                     <th>Date Joined</th>
                     <th>Status</th>
                   </tr>
@@ -366,7 +367,7 @@ const HomePage = () => {
                 <tbody>
                   {recentEmployees.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="text-center py-4 text-secondary">
+                      <td colSpan={6} className="text-center py-4 text-secondary">
                         No employees found.
                       </td>
                     </tr>
@@ -388,6 +389,7 @@ const HomePage = () => {
                         </td>
                         <td>{emp.employee_id || "--"}</td>
                         <td>{emp.department || "General"}</td>
+                        <td>Bhatt Square Pvt Ltd</td>
                         <td>{formatDate(emp.joining_date)}</td>
                         <td>
                           <Badge bg={emp.status === "ACTIVE" ? "success" : "secondary"}>

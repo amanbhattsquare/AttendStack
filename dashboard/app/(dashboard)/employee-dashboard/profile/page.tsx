@@ -15,6 +15,8 @@ import {
 } from "@tabler/icons-react";
 import { useCurrentEmployee } from "../useCurrentEmployee";
 import { Spinner, Alert, Badge, Row, Col } from "react-bootstrap";
+import { useEffect, useState } from "react";
+
 
 const formatDate = (value?: string | null) => {
   if (!value) return "Not provided";
@@ -64,6 +66,32 @@ const ProfileItem = ({ label, value, icon, linkUrl }: { label: string; value?: s
 
 const ProfilePage = () => {
   const { employee, isLoading, error, refetch } = useCurrentEmployee();
+  const [settings, setSettings] = useState<any>(null);
+
+  useEffect(() => {
+    const loadSettings = async () => {
+      const token = localStorage.getItem("authToken");
+      if (!token) return;
+      try {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/settings/`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          // Settings can be an array or a single object. We need the object.
+          const settingsData = Array.isArray(data) ? data[0] : data;
+          setSettings(settingsData);
+        }
+      } catch (err) {
+        console.error("Error loading settings:", err);
+      }
+    };
+    loadSettings();
+  }, []);
+
+  const logoUrl = settings?.company_logo || null;
+
+
 
   if (isLoading) {
     return (
@@ -111,6 +139,7 @@ const ProfilePage = () => {
         { label: "Joining Date", value: formatDate(employee.joining_date), icon: <IconCalendar size={18} /> },
         { label: "Department", value: employee.department, icon: <IconShieldCheck size={18} /> },
         { label: "Designation", value: employee.designation, icon: <IconUser size={18} /> },
+        { label: "Company", value: "Bhatt Square Pvt Ltd", icon: <IconUser size={18} /> },
         { label: "Employment Type", value: employee.employment_type_label, icon: <IconFileText size={18} /> },
         { label: "Reporting Manager", value: employee.reporting_manager || "Admin Desk", icon: <IconUser size={18} /> },
       ],
@@ -150,6 +179,33 @@ const ProfilePage = () => {
                 {employee.designation} <span className="mx-1 text-muted">•</span> {employee.department}
               </p>
               <span className="small text-muted d-block mt-2">Corporate Portal Account Active</span>
+            </div>
+            <div className="ms-sm-auto text-sm-end">
+              {settings ? (
+                <div className="d-flex align-items-center gap-3">
+                  {logoUrl && (
+                    <img
+                      src={logoUrl}
+                      alt={`${settings.company_name} Logo`}
+                      className="bg-light rounded-2 p-1"
+                      style={{ height: "48px", width: "48px", objectFit: "contain" }}
+                    />
+                  )}
+                  <div>
+                    <h6 className="fw-bold mb-0 text-dark">{settings.company_name || "Company"}</h6>
+                    <a
+                      href={settings.company_website || "#"}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-secondary mb-0 small text-decoration-none"
+                    >
+                      {settings.company_website ? "Visit Website" : "Corporate Profile"}
+                    </a>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-muted small">Loading company info...</div>
+              )}
             </div>
           </div>
         </div>

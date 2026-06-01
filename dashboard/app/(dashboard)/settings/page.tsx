@@ -30,6 +30,8 @@ const authHeaders = () => {
   };
 };
 
+import { useBranding } from "context/BrandingContext";
+
 // Types for our settings
 interface AttendanceSettings {
   shiftStartTime: string;
@@ -70,6 +72,8 @@ interface CompanySettings {
 
 const SettingsPage = () => {
   const [activeTab, setActiveTab] = useState("attendance");
+  const { companyLogo, setCompanyLogo } = useBranding();
+  const [logo, setLogo] = useState<{ file: File | null; preview: string | null }>({ file: null, preview: null });
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -245,12 +249,63 @@ const SettingsPage = () => {
 
   // Handle working day toggle
   const handleWorkingDayToggle = (day: string) => {
-    setCompanySettings(prev => {
+    setCompanySettings((prev) => {
       const workingDays = prev.workingDays.includes(day)
-        ? prev.workingDays.filter(d => d !== day)
+        ? prev.workingDays.filter((d) => d !== day)
         : [...prev.workingDays, day];
       return { ...prev, workingDays };
     });
+  };
+
+  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setLogo({ file, preview: reader.result as string });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSaveLogo = async () => {
+    if (!logo.file) return;
+
+    const formData = new FormData();
+    formData.append('company_logo', logo.file);
+
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_ENDPOINT;
+      const token = localStorage.getItem("authToken");
+      const response = await fetch(`${API_URL}/api/v1/settings/`, {
+        method: "PATCH",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to upload logo");
+      }
+
+      const data = await response.json();
+      setCompanyLogo(data.company_logo);
+
+      Swal.fire({
+        icon: 'success',
+        title: 'Logo Saved!',
+        text: 'Your new company logo has been saved.',
+        timer: 2000,
+        showConfirmButton: false
+      });
+    } catch (error) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Oops...',
+        text: 'Failed to save logo. Please try again.',
+      });
+    }
   };
 
   // Save all settings
@@ -1113,6 +1168,16 @@ const SettingsPage = () => {
                         <Card className="border bg-light-subtle">
                           <Card.Body>
                             <Row className="g-3">
+                              <Col md={12}>
+                                <Form.Group>
+                                  <Form.Label>Company Logo</Form.Label>
+                                  <div className="d-flex align-items-center">
+                                    {(logo.preview || companyLogo) && <img src={logo.preview || companyLogo} alt="logo" className="avatar avatar-lg me-3" />}
+                                    <Form.Control type="file" onChange={handleLogoChange} />
+                                    <Button variant="primary" onClick={handleSaveLogo} className="ms-2" disabled={!logo.file}>Save Logo</Button>
+                                  </div>
+                                </Form.Group>
+                              </Col>
                               <Col md={12}>
                                 <Form.Group>
                                   <Form.Label>Company Name</Form.Label>

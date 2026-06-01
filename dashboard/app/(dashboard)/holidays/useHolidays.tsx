@@ -56,20 +56,7 @@ export const useHolidays = (data: Holiday[], isAdmin: boolean) => {
         return <span className={`badge bg-${bg}`}>{type}</span>;
       },
     },
-    {
-      accessorKey: "is_processed",
-      header: "Processed",
-      cell: (props: any) => {
-        const isProcessed = props.getValue();
-        return (
-          <span
-            className={`badge bg-${isProcessed ? "success" : "secondary"}`}
-          >
-            {isProcessed ? "Yes" : "No"}
-          </span>
-        );
-      },
-    },
+
   ];
 
   if (isAdmin) {

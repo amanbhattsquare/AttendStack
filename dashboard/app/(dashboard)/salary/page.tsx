@@ -115,8 +115,13 @@ const SalaryPage = () => {
         body: JSON.stringify({ month: genMonth, year: genYear }),
       });
       if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.detail || "Failed to generate payroll.");
+        const errorText = await res.text();
+        try {
+          const errData = JSON.parse(errorText);
+          throw new Error(errData.detail || "Failed to generate payroll.");
+        } catch (e) {
+          throw new Error(errorText || "Failed to generate payroll.");
+        }
       }
       const result = await res.json();
       Swal.fire({

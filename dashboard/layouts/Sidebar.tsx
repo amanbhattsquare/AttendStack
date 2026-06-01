@@ -16,6 +16,7 @@ import {
 import { MenuItemType } from "types/menuTypes";
 
 //import custom components
+import { useBranding } from "context/BrandingContext";
 import { Avatar } from "components/common/Avatar";
 import CustomToggle, { CustomToggleLevel2 } from "./SidebarMenuToggle";
 
@@ -31,6 +32,7 @@ interface SidebarProps {
   currentPath: string;
 }
 const Sidebar: React.FC<SidebarProps> = ({ hideLogo = false, containerId, currentPath, isEmployee }) => {
+  const { companyLogo, companyName } = useBranding();
   const menuItems = isEmployee ? EmployeeDashboardMenu : DashboardMenu;
   const [user, setUser] = useState<{ full_name: string; designation: string } | null>(null);
 
@@ -270,12 +272,12 @@ const Sidebar: React.FC<SidebarProps> = ({ hideLogo = false, containerId, curren
               <div>
                 <Avatar
                   type='image'
-                  src={getAssetPath("/images/brand/logo/logo.png")}
+                  src={companyLogo || getAssetPath("/images/brand/logo/logo.png")}
                   size='md'
                   className='rounded-circle'
                 />
                 <div className='my-3'>
-                  <h5 className='mb-1 fs-6'>AttendStack</h5>
+                  <h5 className='mb-1 fs-6'>{companyName || 'AttendStack'}</h5>
                   <span className='d-block text-secondary'>{user ? user.full_name : 'Jitu Chauhan'}</span>
                   <span className='text-secondary'>{user ? user.designation : 'HR Administrator'}</span>
                 </div>

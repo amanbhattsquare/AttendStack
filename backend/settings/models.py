@@ -36,6 +36,7 @@ class SystemSettings(models.Model):
     company_address = models.TextField(default="123 Business Park, Mumbai, Maharashtra 400001")
     company_email = models.EmailField(default="admin@bhattsquare.com")
     company_phone = models.CharField(max_length=20, default="+91 98765 43210")
+    company_logo = models.ImageField(upload_to='logos/', null=True, blank=True)
     attendance_rules = models.TextField(blank=True, null=True)
     timezone = models.CharField(max_length=50, default="Asia/Kolkata")
     currency = models.CharField(max_length=10, default="INR")

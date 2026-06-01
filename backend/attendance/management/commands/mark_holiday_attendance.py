@@ -10,28 +10,17 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         today = timezone.now().date()
         
-        try:
-            holiday = Holiday.objects.get(date=today)
-        except Holiday.DoesNotExist:
+        if Holiday.objects.filter(date=today).exists():
+            employees = Employee.objects.all()
+            for employee in employees:
+                AttendanceRecord.objects.update_or_create(
+                    employee=employee,
+                    date=today,
+                    defaults={
+                        'status': AttendanceStatus.HOLIDAY,
+                        'is_paid': True,
+                    }
+                )
+            self.stdout.write(self.style.SUCCESS(f'Successfully marked attendance as HOLIDAY for all employees on {today}.'))
+        else:
             self.stdout.write(self.style.SUCCESS(f'Today ({today}) is not a holiday.'))
-            return
-
-        if holiday.is_processed:
-            self.stdout.write(self.style.WARNING(f'Holiday {holiday.name} has already been processed.'))
-            return
-
-        employees = Employee.objects.all()
-        for employee in employees:
-            AttendanceRecord.objects.update_or_create(
-                employee=employee,
-                date=today,
-                defaults={
-                    'status': AttendanceStatus.HOLIDAY,
-                    'is_paid': True,
-                }
-            )
-
-        holiday.is_processed = True
-        holiday.save()
-
-        self.stdout.write(self.style.SUCCESS(f'Successfully marked attendance as HOLIDAY for all employees on {holiday.name}.'))

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Dropdown, Image } from "react-bootstrap";
 import Link from "next/link";
 import { IconLogin2, IconHome2, IconSettings, IconActivity, IconBook } from "@tabler/icons-react";
+import { useBranding } from "context/BrandingContext";
 import { Avatar } from "components/common/Avatar";
 import { getAssetPath } from "helper/assetPath";
 
@@ -21,6 +22,7 @@ const CustomToggle = React.forwardRef<HTMLAnchorElement, UserToggleProps>(
 CustomToggle.displayName = "CustomToggle";
 
 const UserMenu = () => {
+  const { companyLogo } = useBranding();
   const [user, setUser] = useState<{ full_name: string; email: string; role: string } | null>(null);
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
 
@@ -127,7 +129,7 @@ const UserMenu = () => {
         },
       ];
 
-  const userAvatar = profilePhoto || getAssetPath("/images/avatar/avatar-fallback.jpg");
+  const userAvatar = profilePhoto || companyLogo || getAssetPath("/images/brand/logo/b-logo.png");
 
   return (
     <Dropdown>

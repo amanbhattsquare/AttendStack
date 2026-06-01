@@ -4,6 +4,8 @@ from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.exceptions import PermissionDenied
 
+from rest_framework.parsers import JSONParser, MultiPartParser, FormParser
+
 from .models import SystemSettings, SettingsChangeLog
 from .serializers import SystemSettingsSerializer, SystemSettingsUpdateSerializer, SettingsChangeLogSerializer
 from accounts.permissions import IsAdminOrHR
@@ -18,6 +20,7 @@ class SystemSettingsView(generics.RetrieveUpdateAPIView):
     """
     serializer_class = SystemSettingsSerializer
     permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
     
     def get_object(self):
         return SystemSettings.get_settings()

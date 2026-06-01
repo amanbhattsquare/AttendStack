@@ -16,6 +16,7 @@ import {
 import { MenuItemType } from "types/menuTypes";
 
 //import custom components
+import { useBranding } from "context/BrandingContext";
 import { Avatar } from "components/common/Avatar";
 import CustomToggle, { CustomToggleLevel2 } from "./SidebarMenuToggle";
 
@@ -29,12 +30,13 @@ interface AdminSidebarProps {
   currentPath: string;
 }
 const AdminSidebar: React.FC<AdminSidebarProps> = ({ hideLogo = false, containerId, currentPath }) => {
+  const { companyLogo, companyName } = useBranding();
   const menuItems = AdminDashboardMenu; // Using the imported admin menu
   const [user, setUser] = useState<{ full_name: string; designation: string } | null>(null);
 
   useEffect(() => {
     // You might want to fetch admin user data here
-    setUser({ full_name: "Super Admin", designation: "System Administrator" });
+    setUser({ full_name: "Admin", designation: "Administrator" });
   }, []);
 
 
@@ -261,16 +263,10 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ hideLogo = false, container
           <NavItem as='li' bsPrefix=''>
             <div className='text-center py-5 upgrade-ui'>
               <div>
-                <Avatar
-                  type='image'
-                  src={getAssetPath("/images/brand/logo/logo.png")}
-                  size='md'
-                  className='rounded-circle'
-                />
                 <div className='my-3'>
                   <h5 className='mb-1 fs-6'>AttendStack</h5>
-                  <span className='d-block text-secondary'>{user ? user.full_name : 'Super Admin'}</span>
-                  <span className='text-secondary'>{user ? user.designation : 'System Administrator'}</span>
+                  <span className='d-block text-secondary'>{user ? user.full_name : 'Admin'}</span>
+                  <span className='text-secondary'>{user ? user.designation : 'Administrator'}</span>
                 </div>
               </div>
             </div>

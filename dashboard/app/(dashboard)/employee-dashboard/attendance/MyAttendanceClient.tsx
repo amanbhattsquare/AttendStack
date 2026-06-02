@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Badge, Button, Card, Col, Row, Table, Form } from "react-bootstrap";
-import { IconLogin2, IconLogout2, IconRefresh } from "@tabler/icons-react";
+import { IconLogin2, IconLogout2, IconRefresh, IconShieldLock, IconMapPin, IconInfoCircle } from "@tabler/icons-react";
 import CustomPagination from "../../../../components/shared/CustomPagination";
 
 type AttendanceRecord = {
@@ -24,6 +24,14 @@ type TodayAttendance = {
   status: string;
   status_label: string;
   live_status: string;
+};
+
+type SecuritySettings = {
+  ipRestrictionEnabled: boolean;
+  geofencingEnabled: boolean;
+  geofenceRadius: number;
+  officeLatitude: string;
+  officeLongitude: string;
 };
 
 const API_URL = `${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/attendance/`;
@@ -78,6 +86,13 @@ const MyAttendanceClient = () => {
   const [actionLoading, setActionLoading] = useState<"check-in" | "check-out" | null>(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [securitySettings, setSecuritySettings] = useState<SecuritySettings>({
+    ipRestrictionEnabled: false,
+    geofencingEnabled: false,
+    geofenceRadius: 100,
+    officeLatitude: "",
+    officeLongitude: "",
+  });
 
   const loadAttendance = async () => {
     setIsLoading(true);
@@ -90,24 +105,30 @@ const MyAttendanceClient = () => {
       const date_to = `${year}-12-31`;
       const params = new URLSearchParams({ date_from, date_to, page_size: "365" });
 
-      const [todayResponse, recordsResponse] = await Promise.all([
+      const [todayResponse, recordsResponse, settingsResponse] = await Promise.all([
         fetch(`${API_URL}me/today/`, { headers: authHeaders() }),
         fetch(`${API_URL}me/?${params.toString()}`, { headers: authHeaders() }),
+        fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/settings/`, { headers: authHeaders() }),
       ]);
 
-      if (!todayResponse.ok) {
-        throw new Error("Unable to load today's attendance summary.");
-      }
-      if (!recordsResponse.ok) {
-        throw new Error("Unable to load your attendance history.");
-      }
+      if (!todayResponse.ok) throw new Error("Unable to load today's attendance summary.");
+      if (!recordsResponse.ok) throw new Error("Unable to load your attendance history.");
 
       setToday((await todayResponse.json()) as TodayAttendance);
-      
       const recordsData = await recordsResponse.json();
       const allRecords = Array.isArray(recordsData) ? recordsData : recordsData.results || [];
       setRecords(allRecords);
 
+      if (settingsResponse.ok) {
+        const s = await settingsResponse.json();
+        setSecuritySettings({
+          ipRestrictionEnabled: s.ip_restriction_enabled ?? false,
+          geofencingEnabled: s.geofencing_enabled ?? false,
+          geofenceRadius: s.geofence_radius ?? 100,
+          officeLatitude: s.office_latitude ?? "",
+          officeLongitude: s.office_longitude ?? "",
+        });
+      }
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Unable to load your attendance.");
     } finally {
@@ -122,9 +143,49 @@ const MyAttendanceClient = () => {
     return () => window.clearInterval(timer);
   }, []);
 
-  const parseError = async (response: Response) => {
-    const body = await response.json().catch(() => null);
-    return body?.detail || Object.values(body || {}).flat().join(" ") || "Attendance action failed.";
+  const parseError = async (response: Response): Promise<string> => {
+    try {
+      const body = await response.json();
+      // Return the most specific error detail available
+      return body?.detail || Object.values(body || {}).flat().join(" ") || "Attendance action failed.";
+    } catch {
+      return "Attendance action failed. Please try again.";
+    }
+  };
+
+  const getCurrentPosition = (): Promise<GeolocationPosition> => {
+    return new Promise((resolve, reject) => {
+      if (!navigator.geolocation) {
+        reject(new Error("Geolocation is not supported by your browser."));
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(resolve, reject, {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0,
+      });
+    });
+  };
+
+  /**
+   * Attempt to get current GPS coordinates.
+   * Returns null if geofencing is disabled (no need to fetch location).
+   * Throws a user-friendly error if permission is denied or unavailable.
+   */
+  const getLocationIfRequired = async (): Promise<{ latitude: number; longitude: number } | null> => {
+    if (!securitySettings.geofencingEnabled) return null;
+    try {
+      const position = await getCurrentPosition();
+      return {
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+      };
+    } catch (geoError) {
+      if (geoError instanceof GeolocationPositionError && geoError.code === geoError.PERMISSION_DENIED) {
+        throw new Error("Location permission denied. Geofencing is active — please enable location access in your browser settings and try again.");
+      }
+      throw new Error("Could not get your GPS location. Please enable location services and try again.");
+    }
   };
 
   const markAttendance = async (action: "check-in" | "check-out") => {
@@ -133,16 +194,20 @@ const MyAttendanceClient = () => {
     setSuccess("");
 
     try {
+      // Fetch location for both check-in and check-out when geofencing is active
+      const locationData = await getLocationIfRequired();
+
       const response = await fetch(`${API_URL}${action}/`, {
         method: "POST",
-        headers: authHeaders(),
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify(locationData ?? {}),
       });
 
       if (!response.ok) {
         throw new Error(await parseError(response));
       }
 
-      setSuccess(action === "check-in" ? "Checked in successfully." : "Checked out successfully.");
+      setSuccess(action === "check-in" ? "✓ Checked in successfully!" : "✓ Checked out successfully!");
       await loadAttendance();
     } catch (actionError) {
       setError(actionError instanceof Error ? actionError.message : "Unable to mark attendance.");
@@ -215,8 +280,37 @@ const MyAttendanceClient = () => {
 
   return (
     <div>
-      {error && <div className="alert alert-danger">{error}</div>}
-      {success && <div className="alert alert-success">{success}</div>}
+      {error && (
+        <div className="alert alert-danger d-flex align-items-start gap-2 mb-3">
+          <IconShieldLock size={20} className="flex-shrink-0 mt-1" />
+          <div>{error}</div>
+        </div>
+      )}
+      {success && (
+        <div className="alert alert-success d-flex align-items-center gap-2 mb-3">
+          <span>{success}</span>
+        </div>
+      )}
+
+      {/* Active restriction banners */}
+      {(securitySettings.ipRestrictionEnabled || securitySettings.geofencingEnabled) && (
+        <div className="d-flex flex-wrap gap-2 mb-3">
+          {securitySettings.ipRestrictionEnabled && (
+            <div className="d-inline-flex align-items-center gap-2 px-3 py-2 rounded-3 small fw-semibold"
+              style={{ background: "#fff3cd", border: "1px solid #ffc107", color: "#856404" }}>
+              <IconShieldLock size={16} />
+              IP Restriction Active — Office network required
+            </div>
+          )}
+          {securitySettings.geofencingEnabled && (
+            <div className="d-inline-flex align-items-center gap-2 px-3 py-2 rounded-3 small fw-semibold"
+              style={{ background: "#cfe2ff", border: "1px solid #9ec5fe", color: "#084298" }}>
+              <IconMapPin size={16} />
+              Geofencing Active — Must be within {securitySettings.geofenceRadius}m of office
+            </div>
+          )}
+        </div>
+      )}
 
       <Card className="border-0 shadow-sm mb-4">
         <Card.Body className="p-4">

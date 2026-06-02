@@ -45,6 +45,32 @@ class AttendanceRecord(models.Model):
     )
     notes = models.TextField(blank=True)
     is_paid = models.BooleanField(default=True, help_text="Whether this day is paid in payroll")
+
+    # Audit trail — security & compliance
+    check_in_ip = models.GenericIPAddressField(
+        null=True, blank=True,
+        help_text="IP address used when employee checked in"
+    )
+    check_in_latitude = models.DecimalField(
+        max_digits=9, decimal_places=6, null=True, blank=True,
+        help_text="GPS latitude at the time of check-in"
+    )
+    check_in_longitude = models.DecimalField(
+        max_digits=9, decimal_places=6, null=True, blank=True,
+        help_text="GPS longitude at the time of check-in"
+    )
+    check_out_ip = models.GenericIPAddressField(
+        null=True, blank=True,
+        help_text="IP address used when employee checked out"
+    )
+    check_out_latitude = models.DecimalField(
+        max_digits=9, decimal_places=6, null=True, blank=True,
+        help_text="GPS latitude at the time of check-out"
+    )
+    check_out_longitude = models.DecimalField(
+        max_digits=9, decimal_places=6, null=True, blank=True,
+        help_text="GPS longitude at the time of check-out"
+    )
     leave_request = models.ForeignKey(
         "attendance.LeaveRequest",
         on_delete=models.SET_NULL,

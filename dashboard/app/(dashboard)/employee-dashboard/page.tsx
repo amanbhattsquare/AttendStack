@@ -106,6 +106,31 @@ const formatTimeLabel = (value?: string | null) => {
   }).format(new Date(value));
 };
 
+const requestLocationPermission = async () => {
+  if (navigator.permissions) {
+    const permission = await navigator.permissions.query({ name: "geolocation" });
+    if (permission.state === "granted") {
+      return true;
+    } else if (permission.state === "prompt") {
+      // The browser will ask the user, so we can proceed
+      return true;
+    }
+    // Don't return false here, let the getCurrentPosition call trigger the prompt
+  }
+  // If permissions API is not supported, we'll just try to get the location
+  return true;
+};
+
+const getCurrentPosition = (): Promise<GeolocationPosition> => {
+  return new Promise((resolve, reject) => {
+    navigator.geolocation.getCurrentPosition(resolve, reject, {
+      enableHighAccuracy: true,
+      timeout: 10000,
+      maximumAge: 0,
+    });
+  });
+};
+
 const EmployeeDashboard = () => {
   const { employee, isLoading, error } = useCurrentEmployee();
 
@@ -319,12 +344,33 @@ const EmployeeDashboard = () => {
     }
 
     try {
+      let locationData = {};
+      if (action === "check-in") {
+        const hasPermission = await requestLocationPermission();
+        if (!hasPermission) {
+          throw new Error("Location permission is required to check in.");
+        }
+        try {
+          const position = await getCurrentPosition();
+          locationData = {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+          };
+        } catch (geoError) {
+          if (geoError instanceof GeolocationPositionError && geoError.code === geoError.PERMISSION_DENIED) {
+            throw new Error("Location permission denied. Please enable it in your browser settings.");
+          }
+          throw new Error("Could not get your location. Please enable location services and try again.");
+        }
+      }
+
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/attendance/${action}/`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
+        body: JSON.stringify(locationData),
       });
 
       if (!res.ok) {

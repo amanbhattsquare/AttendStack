@@ -19,6 +19,10 @@ import {
   IconHeart,
   IconUsers,
   IconBriefcase,
+  IconMapPin,
+  IconWifi,
+  IconCurrentLocation,
+  IconAlertTriangle,
 } from "@tabler/icons-react";
 
 // API utility to get auth headers
@@ -76,6 +80,62 @@ const SettingsPage = () => {
   const [logo, setLogo] = useState<{ file: File | null; preview: string | null }>({ file: null, preview: null });
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isDetectingLocation, setIsDetectingLocation] = useState(false);
+  const [myIpInfo, setMyIpInfo] = useState<{ client_ip: string; is_currently_allowed: boolean | null } | null>(null);
+  const [isFetchingIp, setIsFetchingIp] = useState(false);
+
+  // Detect admin's current GPS location for easy office coord setup
+  const detectMyLocation = () => {
+    if (!navigator.geolocation) {
+      alert("Geolocation is not supported by your browser.");
+      return;
+    }
+    setIsDetectingLocation(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setAttendanceSettings((prev) => ({
+          ...prev,
+          officeLatitude: position.coords.latitude.toFixed(6),
+          officeLongitude: position.coords.longitude.toFixed(6),
+        }));
+        setIsDetectingLocation(false);
+      },
+      () => {
+        alert("Could not detect your location. Please enable location access in your browser.");
+        setIsDetectingLocation(false);
+      },
+      { enableHighAccuracy: true }
+    );
+  };
+
+  // Fetch admin's detected IP from the backend
+  const fetchMyIp = async () => {
+    setIsFetchingIp(true);
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_ENDPOINT;
+      const token = localStorage.getItem("authToken");
+      const res = await fetch(`${API_URL}/api/v1/attendance/my-ip/`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setMyIpInfo(data);
+        // Auto-append to allowed list if not already present
+        if (data.client_ip && !attendanceSettings.allowedIpRanges.includes(data.client_ip)) {
+          setAttendanceSettings((prev) => ({
+            ...prev,
+            allowedIpRanges: prev.allowedIpRanges
+              ? `${prev.allowedIpRanges}, ${data.client_ip}`
+              : data.client_ip,
+          }));
+        }
+      }
+    } catch {
+      alert("Failed to fetch your IP address. Please try again.");
+    } finally {
+      setIsFetchingIp(false);
+    }
+  };
 
   // Load settings from backend on component mount
   useEffect(() => {
@@ -561,85 +621,160 @@ const SettingsPage = () => {
                       <Col md={6}>
                         <Card className="border-0 shadow-sm">
                           <Card.Body>
-                            <h5 className="fw-bold mb-4 d-flex align-items-center gap-2">
+                            <h5 className="fw-bold mb-1 d-flex align-items-center gap-2">
                               <IconShieldLock size={20} />
-                              Location & Security
+                              Location &amp; Security
                             </h5>
-                            <p className="text-muted small mb-4">Restrict attendance to specific locations or IP addresses.</p>
-                            
-                            {/* IP Restriction */}
-                            <Form.Group className="mb-4">
-                              <Form.Check
-                                type="switch"
-                                id="ip-restriction-switch"
-                                label="Enable IP Address Restriction"
-                                checked={attendanceSettings.ipRestrictionEnabled}
-                                onChange={(e) => setAttendanceSettings({ ...attendanceSettings, ipRestrictionEnabled: e.target.checked })}
-                              />
-                              <Form.Text>Allow attendance only from specified IP addresses.</Form.Text>
-                            </Form.Group>
-                            {attendanceSettings.ipRestrictionEnabled && (
-                              <Form.Group className="mb-4">
-                                <Form.Label className="fw-semibold">Allowed IP Ranges</Form.Label>
-                                <Form.Control
-                                  as="textarea"
-                                  rows={2}
-                                  placeholder="e.g., 192.168.1.0/24, 203.0.113.5"
-                                  value={attendanceSettings.allowedIpRanges}
-                                  onChange={(e) => setAttendanceSettings({ ...attendanceSettings, allowedIpRanges: e.target.value })}
-                                />
-                                <Form.Text>Comma-separated IP addresses or CIDR ranges.</Form.Text>
-                              </Form.Group>
-                            )}
+                            <p className="text-muted small mb-4">Restrict attendance marking to specific locations or IP addresses. Employees can still log in from anywhere.</p>
 
-                            {/* Geofencing */}
-                            <Form.Group className="mb-4">
-                              <Form.Check
-                                type="switch"
-                                id="geofencing-switch"
-                                label="Enable Geofencing Restriction"
-                                checked={attendanceSettings.geofencingEnabled}
-                                onChange={(e) => setAttendanceSettings({ ...attendanceSettings, geofencingEnabled: e.target.checked })}
-                              />
-                              <Form.Text>Allow attendance only from within a specific geographic radius.</Form.Text>
-                            </Form.Group>
-                            {attendanceSettings.geofencingEnabled && (
-                              <Row className="g-3">
-                                <Col md={6}>
-                                  <Form.Group>
-                                    <Form.Label className="fw-semibold">Office Latitude</Form.Label>
+                            {/* ── IP Restriction ── */}
+                            <div className="p-3 rounded-3 mb-4" style={{ background: "#f8f9fa", border: "1px solid #e9ecef" }}>
+                              <Form.Group className="mb-2">
+                                <Form.Check
+                                  type="switch"
+                                  id="ip-restriction-switch"
+                                  label={<span className="fw-semibold">Enable IP Address Restriction</span>}
+                                  checked={attendanceSettings.ipRestrictionEnabled}
+                                  onChange={(e) => setAttendanceSettings({ ...attendanceSettings, ipRestrictionEnabled: e.target.checked })}
+                                />
+                                <Form.Text className="ms-4 ps-2">Allow attendance marking only from authorised IP addresses or CIDR ranges.</Form.Text>
+                              </Form.Group>
+
+                              {attendanceSettings.ipRestrictionEnabled && (
+                                <div className="mt-3">
+                                  <Form.Group className="mb-2">
+                                    <Form.Label className="fw-semibold small mb-1">Allowed IP Ranges</Form.Label>
                                     <Form.Control
-                                      type="text"
-                                      placeholder="e.g., 19.0760"
-                                      value={attendanceSettings.officeLatitude}
-                                      onChange={(e) => setAttendanceSettings({ ...attendanceSettings, officeLatitude: e.target.value })}
+                                      as="textarea"
+                                      rows={3}
+                                      placeholder="e.g., 192.168.1.0/24, 10.0.0.1, 203.0.113.5"
+                                      value={attendanceSettings.allowedIpRanges}
+                                      onChange={(e) => setAttendanceSettings({ ...attendanceSettings, allowedIpRanges: e.target.value })}
+                                      className="font-monospace small"
                                     />
+                                    <Form.Text>Comma-separated. Supports single IPs and CIDR ranges (e.g. 192.168.1.0/24).</Form.Text>
                                   </Form.Group>
-                                </Col>
-                                <Col md={6}>
-                                  <Form.Group>
-                                    <Form.Label className="fw-semibold">Office Longitude</Form.Label>
-                                    <Form.Control
-                                      type="text"
-                                      placeholder="e.g., 72.8777"
-                                      value={attendanceSettings.officeLongitude}
-                                      onChange={(e) => setAttendanceSettings({ ...attendanceSettings, officeLongitude: e.target.value })}
-                                    />
-                                  </Form.Group>
-                                </Col>
-                                <Col md={12}>
-                                  <Form.Group>
-                                    <Form.Label className="fw-semibold">Geofence Radius (meters)</Form.Label>
-                                    <Form.Control
-                                      type="number"
-                                      value={attendanceSettings.geofenceRadius}
-                                      onChange={(e) => setAttendanceSettings({ ...attendanceSettings, geofenceRadius: parseInt(e.target.value) || 0 })}
-                                    />
-                                    <Form.Text>The radius from the office location within which employees can mark attendance.</Form.Text>
-                                  </Form.Group>
-                                </Col>
-                              </Row>
-                            )}
+
+                                  {/* What is my IP helper */}
+                                  <div className="d-flex align-items-center gap-2 mt-2 flex-wrap">
+                                    <Button
+                                      size="sm"
+                                      variant="outline-primary"
+                                      className="d-inline-flex align-items-center gap-1"
+                                      onClick={fetchMyIp}
+                                      disabled={isFetchingIp}
+                                      id="btn-detect-my-ip"
+                                    >
+                                      <IconWifi size={14} />
+                                      {isFetchingIp ? "Detecting..." : "What is my IP?"}
+                                    </Button>
+                                    {myIpInfo && (
+                                      <span className={`badge rounded-pill ${
+                                        myIpInfo.is_currently_allowed === true
+                                          ? "bg-success-subtle text-success border border-success-subtle"
+                                          : myIpInfo.is_currently_allowed === false
+                                          ? "bg-danger-subtle text-danger border border-danger-subtle"
+                                          : "bg-secondary-subtle text-secondary border border-secondary-subtle"
+                                      }`}>
+                                        {myIpInfo.client_ip}
+                                        {myIpInfo.is_currently_allowed === true && " ✓ Allowed"}
+                                        {myIpInfo.is_currently_allowed === false && " ✗ Not allowed"}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {myIpInfo?.is_currently_allowed === false && (
+                                    <div className="alert alert-warning d-flex align-items-center gap-2 mt-2 py-2 px-3 small">
+                                      <IconAlertTriangle size={16} />
+                                      Your current IP is <strong>{myIpInfo.client_ip}</strong>. It has been added to the list above. Save settings to allow it.
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* ── Geofencing ── */}
+                            <div className="p-3 rounded-3" style={{ background: "#f8f9fa", border: "1px solid #e9ecef" }}>
+                              <Form.Group className="mb-2">
+                                <Form.Check
+                                  type="switch"
+                                  id="geofencing-switch"
+                                  label={<span className="fw-semibold">Enable Geofencing Restriction</span>}
+                                  checked={attendanceSettings.geofencingEnabled}
+                                  onChange={(e) => setAttendanceSettings({ ...attendanceSettings, geofencingEnabled: e.target.checked })}
+                                />
+                                <Form.Text className="ms-4 ps-2">Allow attendance marking only from within a specific geographic radius of the office.</Form.Text>
+                              </Form.Group>
+
+                              {attendanceSettings.geofencingEnabled && (
+                                <div className="mt-3">
+                                  {/* Detect My Location helper */}
+                                  <div className="d-flex align-items-center justify-content-between mb-3">
+                                    <span className="small text-muted fw-semibold">Office Coordinates</span>
+                                    <Button
+                                      size="sm"
+                                      variant="outline-success"
+                                      className="d-inline-flex align-items-center gap-1"
+                                      onClick={detectMyLocation}
+                                      disabled={isDetectingLocation}
+                                      id="btn-detect-my-location"
+                                    >
+                                      <IconCurrentLocation size={14} />
+                                      {isDetectingLocation ? "Detecting..." : "Use My Location"}
+                                    </Button>
+                                  </div>
+
+                                  <Row className="g-3">
+                                    <Col md={6}>
+                                      <Form.Group>
+                                        <Form.Label className="fw-semibold small mb-1">Office Latitude</Form.Label>
+                                        <Form.Control
+                                          type="text"
+                                          placeholder="e.g., 26.8342"
+                                          value={attendanceSettings.officeLatitude}
+                                          onChange={(e) => setAttendanceSettings({ ...attendanceSettings, officeLatitude: e.target.value })}
+                                        />
+                                      </Form.Group>
+                                    </Col>
+                                    <Col md={6}>
+                                      <Form.Group>
+                                        <Form.Label className="fw-semibold small mb-1">Office Longitude</Form.Label>
+                                        <Form.Control
+                                          type="text"
+                                          placeholder="e.g., 80.9862"
+                                          value={attendanceSettings.officeLongitude}
+                                          onChange={(e) => setAttendanceSettings({ ...attendanceSettings, officeLongitude: e.target.value })}
+                                        />
+                                      </Form.Group>
+                                    </Col>
+                                    <Col md={12}>
+                                      <Form.Group>
+                                        <Form.Label className="fw-semibold small mb-1">Geofence Radius (meters)</Form.Label>
+                                        <Form.Control
+                                          type="number"
+                                          min={50}
+                                          max={5000}
+                                          value={attendanceSettings.geofenceRadius}
+                                          onChange={(e) => setAttendanceSettings({ ...attendanceSettings, geofenceRadius: parseInt(e.target.value) || 100 })}
+                                        />
+                                        <Form.Text>Employees must be within this radius of the office to mark attendance.</Form.Text>
+                                      </Form.Group>
+                                    </Col>
+                                  </Row>
+
+                                  {/* Live preview */}
+                                  {attendanceSettings.officeLatitude && attendanceSettings.officeLongitude && (
+                                    <div className="d-flex align-items-center gap-2 mt-3 p-2 rounded-2 bg-primary-subtle">
+                                      <IconMapPin size={16} className="text-primary flex-shrink-0" />
+                                      <span className="small text-primary">
+                                        Employees must be within <strong>{attendanceSettings.geofenceRadius}m</strong> of
+                                        &nbsp;({parseFloat(attendanceSettings.officeLatitude).toFixed(4)},&nbsp;
+                                        {parseFloat(attendanceSettings.officeLongitude).toFixed(4)})
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
                           </Card.Body>
                         </Card>
                       </Col>
@@ -1172,8 +1307,7 @@ const SettingsPage = () => {
                                 <Form.Group>
                                   <Form.Label>Company Logo</Form.Label>
                                   <div className="d-flex align-items-center">
-                                    {(logo.preview || companyLogo) && <img src={logo.preview || companyLogo} alt="logo" className="avatar avatar-lg me-3" />}
-                                    <Form.Control type="file" onChange={handleLogoChange} />
+{(logo.preview || companyLogo) && <img src={(logo.preview || companyLogo) ?? undefined} alt="logo" className="avatar avatar-lg me-3" />}                                    <Form.Control type="file" onChange={handleLogoChange} />
                                     <Button variant="primary" onClick={handleSaveLogo} className="ms-2" disabled={!logo.file}>Save Logo</Button>
                                   </div>
                                 </Form.Group>

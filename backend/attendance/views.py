@@ -1,3 +1,5 @@
+import ipaddress
+
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
@@ -6,7 +8,10 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.permissions import IsAuthenticated
+from django.apps import apps
 from rest_framework.response import Response
+from ipware import get_client_ip
+from geopy.distance import geodesic
 
 from accounts.permissions import IsAdminOrHR
 from employees.models import Employee, EmployeeStatus
@@ -14,6 +19,38 @@ from .models import AttendanceRecord, AttendanceStatus, LeaveRequest, LeaveStatu
 from .permissions import IsAdminOrReadOnly
 from .serializers import AttendanceRecordSerializer, TodayAttendanceSerializer, LeaveRequestSerializer
 from .services import auto_mark_calendar_days, sync_leave_request_attendance
+
+
+def get_ip_address(request):
+    """Get the real client IP address, respecting proxies and load balancers."""
+    ip, _ = get_client_ip(request)
+    return ip or "0.0.0.0"
+
+
+def ip_is_allowed(client_ip: str, allowed_ranges: str) -> bool:
+    """
+    Check whether client_ip is permitted by the configured allowed_ip_ranges.
+    Supports both exact IPs (e.g. 203.0.113.5) and CIDR notation (e.g. 192.168.1.0/24).
+    Returns True if any range matches.
+    """
+    try:
+        client = ipaddress.ip_address(client_ip)
+    except ValueError:
+        return False
+
+    for raw in allowed_ranges.split(","):
+        raw = raw.strip()
+        if not raw:
+            continue
+        try:
+            # Handles both single IPs and CIDR ranges uniformly
+            network = ipaddress.ip_network(raw, strict=False)
+            if client in network:
+                return True
+        except ValueError:
+            # Invalid entry in the allow-list — skip it safely
+            continue
+    return False
 
 
 class StandardResultsSetPagination(PageNumberPagination):
@@ -158,8 +195,107 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
         serializer = TodayAttendanceSerializer(self._today_payload(employee, record))
         return Response(serializer.data)
 
+    def _validate_location_and_ip(self, request, action_label: str = "attendance"):
+        """
+        Shared validator for both check-in and check-out.
+        Enforces IP restriction (with full CIDR support) and geofencing.
+        Returns a dict of location data captured (may be empty if restrictions are off).
+        Raises ValidationError with a clear, user-friendly message on any violation.
+        """
+        SystemSettings = apps.get_model('settings', 'SystemSettings')
+        settings = SystemSettings.get_settings()
+        location_data = {}
+
+        # ―――――――――― IP Restriction ――――――――――
+        if settings.ip_restriction_enabled:
+            allowed_ranges = settings.allowed_ip_ranges or ""
+            if not allowed_ranges.strip():
+                raise ValidationError({
+                    "detail": (
+                        f"IP restriction is enabled but no allowed IPs are configured. "
+                        f"Please contact your administrator."
+                    )
+                })
+
+            client_ip = get_ip_address(request)
+            if not ip_is_allowed(client_ip, allowed_ranges):
+                raise ValidationError({
+                    "detail": (
+                        f"Access denied: Your current IP address ({client_ip}) is not authorised "
+                        f"to mark {action_label}. Please connect to the office network and try again."
+                    ),
+                    "code": "IP_RESTRICTED",
+                    "client_ip": client_ip,
+                })
+            location_data["ip"] = client_ip
+        else:
+            location_data["ip"] = get_ip_address(request)
+
+        # ―――――――――― Geofencing ――――――――――
+        if settings.geofencing_enabled:
+            if not settings.office_latitude or not settings.office_longitude:
+                raise ValidationError({
+                    "detail": (
+                        "Geofencing is enabled but office coordinates are not set. "
+                        "Please contact your administrator."
+                    )
+                })
+
+            raw_lat = request.data.get("latitude")
+            raw_lon = request.data.get("longitude")
+
+            if raw_lat is None or raw_lon is None:
+                raise ValidationError({
+                    "detail": (
+                        f"Your GPS location is required to mark {action_label}. "
+                        f"Please allow location access in your browser and try again."
+                    ),
+                    "code": "LOCATION_REQUIRED",
+                })
+
+            try:
+                user_lat = float(raw_lat)
+                user_lon = float(raw_lon)
+            except (ValueError, TypeError):
+                raise ValidationError({
+                    "detail": "Invalid location coordinates received. Please try again."
+                })
+
+            office_location = (
+                float(settings.office_latitude),
+                float(settings.office_longitude),
+            )
+            user_location = (user_lat, user_lon)
+            distance_m = int(geodesic(user_location, office_location).meters)
+            allowed_radius = settings.geofence_radius
+
+            if distance_m > allowed_radius:
+                raise ValidationError({
+                    "detail": (
+                        f"Location check failed: You are {distance_m}m away from the office. "
+                        f"{action_label.capitalize()} is only allowed within {allowed_radius}m of the office. "
+                        f"Please move closer and try again."
+                    ),
+                    "code": "OUTSIDE_GEOFENCE",
+                    "distance_meters": distance_m,
+                    "allowed_radius_meters": allowed_radius,
+                })
+
+            location_data["latitude"] = user_lat
+            location_data["longitude"] = user_lon
+
+        return location_data
+
+    # Keep backward-compatible alias
+    def _validate_check_in(self, request):
+        return self._validate_location_and_ip(request, action_label="check-in")
+
     @action(detail=False, methods=["post"], url_path="check-in")
     def check_in(self, request):
+        # 1. Validate location & IP restrictions
+        location_data = self._validate_location_and_ip(request, action_label="check-in")
+
+        # 2. Get or create today's record
         employee = self._current_employee()
         today = timezone.localdate()
         record, created = AttendanceRecord.objects.get_or_create(employee=employee, date=today)
@@ -167,14 +303,23 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
         if record.check_in:
             raise ValidationError({"detail": "You have already checked in today."})
 
+        # 3. Save the check-in with audit trail
         record.check_in = timezone.now()
+        record.check_in_ip = location_data.get("ip")
+        record.check_in_latitude = location_data.get("latitude")
+        record.check_in_longitude = location_data.get("longitude")
         record.refresh_status()
         record.save(auto_refresh_status=False)
+
         serializer = self.get_serializer(record)
         return Response(serializer.data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
 
     @action(detail=False, methods=["post"], url_path="check-out")
     def check_out(self, request):
+        # 1. Validate location & IP restrictions (same rules as check-in)
+        location_data = self._validate_location_and_ip(request, action_label="check-out")
+
+        # 2. Verify the employee has an open check-in
         employee = self._current_employee()
         record = self._today_record(employee)
 
@@ -183,9 +328,14 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
         if record.check_out:
             raise ValidationError({"detail": "You have already checked out today."})
 
+        # 3. Save the check-out with audit trail
         record.check_out = timezone.now()
+        record.check_out_ip = location_data.get("ip")
+        record.check_out_latitude = location_data.get("latitude")
+        record.check_out_longitude = location_data.get("longitude")
         record.refresh_status()
         record.save(auto_refresh_status=False)
+
         serializer = self.get_serializer(record)
         return Response(serializer.data)
 
@@ -229,6 +379,27 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
             },
             status=status.HTTP_201_CREATED,
         )
+
+    @action(detail=False, methods=["get"], url_path="my-ip", permission_classes=[IsAuthenticated])
+    def my_ip(self, request):
+        """
+        Returns the detected IP address of the requesting client.
+        Used by the admin settings page to easily find the correct IP to whitelist.
+        """
+        SystemSettings = apps.get_model('settings', 'SystemSettings')
+        settings = SystemSettings.get_settings()
+        client_ip = get_ip_address(request)
+
+        # Check if this IP is already in the allow-list
+        allowed_ranges = settings.allowed_ip_ranges or ""
+        is_allowed = ip_is_allowed(client_ip, allowed_ranges) if settings.ip_restriction_enabled else None
+
+        return Response({
+            "client_ip": client_ip,
+            "ip_restriction_enabled": settings.ip_restriction_enabled,
+            "is_currently_allowed": is_allowed,
+            "allowed_ranges": allowed_ranges,
+        })
 
 
 class LeaveRequestViewSet(viewsets.ModelViewSet):

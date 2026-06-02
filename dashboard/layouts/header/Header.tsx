@@ -53,9 +53,15 @@ const Header = () => {
   const [isNoficationOpen, setIsNotificationOpen] = useState<boolean>(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [mounted, setMounted] = useState(false);
   const { toggleMenuHandler, handleCollapsed } = useMenu();
 
+  // useMediaQuery reads `window` — it returns false on the server.
+  // We gate all its usages behind `mounted` so the server render and
+  // the initial client render both produce the desktop layout, preventing
+  // the React hydration mismatch.
   const isTablet = useMediaQuery({ maxWidth: 990 });
+  const isTabletMounted = mounted && isTablet;
 
   const getReadStorageKey = () => {
     const userData = localStorage.getItem("user");
@@ -251,10 +257,15 @@ const Header = () => {
   };
 
   useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
     loadDynamicNotifications();
     const interval = window.setInterval(loadDynamicNotifications, 60000);
     return () => window.clearInterval(interval);
-  }, []);
+  }, [mounted]);
 
   // Recalculate unread whenever notifications change
   useEffect(() => {
@@ -282,7 +293,7 @@ const Header = () => {
       <Navbar expand="lg" className="navbar-glass px-0 px-lg-4">
         <Container fluid className="px-lg-0">
           <Flex alignItems="center" className="gap-4">
-            {isTablet && (
+            {isTabletMounted && (
               <div
                 className="d-block d-lg-none"
                 style={{ cursor: "pointer" }}
@@ -291,7 +302,7 @@ const Header = () => {
                 <IconMenu2 size={24} />
               </div>
             )}
-            {isTablet || (
+            {!isTabletMounted && (
               <div>
                 <Link href={"#"} className="sidebar-toggle d-flex p-3">
                   <span
@@ -353,7 +364,7 @@ const Header = () => {
         onMarkAsRead={handleMarkAsRead}
         onMarkAllAsRead={handleMarkAllAsRead}
       />
-      {isTablet && <OffcanvasSidebar />}
+      {isTabletMounted && <OffcanvasSidebar />}
     </Fragment>
   );
 };

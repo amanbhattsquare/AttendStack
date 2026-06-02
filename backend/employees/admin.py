@@ -12,7 +12,6 @@ class EmployeeAdmin(admin.ModelAdmin):
         "department",
         "designation",
         "status",
-        "joining_date",
     )
     list_filter = ("department", "status", "employment_type", "pay_frequency")
     search_fields = ("employee_id", "full_name", "email", "phone", "aadhaar_number")

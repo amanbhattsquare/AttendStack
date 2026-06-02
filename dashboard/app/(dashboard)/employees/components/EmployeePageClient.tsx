@@ -447,7 +447,6 @@ const EmployeePageClient = () => {
                   <th>ID</th>
                   <th>Department</th>
                   <th>Designation</th>
-                  <th>Join Date</th>
                   <th>Status</th>
                   <th className="text-center employee-action-column">Action</th>
                 </tr>
@@ -483,7 +482,6 @@ const EmployeePageClient = () => {
                     <td>{employee.employee_id}</td>
                     <td>{employee.department}</td>
                     <td>{employee.designation}</td>
-                    <td>{formatDate(employee.joining_date)}</td>
                     <td>
                       <span className={`badge ${statusBadgeClass[employee.status] || "bg-secondary-subtle text-secondary"}`}>
                         {employee.status_label}

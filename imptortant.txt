@@ -68,7 +68,9 @@ sudo journalctl -u attendstack-backend -f
 sudo tail -f /var/log/nginx/access.log
 
 
-
+source venv/bin/activate
+python3 manage.py makemigrations
+python3 manage.py migrate
 sudo systemctl restart attendstack-backend
 
 

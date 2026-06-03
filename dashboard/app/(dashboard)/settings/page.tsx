@@ -1307,7 +1307,7 @@ const SettingsPage = () => {
                                 <Form.Group>
                                   <Form.Label>Company Logo</Form.Label>
                                   <div className="d-flex align-items-center">
-{(logo.preview || companyLogo) && <img src={(logo.preview || companyLogo) ?? undefined} alt="logo" className="avatar avatar-lg me-3" />}                                    <Form.Control type="file" onChange={handleLogoChange} />
+                                    {(logo.preview || companyLogo) && <img src={(logo.preview || companyLogo) ?? undefined} alt="logo" className="avatar avatar-lg me-3" />}                                    <Form.Control type="file" onChange={handleLogoChange} />
                                     <Button variant="primary" onClick={handleSaveLogo} className="ms-2" disabled={!logo.file}>Save Logo</Button>
                                   </div>
                                 </Form.Group>

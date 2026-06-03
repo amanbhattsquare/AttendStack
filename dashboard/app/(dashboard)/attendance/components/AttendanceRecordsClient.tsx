@@ -62,7 +62,7 @@ type EmployeeSummary = {
   payableSalary: number | string | null;
 };
 
-const API_URL = `${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/attendance/`;
+const API_URL = `${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/attendance`;
 const PAYROLL_SUMMARY_URL = `${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/payroll/summary/`;
 const recordsPerPage = 31;
 
@@ -186,6 +186,29 @@ const AttendanceRecordsClient = () => {
     }
   };
 
+  const handleApiCall = async (url: string, options: RequestInit, successMessage: string, errorMessage: string) => {
+    try {
+      const response = await fetch(url, options);
+      if (!response.ok) {
+        let errData;
+        try {
+          errData = await response.json();
+        } catch (e) {
+          errData = { detail: await response.text() };
+        }
+        const errMsg = errData.detail || Object.values(errData).flat().join(" ") || errorMessage;
+        throw new Error(errMsg);
+      }
+      
+      const isJson = response.headers.get('content-type')?.includes('application/json');
+      const data = response.status !== 204 && isJson ? await response.json() : null;
+
+      return { success: true, data: data };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : "An unknown error occurred." };
+    }
+  };
+
   const handleCreateRecord = async (newRecord: {
     employee: string;
     date: string;
@@ -194,26 +217,22 @@ const AttendanceRecordsClient = () => {
     status: string;
     notes: string;
   }) => {
-    try {
-      const response = await fetch(API_URL, {
+    const result = await handleApiCall(
+      API_URL,
+      {
         method: "POST",
-        headers: {
-          ...authHeaders(),
-          "Content-Type": "application/json",
-        },
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify(newRecord),
-      });
+      },
+      "Record created successfully.",
+      "Failed to create the record."
+    );
 
-      if (!response.ok) {
-        const errData = await response.json();
-        const errMsg = errData.detail || Object.values(errData).flat().join(" ") || "Failed to create the record.";
-        throw new Error(errMsg);
-      }
-
+    if (result.success) {
       setIsCreateOpen(false);
       loadRecords();
-    } catch (error) {
-      setError(error instanceof Error ? error.message : "An unknown error occurred.");
+    } else {
+      setError(result.error);
     }
   };
 
@@ -222,24 +241,22 @@ const AttendanceRecordsClient = () => {
   }, []);
 
   const handleUpdateRecord = async (updatedRecord: AttendanceRecord) => {
-    try {
-      const response = await fetch(`${API_URL}${updatedRecord.id}/`, {
+    const result = await handleApiCall(
+      `${API_URL}/${updatedRecord.id}/`,
+      {
         method: "PATCH",
-        headers: {
-          ...authHeaders(),
-          "Content-Type": "application/json",
-        },
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify(updatedRecord),
-      });
+      },
+      "Record updated successfully.",
+      "Failed to update the record."
+    );
 
-      if (!response.ok) {
-        throw new Error("Failed to update the record.");
-      }
-
+    if (result.success) {
       setEditingRecord(null);
       loadRecords();
-    } catch (error) {
-      setError(error instanceof Error ? error.message : "An unknown error occurred.");
+    } else {
+      setError(result.error);
     }
   };
 
@@ -251,20 +268,21 @@ const AttendanceRecordsClient = () => {
   const handleDeleteRecord = async () => {
     if (!deletingRecord) return;
 
-    try {
-      const response = await fetch(`${API_URL}${deletingRecord.id}/`, {
+    const result = await handleApiCall(
+      `${API_URL}/${deletingRecord.id}/`,
+      {
         method: "DELETE",
         headers: authHeaders(),
-      });
+      },
+      "Record deleted successfully.",
+      "Failed to delete the record."
+    );
 
-      if (!response.ok) {
-        throw new Error("Failed to delete the record.");
-      }
-
+    if (result.success) {
       setDeletingRecord(null);
       loadRecords();
-    } catch (error) {
-      setError(error instanceof Error ? error.message : "An unknown error occurred.");
+    } else {
+      setError(result.error);
     }
   };
 
@@ -272,63 +290,62 @@ const AttendanceRecordsClient = () => {
     setIsLoading(true);
     setError("");
 
-    try {
-      const params = new URLSearchParams();
-      const today = new Date();
+    const params = new URLSearchParams();
+    const today = new Date();
+    
+    if (filterMode === "month") {
+      params.set("year", String(selectedYear));
+      params.set("month", String(selectedMonth));
+      if (selectedDay !== "All") {
+        params.set("day", selectedDay);
+      }
       
-      if (filterMode === "month") {
-        params.set("year", String(selectedYear));
-        params.set("month", String(selectedMonth));
-        if (selectedDay !== "All") {
-          params.set("day", selectedDay);
-        }
-        
-        const currentYear = today.getFullYear();
-        const currentMonth = today.getMonth() + 1;
+      const currentYear = today.getFullYear();
+      const currentMonth = today.getMonth() + 1;
 
-        if (Number(selectedYear) > currentYear || (Number(selectedYear) === currentYear && Number(selectedMonth) > currentMonth)) {
-          setRecords([]);
-          setTotalRecords(0);
-          setIsLoading(false);
-          return;
-        }
-
-        if (Number(selectedYear) === currentYear && Number(selectedMonth) === currentMonth) {
-          params.set("date_to", today.toISOString().split('T')[0]);
-        }
-
-      } else {
-        if (startDate) params.set("date_from", startDate);
-        if (endDate) params.set("date_to", endDate);
-      }
-      if (statusFilter !== "All") params.set("status", statusFilter);
-      if (debouncedSearch.trim()) params.set("search", debouncedSearch.trim());
-
-      // Only add pagination params if not in month view
-      if (filterMode !== "month") {
-        params.set("page", String(currentPage));
-        params.set("page_size", String(recordsPerPage));
+      if (Number(selectedYear) > currentYear || (Number(selectedYear) === currentYear && Number(selectedMonth) > currentMonth)) {
+        setRecords([]);
+        setTotalRecords(0);
+        setIsLoading(false);
+        return;
       }
 
-      const response = await fetch(`${API_URL}?${params.toString()}`, { headers: authHeaders() });
-      if (!response.ok) throw new Error("Unable to load attendance records.");
-
-      const data = await response.json();
-
-      // Check if the response is paginated or a direct array
-      if (Array.isArray(data)) {
-        setRecords(data);
-        setTotalRecords(data.length);
-        setCurrentPage(1); // Reset to first page
-      } else {
-        setRecords(data.results);
-        setTotalRecords(data.count);
+      if (Number(selectedYear) === currentYear && Number(selectedMonth) === currentMonth) {
+        params.set("date_to", today.toISOString().split('T')[0]);
       }
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Unable to load attendance records.");
-    } finally {
-      setIsLoading(false);
+
+    } else {
+      if (startDate) params.set("date_from", startDate);
+      if (endDate) params.set("date_to", endDate);
     }
+    if (statusFilter !== "All") params.set("status", statusFilter);
+    if (debouncedSearch.trim()) params.set("search", debouncedSearch.trim());
+
+    if (filterMode !== "month") {
+      params.set("page", String(currentPage));
+      params.set("page_size", String(recordsPerPage));
+    }
+
+    const result = await handleApiCall(
+      `${API_URL}?${params.toString()}`,
+      { headers: authHeaders() },
+      "Records loaded successfully.",
+      "Unable to load attendance records."
+    );
+
+    if (result.success) {
+      if (Array.isArray(result.data)) {
+        setRecords(result.data);
+        setTotalRecords(result.data.length);
+        setCurrentPage(1);
+      } else {
+        setRecords(result.data.results);
+        setTotalRecords(result.data.count);
+      }
+    } else {
+      setError(result.error);
+    }
+    setIsLoading(false);
   };
 
   const loadMonthlySummary = async () => {
@@ -337,18 +354,22 @@ const AttendanceRecordsClient = () => {
       return;
     }
 
-    try {
-      const params = new URLSearchParams();
-      params.set("year", String(selectedYear));
-      params.set("month", String(selectedMonth));
-      if (debouncedSearch.trim()) params.set("search", debouncedSearch.trim());
+    const params = new URLSearchParams();
+    params.set("year", String(selectedYear));
+    params.set("month", String(selectedMonth));
+    if (debouncedSearch.trim()) params.set("search", debouncedSearch.trim());
 
-      const response = await fetch(`${PAYROLL_SUMMARY_URL}?${params.toString()}`, { headers: authHeaders() });
-      if (!response.ok) throw new Error("Unable to load monthly payroll summary.");
-      const data = await response.json();
-      setMonthlySummary(Array.isArray(data) ? data : data.results || []);
-    } catch (summaryError) {
-      setError(summaryError instanceof Error ? summaryError.message : "Unable to load monthly payroll summary.");
+    const result = await handleApiCall(
+      `${PAYROLL_SUMMARY_URL}?${params.toString()}`,
+      { headers: authHeaders() },
+      "Monthly summary loaded successfully.",
+      "Unable to load monthly payroll summary."
+    );
+
+    if (result.success) {
+      setMonthlySummary(Array.isArray(result.data) ? result.data : result.data.results || []);
+    } else {
+      setError(result.error);
     }
   };
 

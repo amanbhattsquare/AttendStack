@@ -85,7 +85,7 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
         search = params.get("search")
 
         # By default, only return today's records unless specific filters are provided
-        if not any([date_from, date_to, year, month, day, search]):
+        if self.action == "list" and not any([date_from, date_to, year, month, day, search]):
             queryset = queryset.filter(date=timezone.now().date())
 
         # Enforce data isolation: Employees can only view their own records
@@ -379,6 +379,19 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
             },
             status=status.HTTP_201_CREATED,
         )
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        user = self.request.user
+
+        if user.role not in ["SUPER_ADMIN", "HR"] and instance.employee.email != user.email:
+            return Response(
+                {"detail": "You do not have permission to delete this record."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        self.perform_destroy(instance)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=False, methods=["get"], url_path="my-ip", permission_classes=[IsAuthenticated])
     def my_ip(self, request):

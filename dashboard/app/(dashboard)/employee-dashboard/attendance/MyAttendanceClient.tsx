@@ -84,7 +84,7 @@ const MyAttendanceClient = () => {
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [isLoading, setIsLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<"check-in" | "check-out" | null>(null);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<any>(null);
   const [success, setSuccess] = useState("");
   const [securitySettings, setSecuritySettings] = useState<SecuritySettings>({
     ipRestrictionEnabled: false,
@@ -143,13 +143,12 @@ const MyAttendanceClient = () => {
     return () => window.clearInterval(timer);
   }, []);
 
-  const parseError = async (response: Response): Promise<string> => {
+  const parseError = async (response: Response): Promise<any> => {
     try {
       const body = await response.json();
-      // Return the most specific error detail available
-      return body?.detail || Object.values(body || {}).flat().join(" ") || "Attendance action failed.";
+      return body;
     } catch {
-      return "Attendance action failed. Please try again.";
+      return { detail: "Attendance action failed. Please try again." };
     }
   };
 
@@ -195,7 +194,7 @@ const MyAttendanceClient = () => {
 
   const markAttendance = async (action: "check-in" | "check-out") => {
     setActionLoading(action);
-    setError("");
+    setError(null);
     setSuccess("");
 
     try {
@@ -209,13 +208,18 @@ const MyAttendanceClient = () => {
       });
 
       if (!response.ok) {
-        throw new Error(await parseError(response));
+        const errorBody = await parseError(response);
+        throw errorBody;
       }
 
       setSuccess(action === "check-in" ? "✓ Checked in successfully!" : "✓ Checked out successfully!");
       await loadAttendance();
-    } catch (actionError) {
-      setError(actionError instanceof Error ? actionError.message : "Unable to mark attendance.");
+    } catch (actionError: any) {
+      if (actionError && typeof actionError === "object" && actionError.detail) {
+        setError(actionError);
+      } else {
+        setError({ detail: actionError instanceof Error ? actionError.message : "Unable to mark attendance." });
+      }
     } finally {
       setActionLoading(null);
     }
@@ -286,9 +290,37 @@ const MyAttendanceClient = () => {
   return (
     <div>
       {error && (
-        <div className="alert alert-danger d-flex align-items-start gap-2 mb-3">
-          <IconShieldLock size={20} className="flex-shrink-0 mt-1" />
-          <div>{error}</div>
+        <div className="alert alert-danger d-flex align-items-start gap-2 mb-4 shadow-sm border-0" style={{ background: "#fdf2f2", borderLeft: "4px solid #f05252", color: "#9b1c1c" }}>
+          <IconShieldLock size={22} className="flex-shrink-0 mt-1" />
+          <div className="w-100">
+            {typeof error === "string" ? (
+              <div className="fw-semibold">{error}</div>
+            ) : (
+              <div>
+                <div className="fw-bold mb-2 fs-6">{error.detail}</div>
+                {error.code === "OUTSIDE_GEOFENCE" && (
+                  <div className="mt-2 p-3 bg-white bg-opacity-75 rounded-3 border border-danger-subtle text-dark small shadow-sm">
+                    <div className="fw-bold text-danger mb-2 d-flex align-items-center gap-1">
+                      <IconInfoCircle size={16} /> Location Diagnostics
+                    </div>
+                    <ul className="mb-3 ps-3 text-secondary" style={{ listStyleType: "square" }}>
+                      <li><strong>Your coordinates:</strong> {error.user_location?.latitude?.toFixed(6)}, {error.user_location?.longitude?.toFixed(6)}</li>
+                      <li><strong>Accuracy:</strong> ±{error.user_location?.accuracy_meters !== null ? `${error.user_location?.accuracy_meters} meters` : "Unknown"}</li>
+                      <li><strong>Office coordinates:</strong> {error.office_location?.latitude?.toFixed(6)}, {error.office_location?.longitude?.toFixed(6)}</li>
+                      <li><strong>Calculated distance:</strong> <span className="text-danger fw-bold">{error.distance_meters} meters</span> (Allowed limit: {error.allowed_radius_meters} meters)</li>
+                    </ul>
+                    <div className="fw-bold text-dark mb-1">Troubleshooting Tips:</div>
+                    <ol className="mb-0 ps-3 text-secondary">
+                      <li><strong>Desktop/Laptop Geolocation issue:</strong> Desktop browsers lack hardware GPS chips and rely on Wi-Fi/IP location databases, which are often inaccurate by kilometers. Try marking attendance from a <strong>mobile phone</strong>.</li>
+                      <li><strong>Turn on Wi-Fi:</strong> Enabling Wi-Fi (even if not connected) helps browsers triangulate location much more precisely.</li>
+                      <li><strong>Disable VPNs:</strong> A VPN routes your connection through another server, spoofing your location. Turn off any active VPNs.</li>
+                      <li><strong>Office Network bypass:</strong> If you are physically at the office, connect to the <strong>office Wi-Fi network</strong>. The system will automatically bypass the geofence restriction if you are on the office IP.</li>
+                    </ol>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       )}
       {success && (
@@ -299,19 +331,24 @@ const MyAttendanceClient = () => {
 
       {/* Active restriction banners */}
       {(securitySettings.ipRestrictionEnabled || securitySettings.geofencingEnabled) && (
-        <div className="d-flex flex-wrap gap-2 mb-3">
+        <div className="d-flex flex-column gap-2 mb-4">
           {securitySettings.ipRestrictionEnabled && (
-            <div className="d-inline-flex align-items-center gap-2 px-3 py-2 rounded-3 small fw-semibold"
+            <div className="d-inline-flex align-items-center gap-2 px-3 py-2 rounded-3 small fw-semibold align-self-start"
               style={{ background: "#fff3cd", border: "1px solid #ffc107", color: "#856404" }}>
               <IconShieldLock size={16} />
               IP Restriction Active — Office network required
             </div>
           )}
           {securitySettings.geofencingEnabled && (
-            <div className="d-inline-flex align-items-center gap-2 px-3 py-2 rounded-3 small fw-semibold"
-              style={{ background: "#cfe2ff", border: "1px solid #9ec5fe", color: "#084298" }}>
-              <IconMapPin size={16} />
-              Geofencing Active — Must be within {securitySettings.geofenceRadius}m of office
+            <div className="w-100 p-3 rounded-3 border"
+              style={{ background: "#cfe2ff", borderColor: "#b6d4fe", color: "#084298" }}>
+              <div className="d-flex align-items-center gap-2 fw-semibold mb-1 small">
+                <IconMapPin size={18} />
+                Geofencing Active — Must be within {securitySettings.geofenceRadius}m of office
+              </div>
+              <div className="small text-secondary-emphasis ps-4">
+                Note: Desktop browsers can report location errors. Connecting your device to the <strong>office Wi-Fi network</strong> or using your <strong>mobile phone</strong> is highly recommended for hassle-free check-in.
+              </div>
             </div>
           )}
         </div>

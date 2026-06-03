@@ -206,9 +206,17 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
         settings = SystemSettings.get_settings()
         location_data = {}
 
+        # Detect client IP
+        client_ip = get_ip_address(request)
+        location_data["ip"] = client_ip
+
+        allowed_ranges = settings.allowed_ip_ranges or ""
+        on_office_network = False
+        if allowed_ranges.strip():
+            on_office_network = ip_is_allowed(client_ip, allowed_ranges)
+
         # ―――――――――― IP Restriction ――――――――――
         if settings.ip_restriction_enabled:
-            allowed_ranges = settings.allowed_ip_ranges or ""
             if not allowed_ranges.strip():
                 raise ValidationError({
                     "detail": (
@@ -217,8 +225,7 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
                     )
                 })
 
-            client_ip = get_ip_address(request)
-            if not ip_is_allowed(client_ip, allowed_ranges):
+            if not on_office_network:
                 raise ValidationError({
                     "detail": (
                         f"Access denied: Your current IP address ({client_ip}) is not authorised "
@@ -227,12 +234,22 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
                     "code": "IP_RESTRICTED",
                     "client_ip": client_ip,
                 })
-            location_data["ip"] = client_ip
-        else:
-            location_data["ip"] = get_ip_address(request)
 
         # ―――――――――― Geofencing ――――――――――
         if settings.geofencing_enabled:
+            # If the user is connected to the office network (whitelisted IP),
+            # we automatically bypass geofence restriction since they are physically in the office.
+            if on_office_network:
+                raw_lat = request.data.get("latitude")
+                raw_lon = request.data.get("longitude")
+                if raw_lat is not None and raw_lon is not None:
+                    try:
+                        location_data["latitude"] = float(raw_lat)
+                        location_data["longitude"] = float(raw_lon)
+                    except (ValueError, TypeError):
+                        pass
+                return location_data
+
             if not settings.office_latitude or not settings.office_longitude:
                 raise ValidationError({
                     "detail": (

@@ -111,3 +111,50 @@ class LeaveAttendanceSyncTests(TestCase):
 
         self.assertEqual(result["deleted"], 1)
         self.assertFalse(AttendanceRecord.objects.filter(employee=self.employee).exists())
+
+
+from rest_framework.test import APITestCase
+from django.urls import reverse
+from rest_framework import status
+
+class GeofenceBypassTests(APITestCase):
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        self.user = User.objects.create_user(
+            email="employee@example.com",
+            password="testpassword",
+            employee_id="EMP-TEST-001"
+        )
+        self.employee = create_employee(email="employee@example.com", employee_id="EMP-TEST-001")
+        self.settings = SystemSettings.get_settings()
+        self.settings.geofencing_enabled = True
+        self.settings.office_latitude = 26.8342
+        self.settings.office_longitude = 80.9862
+        self.settings.geofence_radius = 100
+        self.settings.ip_restriction_enabled = False
+        self.settings.allowed_ip_ranges = ""
+        self.settings.save()
+        self.client.force_authenticate(user=self.user)
+
+    def test_geofence_fails_when_far_away(self):
+        # Coordinates for a place far away
+        url = reverse("attendance:attendance-check-in")
+        response = self.client.post(url, {"latitude": 30.0, "longitude": 80.9862})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("Location check failed", response.data["detail"])
+        self.assertEqual(response.data["code"], "OUTSIDE_GEOFENCE")
+
+    def test_geofence_bypassed_when_ip_is_whitelisted(self):
+        self.settings.allowed_ip_ranges = "192.168.1.1, 10.0.0.1"
+        self.settings.save()
+
+        url = reverse("attendance:attendance-check-in")
+        # Post coordinate that is far away, but mock client IP to be 10.0.0.1
+        response = self.client.post(
+            url, 
+            {"latitude": 30.0, "longitude": 80.9862},
+            REMOTE_ADDR="10.0.0.1"
+        )
+        # It should bypass geofencing and succeed!
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)

@@ -83,6 +83,7 @@ const SettingsPage = () => {
   const [isDetectingLocation, setIsDetectingLocation] = useState(false);
   const [myIpInfo, setMyIpInfo] = useState<{ client_ip: string; is_currently_allowed: boolean | null } | null>(null);
   const [isFetchingIp, setIsFetchingIp] = useState(false);
+  const [detectedAccuracy, setDetectedAccuracy] = useState<number | null>(null);
 
   // Detect admin's current GPS location for easy office coord setup
   const detectMyLocation = () => {
@@ -91,6 +92,7 @@ const SettingsPage = () => {
       return;
     }
     setIsDetectingLocation(true);
+    setDetectedAccuracy(null);
     navigator.geolocation.getCurrentPosition(
       (position) => {
         setAttendanceSettings((prev) => ({
@@ -98,13 +100,16 @@ const SettingsPage = () => {
           officeLatitude: position.coords.latitude.toFixed(6),
           officeLongitude: position.coords.longitude.toFixed(6),
         }));
+        if (position.coords.accuracy !== undefined) {
+          setDetectedAccuracy(Math.round(position.coords.accuracy));
+        }
         setIsDetectingLocation(false);
       },
       () => {
         alert("Could not detect your location. Please enable location access in your browser.");
         setIsDetectingLocation(false);
       },
-      { enableHighAccuracy: true }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
   };
 
@@ -702,7 +707,12 @@ const SettingsPage = () => {
                                   checked={attendanceSettings.geofencingEnabled}
                                   onChange={(e) => setAttendanceSettings({ ...attendanceSettings, geofencingEnabled: e.target.checked })}
                                 />
-                                <Form.Text className="ms-4 ps-2">Allow attendance marking only from within a specific geographic radius of the office.</Form.Text>
+                                <Form.Text className="ms-4 ps-2 d-block">
+                                  Allow attendance marking only from within a specific geographic radius of the office.
+                                  <br />
+                                  <span className="text-warning fw-semibold small">★ Note on GPS Drift:</span>
+                                  <span className="text-muted small"> Coordinates naturally drift by a few meters (standard GPS variation) even when you are stationary. This is normal behavior due to satellite movement and Wi-Fi signal triangulation.</span>
+                                </Form.Text>
                               </Form.Group>
 
                               {attendanceSettings.geofencingEnabled && (
@@ -722,6 +732,24 @@ const SettingsPage = () => {
                                       {isDetectingLocation ? "Detecting..." : "Use My Location"}
                                     </Button>
                                   </div>
+
+                                  {detectedAccuracy !== null && (
+                                    <div className={`mb-3 p-2.5 rounded-3 small border ${
+                                      detectedAccuracy > 150 
+                                        ? "bg-warning-subtle text-warning border-warning-subtle" 
+                                        : "bg-success-subtle text-success border-success-subtle"
+                                    }`}>
+                                      {detectedAccuracy > 150 ? (
+                                        <div>
+                                          <strong>⚠️ Low Accuracy (±{detectedAccuracy}m):</strong> Detected location accuracy is poor. This usually happens on desktop browsers. We highly recommend verifying these coordinates manually on Google Maps.
+                                        </div>
+                                      ) : (
+                                        <div>
+                                          <strong>✓ High Accuracy (±{detectedAccuracy}m):</strong> Location successfully captured.
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
 
                                   <Row className="g-3">
                                     <Col md={6}>
@@ -763,13 +791,25 @@ const SettingsPage = () => {
 
                                   {/* Live preview */}
                                   {attendanceSettings.officeLatitude && attendanceSettings.officeLongitude && (
-                                    <div className="d-flex align-items-center gap-2 mt-3 p-2 rounded-2 bg-primary-subtle">
-                                      <IconMapPin size={16} className="text-primary flex-shrink-0" />
-                                      <span className="small text-primary">
-                                        Employees must be within <strong>{attendanceSettings.geofenceRadius}m</strong> of
-                                        &nbsp;({parseFloat(attendanceSettings.officeLatitude).toFixed(4)},&nbsp;
-                                        {parseFloat(attendanceSettings.officeLongitude).toFixed(4)})
-                                      </span>
+                                    <div className="mt-3">
+                                      <div className="d-flex align-items-center gap-2 p-2 rounded-2 bg-primary-subtle border border-primary-subtle">
+                                        <IconMapPin size={16} className="text-primary flex-shrink-0" />
+                                        <span className="small text-primary">
+                                          Employees must be within <strong>{attendanceSettings.geofenceRadius}m</strong> of
+                                          &nbsp;({parseFloat(attendanceSettings.officeLatitude).toFixed(4)},&nbsp;
+                                          {parseFloat(attendanceSettings.officeLongitude).toFixed(4)})
+                                        </span>
+                                      </div>
+                                      <div className="mt-2 text-end">
+                                        <a
+                                          href={`https://www.google.com/maps/search/?api=1&query=${attendanceSettings.officeLatitude},${attendanceSettings.officeLongitude}`}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="text-decoration-none small fw-semibold text-primary d-inline-flex align-items-center gap-1"
+                                        >
+                                          <IconMapPin size={14} /> Verify Location on Google Maps
+                                        </a>
+                                      </div>
                                     </div>
                                   )}
                                 </div>

@@ -261,13 +261,24 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
                     "detail": "Invalid location coordinates received. Please try again."
                 })
 
-            office_location = (
-                float(settings.office_latitude),
-                float(settings.office_longitude),
-            )
+            office_lat = float(settings.office_latitude)
+            office_lon = float(settings.office_longitude)
+            if not (-90.0 <= office_lat <= 90.0) or not (-180.0 <= office_lon <= 180.0):
+                raise ValidationError({
+                    "detail": (
+                        "Configured office coordinates are invalid. Please contact your administrator."
+                    )
+                })
+
+            if not (-90.0 <= user_lat <= 90.0) or not (-180.0 <= user_lon <= 180.0):
+                raise ValidationError({
+                    "detail": "Invalid GPS coordinates received. Please try again."
+                })
+
+            office_location = (office_lat, office_lon)
             user_location = (user_lat, user_lon)
             distance_m = int(geodesic(user_location, office_location).meters)
-            allowed_radius = settings.geofence_radius
+            allowed_radius = getattr(settings, "geofence_radius", None) or 100
 
             if distance_m > allowed_radius:
                 raise ValidationError({

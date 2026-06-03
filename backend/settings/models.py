@@ -21,14 +21,22 @@ class SystemSettings(models.Model):
     allowed_ip_ranges = models.TextField(blank=True, null=True)
     geofencing_enabled = models.BooleanField(default=False)
     office_latitude = models.DecimalField(
-        max_digits=9, decimal_places=6, blank=True, null=True
+        max_digits=12,
+        decimal_places=9,
+        null=True,
+        blank=True,
+        help_text="Office latitude for geofencing."
     )
     office_longitude = models.DecimalField(
-        max_digits=9, decimal_places=6, blank=True, null=True
+        max_digits=12,
+        decimal_places=9,
+        null=True,
+        blank=True,
+        help_text="Office longitude for geofencing."
     )
-    geofence_radius = models.IntegerField(
+    geofence_radius = models.PositiveIntegerField(
         default=100,
-        validators=[MinValueValidator(50), MaxValueValidator(5000)]
+        help_text="Allowed geofencing radius in meters."
     )
     
     # Company Settings

@@ -281,31 +281,41 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
             office_location = (office_lat, office_lon)
             user_location = (user_lat, user_lon)
             distance_m = int(geodesic(user_location, office_location).meters)
+            # Also compute distance if user coordinates were accidentally swapped (lat<->lon)
+            try:
+                swapped_distance_m = int(geodesic((user_lon, user_lat), office_location).meters)
+            except Exception:
+                swapped_distance_m = distance_m
+
+            # Use the smallest plausible distance (handles accidental swap)
+            effective_distance_m = min(distance_m, swapped_distance_m)
+
             allowed_radius = getattr(settings, "geofence_radius", None) or 100
 
-            # If the device reports poor accuracy, reject and ask user to enable high-accuracy GPS
-            if accuracy_m is not None:
-                # If reported accuracy is larger than the allowed radius or unreasonably large,
-                # the location cannot be trusted for geofencing decisions.
-                if accuracy_m > max(allowed_radius, 100):
-                    raise ValidationError({
-                        "detail": (
-                            "Location accuracy is too low for a reliable geofence check. "
-                            "Ensure device location mode is set to high accuracy and try again."
-                        ),
-                        "code": "LOW_ACCURACY",
-                        "reported_accuracy_meters": int(accuracy_m),
-                    })
-
-            if distance_m > allowed_radius:
+            # If the device reports poor accuracy that exceeds reasonable bounds, ask user to improve
+            if accuracy_m is not None and accuracy_m > 5000:
                 raise ValidationError({
                     "detail": (
-                        f"Location check failed: You are {distance_m}m away from the office. "
+                        "Location accuracy is too low for a reliable geofence check. "
+                        "Ensure device location mode is set to high accuracy (GPS) and try again."
+                    ),
+                    "code": "LOW_ACCURACY",
+                    "reported_accuracy_meters": int(accuracy_m),
+                })
+
+            # Accept if within allowed radius OR if reported accuracy covers the distance
+            within_radius = effective_distance_m <= allowed_radius
+            covered_by_accuracy = (accuracy_m is not None) and (effective_distance_m <= (allowed_radius + accuracy_m))
+
+            if not (within_radius or covered_by_accuracy):
+                raise ValidationError({
+                    "detail": (
+                        f"Location check failed: You are {effective_distance_m}m away from the office. "
                         f"{action_label.capitalize()} is only allowed within {allowed_radius}m of the office. "
                         f"Please move closer and try again."
                     ),
                     "code": "OUTSIDE_GEOFENCE",
-                    "distance_meters": distance_m,
+                    "distance_meters": effective_distance_m,
                     "allowed_radius_meters": allowed_radius,
                     "office_location": {
                         "latitude": office_lat,
@@ -315,6 +325,7 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
                         "latitude": user_lat,
                         "longitude": user_lon,
                         "accuracy_meters": int(accuracy_m) if accuracy_m is not None else None,
+                        "swapped_distance_meters": swapped_distance_m if swapped_distance_m != distance_m else None,
                     },
                 })
 

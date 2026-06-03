@@ -232,7 +232,7 @@ const AttendanceRecordsClient = () => {
       setIsCreateOpen(false);
       loadRecords();
     } else {
-      setError(result.error);
+      setError(result.error || "");
     }
   };
 
@@ -256,7 +256,7 @@ const AttendanceRecordsClient = () => {
       setEditingRecord(null);
       loadRecords();
     } else {
-      setError(result.error);
+      setError(result.error || "");
     }
   };
 
@@ -282,7 +282,7 @@ const AttendanceRecordsClient = () => {
       setDeletingRecord(null);
       loadRecords();
     } else {
-      setError(result.error);
+      setError(result.error || "");
     }
   };
 
@@ -343,7 +343,7 @@ const AttendanceRecordsClient = () => {
         setTotalRecords(result.data.count);
       }
     } else {
-      setError(result.error);
+      setError(result.error || "");
     }
     setIsLoading(false);
   };
@@ -369,7 +369,7 @@ const AttendanceRecordsClient = () => {
     if (result.success) {
       setMonthlySummary(Array.isArray(result.data) ? result.data : result.data.results || []);
     } else {
-      setError(result.error);
+      setError(result.error || "");
     }
   };
 

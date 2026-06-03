@@ -172,16 +172,21 @@ const MyAttendanceClient = () => {
    * Returns null if geofencing is disabled (no need to fetch location).
    * Throws a user-friendly error if permission is denied or unavailable.
    */
-  const getLocationIfRequired = async (): Promise<{ latitude: number; longitude: number } | null> => {
+  const getLocationIfRequired = async (): Promise<{ latitude: number; longitude: number; accuracy?: number; timestamp?: number } | null> => {
     if (!securitySettings.geofencingEnabled) return null;
     try {
       const position = await getCurrentPosition();
       return {
         latitude: position.coords.latitude,
         longitude: position.coords.longitude,
+        accuracy: position.coords.accuracy, // meters
+        timestamp: position.timestamp || Date.now(),
       };
     } catch (geoError) {
-      if (geoError instanceof GeolocationPositionError && geoError.code === geoError.PERMISSION_DENIED) {
+      // TypeScript environments may not have the `GeolocationPositionError` type at runtime.
+      // Use a defensive check on `.code` where `1` corresponds to PERMISSION_DENIED.
+      const geoCode = (geoError as any)?.code;
+      if (geoCode === 1) {
         throw new Error("Location permission denied. Geofencing is active — please enable location access in your browser settings and try again.");
       }
       throw new Error("Could not get your GPS location. Please enable location services and try again.");

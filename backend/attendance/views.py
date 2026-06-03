@@ -243,6 +243,8 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
 
             raw_lat = request.data.get("latitude")
             raw_lon = request.data.get("longitude")
+            # Optional: client-provided accuracy in meters (from Geolocation API)
+            raw_acc = request.data.get("accuracy")
 
             if raw_lat is None or raw_lon is None:
                 raise ValidationError({
@@ -256,6 +258,7 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
             try:
                 user_lat = float(raw_lat)
                 user_lon = float(raw_lon)
+                accuracy_m = float(raw_acc) if raw_acc is not None else None
             except (ValueError, TypeError):
                 raise ValidationError({
                     "detail": "Invalid location coordinates received. Please try again."
@@ -280,6 +283,20 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
             distance_m = int(geodesic(user_location, office_location).meters)
             allowed_radius = getattr(settings, "geofence_radius", None) or 100
 
+            # If the device reports poor accuracy, reject and ask user to enable high-accuracy GPS
+            if accuracy_m is not None:
+                # If reported accuracy is larger than the allowed radius or unreasonably large,
+                # the location cannot be trusted for geofencing decisions.
+                if accuracy_m > max(allowed_radius, 100):
+                    raise ValidationError({
+                        "detail": (
+                            "Location accuracy is too low for a reliable geofence check. "
+                            "Ensure device location mode is set to high accuracy and try again."
+                        ),
+                        "code": "LOW_ACCURACY",
+                        "reported_accuracy_meters": int(accuracy_m),
+                    })
+
             if distance_m > allowed_radius:
                 raise ValidationError({
                     "detail": (
@@ -290,6 +307,15 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
                     "code": "OUTSIDE_GEOFENCE",
                     "distance_meters": distance_m,
                     "allowed_radius_meters": allowed_radius,
+                    "office_location": {
+                        "latitude": office_lat,
+                        "longitude": office_lon,
+                    },
+                    "user_location": {
+                        "latitude": user_lat,
+                        "longitude": user_lon,
+                        "accuracy_meters": int(accuracy_m) if accuracy_m is not None else None,
+                    },
                 })
 
             location_data["latitude"] = user_lat

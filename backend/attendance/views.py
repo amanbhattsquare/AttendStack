@@ -6,7 +6,7 @@ from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.decorators import action
-from rest_framework.exceptions import NotFound, ValidationError
+from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 from rest_framework.permissions import IsAuthenticated
 from django.apps import apps
 from rest_framework.response import Response
@@ -15,7 +15,7 @@ from geopy.distance import geodesic
 
 from accounts.permissions import IsAdminOrHR
 from employees.models import Employee, EmployeeStatus
-from .models import AttendanceRecord, AttendanceStatus, LeaveRequest, LeaveStatus
+from .models import AttendanceRecord, AttendanceStatus, LeaveRequest, LeaveStatus, LeaveType
 from .permissions import IsAdminOrReadOnly
 from .serializers import AttendanceRecordSerializer, TodayAttendanceSerializer, LeaveRequestSerializer
 from .services import auto_mark_calendar_days, sync_leave_request_attendance
@@ -485,8 +485,19 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
 class LeaveRequestViewSet(viewsets.ModelViewSet):
     queryset = LeaveRequest.objects.select_related("employee").all()
     serializer_class = LeaveRequestSerializer
-    permission_classes = [IsAdminOrHR]
+    permission_classes = [IsAuthenticated]
     pagination_class = StandardResultsSetPagination
+
+    def _is_admin_or_hr(self, user):
+        return user.role in ["SUPER_ADMIN", "HR"] or user.is_staff
+
+    def _current_employee(self):
+        employee = Employee.objects.filter(email__iexact=self.request.user.email).first()
+        if employee is None and self.request.user.employee_id:
+            employee = Employee.objects.filter(employee_id=self.request.user.employee_id).first()
+        if employee is None:
+            raise ValidationError({"detail": "No employee profile is linked to this user account."})
+        return employee
 
     @action(detail=False, methods=["get"], url_path="types")
     def get_leave_types(self, request):
@@ -503,12 +514,10 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         user = self.request.user
         
         # Isolation: Employees only see their own leave requests
-        if user.is_authenticated and user.role not in ["SUPER_ADMIN", "HR"] and not user.is_staff:
-            try:
-                employee = Employee.objects.get(email=user.email)
-                queryset = queryset.filter(employee=employee)
-            except Employee.DoesNotExist:
-                queryset = queryset.none()
+        if user.is_authenticated and not self._is_admin_or_hr(user):
+            queryset = queryset.filter(
+                Q(employee__email__iexact=user.email) | Q(employee__employee_id=user.employee_id)
+            )
         return queryset
 
     def _raise_if_leave_overlaps(self, employee, start_date, end_date, instance=None):
@@ -526,17 +535,14 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         user = self.request.user
-        if user.role not in ["SUPER_ADMIN", "HR"] and not user.is_staff:
-            try:
-                employee = Employee.objects.get(email=user.email)
-                self._raise_if_leave_overlaps(
-                    employee,
-                    serializer.validated_data["start_date"],
-                    serializer.validated_data["end_date"],
-                )
-                leave_request = serializer.save(employee=employee, status=LeaveStatus.PENDING)
-            except Employee.DoesNotExist:
-                raise ValidationError({"detail": "No employee profile is linked to this user account."})
+        if not self._is_admin_or_hr(user):
+            employee = self._current_employee()
+            self._raise_if_leave_overlaps(
+                employee,
+                serializer.validated_data["start_date"],
+                serializer.validated_data["end_date"],
+            )
+            leave_request = serializer.save(employee=employee, status=LeaveStatus.PENDING, admin_notes=None)
         else:
             leave_request = serializer.save()
 
@@ -546,18 +552,30 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         user = self.request.user
         
         # If user is Employee, they cannot update status or admin_notes
-        if user.role not in ["SUPER_ADMIN", "HR"] and not user.is_staff:
-            if "status" in self.request.data or "admin_notes" in self.request.data:
-                raise ValidationError({"detail": "Employees are not authorized to approve/reject leave requests or edit admin notes."})
+        if not self._is_admin_or_hr(user):
+            forbidden_fields = {"employee", "status", "admin_notes"}
+            if forbidden_fields.intersection(self.request.data.keys()):
+                raise PermissionDenied("Employees can only edit leave dates, type, and reason.")
             if serializer.instance.status != LeaveStatus.PENDING:
                 raise ValidationError({"detail": "Only pending leave requests can be edited by employees."})
+            employee = self._current_employee()
             leave_request = serializer.save()
+            if leave_request.employee_id != employee.id:
+                raise PermissionDenied("You can only edit your own leave requests.")
         else:
             leave_request = serializer.save()
 
         sync_leave_request_attendance(leave_request)
 
     def perform_destroy(self, instance):
+        user = self.request.user
+        if not self._is_admin_or_hr(user):
+            employee = self._current_employee()
+            if instance.employee_id != employee.id:
+                raise PermissionDenied("You can only delete your own leave requests.")
+            if instance.status != LeaveStatus.PENDING:
+                raise ValidationError({"detail": "Only pending leave requests can be deleted by employees."})
+
         with transaction.atomic():
             instance.status = LeaveStatus.REJECTED
             sync_leave_request_attendance(instance)

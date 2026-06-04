@@ -24,6 +24,18 @@ interface LeaveSettings {
   casual_leave_days: number;
 }
 
+const DEFAULT_LEAVE_TYPES = [
+  { value: "CASUAL", label: "Casual Leave" },
+  { value: "SICK", label: "Sick Leave" },
+  { value: "ANNUAL", label: "Annual Leave" },
+  { value: "STUDY", label: "Study Leave" },
+  { value: "MATERNITY", label: "Maternity Leave" },
+  { value: "PATERNITY", label: "Paternity Leave" },
+  { value: "BEREAVEMENT", label: "Bereavement Leave" },
+  { value: "MARRIAGE", label: "Marriage Leave" },
+  { value: "OTHER", label: "Other" },
+];
+
 const EmployeeLeavesClient = () => {
   const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -38,7 +50,7 @@ const EmployeeLeavesClient = () => {
   const [leaveType, setLeaveType] = useState("CASUAL");
   const [reason, setReason] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [leaveTypes, setLeaveTypes] = useState<{ value: string; label: string }[]>([]);
+  const [leaveTypes, setLeaveTypes] = useState<{ value: string; label: string }[]>(DEFAULT_LEAVE_TYPES);
 
   const fetchLeaves = async () => {
     setIsLoading(true);
@@ -76,12 +88,10 @@ const EmployeeLeavesClient = () => {
       });
       if (res.ok) {
         const data = await res.json();
-        setLeaveTypes(data);
-      } else {
-        console.error("Failed to fetch leave types:", res.statusText);
+        setLeaveTypes(Array.isArray(data) && data.length > 0 ? data : DEFAULT_LEAVE_TYPES);
       }
-    } catch (err) {
-      console.error("Error fetching leave types:", err);
+    } catch {
+      setLeaveTypes(DEFAULT_LEAVE_TYPES);
     }
   };
 

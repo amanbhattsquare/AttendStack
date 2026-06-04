@@ -1,4 +1,5 @@
 //import custom hooks
+import { useCallback } from "react";
 import { useAppDispatch, useAppSelector } from "store/store";
 
 //import redux slices
@@ -13,13 +14,13 @@ const useMenu = () => {
 
   const dispatch = useAppDispatch();
 
-  const toggleMenuHandler = (value: boolean) => {
+  const toggleMenuHandler = useCallback((value: boolean) => {
     dispatch(toggleMenu({ showMenu: value }));
-  };
+  }, [dispatch]);
 
-  const handleCollapsed = (value: MenuToggleType) => {
+  const handleCollapsed = useCallback((value: MenuToggleType) => {
     dispatch(setCollapsed({ value: value }));
-  };
+  }, [dispatch]);
 
   return { toggleMenuHandler, showMenu, handleCollapsed };
 };

@@ -1,7 +1,6 @@
 "use client";
 //import node module libraries
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import React, { Fragment, useState, useEffect } from "react";
 import {
   Accordion,
@@ -30,8 +29,9 @@ interface SidebarProps {
   isEmployee?: boolean;
   containerId?: string;
   currentPath: string;
+  onNavigate?: () => void;
 }
-const Sidebar: React.FC<SidebarProps> = ({ hideLogo = false, containerId, currentPath, isEmployee }) => {
+const Sidebar: React.FC<SidebarProps> = ({ hideLogo = false, containerId, currentPath, isEmployee, onNavigate }) => {
   const { companyLogo, companyName } = useBranding();
   const menuItems = isEmployee ? EmployeeDashboardMenu : DashboardMenu;
   const [user, setUser] = useState<{ full_name: string; designation: string } | null>(null);
@@ -50,6 +50,7 @@ const Sidebar: React.FC<SidebarProps> = ({ hideLogo = false, containerId, curren
     const isactive = currentPath === item.link;
     if (item.logout) {
       const handleLogout = () => {
+        onNavigate?.();
         localStorage.removeItem("authToken");
         localStorage.removeItem("refreshToken");
         localStorage.removeItem("user");
@@ -69,6 +70,7 @@ const Sidebar: React.FC<SidebarProps> = ({ hideLogo = false, containerId, curren
       <Link
         href={`${item.link}`}
         className={`nav-link ${isactive ? "active" : ""}`}
+        onClick={onNavigate}
       >
         {item.icon && <span className="nav-icon">{item.icon}</span>}
         <span className="text">{item.name || item.title}</span>
@@ -101,7 +103,8 @@ const Sidebar: React.FC<SidebarProps> = ({ hideLogo = false, containerId, curren
           <div className='brand-logo'>
             <Link
               href='/'
-              className='d-none d-md-flex align-items-center gap-2'>
+              className='d-none d-md-flex align-items-center gap-2'
+              onClick={onNavigate}>
               <Image
                 src={getAssetPath("/images/brand/logo/logo.png")}
                 alt=''
@@ -209,6 +212,7 @@ const Sidebar: React.FC<SidebarProps> = ({ hideLogo = false, containerId, curren
                                                                   ? "active"
                                                                   : ""
                                                               }`}
+                                                              onClick={onNavigate}
                                                             >
                                                               {
                                                                 menuLevel3Item.name

@@ -45,7 +45,7 @@ const formatCurrency = (value?: string | number | null) => {
 const quickActions = [
   {
     title: "My Profile",
-    text: "Review personal details, bank records, and official documents.",
+    text: "Personal details, bank records, and documents.",
     href: "/employee-dashboard/profile",
     icon: <IconUser size={24} />,
     color: "#4f46e5", // Indigo
@@ -53,7 +53,7 @@ const quickActions = [
   },
   {
     title: "Clock-In & Attendance",
-    text: "Mark your daily presence, log lunch breaks, and review live logs.",
+    text: "Daily punch, live status, and attendance history.",
     href: "/employee-dashboard/attendance",
     icon: <IconFingerprint size={24} />,
     color: "#0ea5e9", // Sky
@@ -61,7 +61,7 @@ const quickActions = [
   },
   {
     title: "Monthly Reports",
-    text: "Track your working hours, check-in averages, and present ratios.",
+    text: "Working hours, check-in trends, and present ratio.",
     href: "/employee-dashboard/attendance-report",
     icon: <IconChartBar size={24} />,
     color: "#10b981", // Emerald
@@ -69,7 +69,7 @@ const quickActions = [
   },
   {
     title: "My Paychecks",
-    text: "Download print-ready monthly payslips and inspect salary breakdowns.",
+    text: "Payslips, salary status, and payout breakdowns.",
     href: "/employee-dashboard/salary",
     icon: <IconWallet size={24} />,
     color: "#f59e0b", // Amber
@@ -77,7 +77,7 @@ const quickActions = [
   },
   {
     title: "Holiday Calendar",
-    text: "Browse upcoming company holidays and festival calendars.",
+    text: "Upcoming holidays and company calendar.",
     href: "/employee-dashboard/holidays",
     icon: <IconBeach size={24} />,
     color: "#ec4899", // Pink
@@ -415,43 +415,42 @@ const EmployeeDashboard = () => {
   return (
     <div className="employee-dashboard-container py-3">
       {/* Welcome Hero Banner */}
-      <div className="card border-0 shadow-sm mb-5 overflow-hidden position-relative welcome-hero-card">
-        <div className="radial-glow"></div>
-        <div className="card-body p-4 p-lg-5 position-relative">
-          <div className="d-flex flex-column flex-lg-row align-items-lg-center gap-4">
-            <div className="avatar-wrapper position-relative">
+      <div className="card border-0 shadow-sm mb-4 overflow-hidden welcome-hero-card">
+        <div className="card-body employee-hero-body">
+          <div className="employee-hero-layout">
+            <div className="avatar-wrapper">
               <img
                 src={employee.profile_photo_url || "/images/avatar/avatar-fallback.jpg"}
                 alt={employee.full_name}
-                className="rounded-circle border border-4 border-white shadow-sm employee-avatar"
+                className="rounded-circle border border-3 border-white shadow-sm employee-avatar"
               />
               <span className={`status-dot ${employee.status === "ACTIVE" ? "bg-success" : "bg-warning"}`}></span>
             </div>
-            <div className="flex-grow-1 text-white-container">
-              <div className="d-flex flex-wrap align-items-center gap-2 mb-2">
+            <div className="employee-hero-copy">
+              <div className="employee-hero-title-row">
                 <h1 className="fw-bold mb-0 text-dark heading-welcome">Welcome back, {employee.full_name.split(" ")[0]}!</h1>
-                <Badge bg="success" className="px-3 py-2 bg-success-subtle text-success border border-success-subtle font-monospace rounded-pill">
+                <Badge bg="success" className="employee-status-badge bg-success-subtle text-success border border-success-subtle">
                   {employee.status_label}
                 </Badge>
               </div>
-              <p className="text-secondary fw-medium mb-3 fs-5">
-                {employee.designation} <span className="mx-1 text-muted">•</span> {employee.department} <span className="mx-1 text-muted">•</span> Bhatt Square Pvt Ltd
+              <p className="employee-designation-line text-secondary fw-medium mb-3">
+                {employee.designation} <span className="mx-1 text-muted">-</span> {employee.department} <span className="mx-1 text-muted">-</span> Bhatt Square Pvt Ltd
               </p>
               
-              <div className="d-flex flex-wrap gap-4 text-muted small mt-2">
-                <span className="d-inline-flex align-items-center gap-2">
-                  <IconMail size={18} className="text-secondary" /> {employee.email}
+              <div className="employee-contact-grid text-muted small">
+                <span>
+                  <IconMail size={16} className="text-secondary" /> <span>{employee.email}</span>
                 </span>
-                <span className="d-inline-flex align-items-center gap-2">
-                  <IconPhone size={18} className="text-secondary" /> {employee.phone}
+                <span>
+                  <IconPhone size={16} className="text-secondary" /> <span>{employee.phone}</span>
                 </span>
-                <span className="d-inline-flex align-items-center gap-2">
-                  <IconCalendarCheck size={18} className="text-secondary" /> Joined {formatDate(employee.joining_date)}
+                <span>
+                  <IconCalendarCheck size={16} className="text-secondary" /> <span>Joined {formatDate(employee.joining_date)}</span>
                 </span>
               </div>
             </div>
-            <div className="ms-lg-auto">
-              <Link href="/employee-dashboard/profile" className="btn btn-primary btn-lg shadow-sm px-4 fw-semibold text-white">
+            <div className="employee-hero-action">
+              <Link href="/employee-dashboard/profile" className="btn btn-primary shadow-sm px-4 fw-semibold text-white">
                 View Official Profile
               </Link>
             </div>
@@ -460,11 +459,11 @@ const EmployeeDashboard = () => {
       </div>
 
       {/* Helpful Tip Banner */}
-      <div className="alert alert-primary border-0 shadow-sm d-flex align-items-center gap-3 mb-4 p-3 px-4">
-        <IconClock size={24} className="text-primary flex-shrink-0 animate-pulse" />
+      <div className="shift-banner alert alert-primary border-0 shadow-sm d-flex align-items-start gap-3 mb-4">
+        <IconClock size={20} className="text-primary flex-shrink-0 mt-1" />
         <div>
           <strong className="text-primary-emphasis">Shift Schedule:</strong> 
-          <span className="text-secondary ms-1">
+          <span className="text-secondary">
             Standard office timing is <strong>{settings ? `${settings.shift_start_time} to ${settings.shift_end_time}` : "10:00 AM to 06:00 PM"}</strong>. Please check in and check out daily from your portal to track working hours accurately.
           </span>
         </div>
@@ -472,13 +471,13 @@ const EmployeeDashboard = () => {
 
       {/* Attendance Punch In/Out Quick Action Panel */}
       {mounted && (
-        <Card className="border-0 shadow-sm mb-5 overflow-hidden rounded-4 bg-white">
-          <Card.Body className="p-4">
-            <Row className="align-items-center g-4">
+        <Card className="dashboard-panel attendance-panel border-0 shadow-sm mb-4 overflow-hidden bg-white">
+          <Card.Body>
+            <Row className="align-items-center g-3 g-lg-4">
               <Col xs={12} lg={6}>
-                <div className="d-flex align-items-center gap-3">
-                  <div className="p-3 bg-primary-subtle text-primary rounded-4">
-                    <IconFingerprint size={32} strokeWidth={1.5} />
+                <div className="attendance-panel-heading">
+                  <div className="panel-icon bg-primary-subtle text-primary">
+                    <IconFingerprint size={24} strokeWidth={1.5} />
                   </div>
                   <div>
                     <h4 className="fw-bold text-dark mb-1">Daily Attendance Punch</h4>
@@ -489,13 +488,13 @@ const EmployeeDashboard = () => {
                 </div>
 
                 {/* Ticking Digital Clock */}
-                <div className="mt-4 p-3 bg-light rounded-3 d-inline-flex align-items-center gap-3 border">
-                  <IconClock size={20} className="text-primary animate-pulse" />
+                <div className="dashboard-clock mt-3">
+                  <IconClock size={18} className="text-primary" />
                   <div>
-                    <div className="fs-5 fw-bold text-dark font-monospace">
+                    <div className="fw-bold text-dark font-monospace">
                       {currentTime.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true })}
                     </div>
-                    <div className="text-secondary small" style={{ fontSize: "0.76rem" }}>
+                    <div className="text-secondary small">
                       {currentTime.toLocaleDateString("en-IN", { weekday: "long", day: "2-digit", month: "short", year: "numeric" })}
                     </div>
                   </div>
@@ -525,7 +524,7 @@ const EmployeeDashboard = () => {
                           size="lg"
                           onClick={() => markAttendance("check-in")}
                           disabled={actionLoading !== null || !isCheckinActive}
-                          className="d-inline-flex align-items-center gap-2 px-5 py-3 rounded-3 fw-bold shadow-sm text-white border-0"
+                          className="dashboard-action-btn d-inline-flex align-items-center justify-content-center gap-2 fw-bold shadow-sm text-white border-0"
                         >
                           <IconLogin2 size={22} />
                           {actionLoading === "check-in" ? "Punching In..." : "Clock In Now"}
@@ -551,7 +550,7 @@ const EmployeeDashboard = () => {
                           size="lg"
                           onClick={() => markAttendance("check-out")}
                           disabled={actionLoading !== null || !isCheckoutActive}
-                          className="d-inline-flex align-items-center gap-2 px-5 py-3 rounded-3 fw-bold shadow-sm text-dark border-0"
+                          className="dashboard-action-btn d-inline-flex align-items-center justify-content-center gap-2 fw-bold shadow-sm text-dark border-0"
                           style={{ backgroundColor: "#ffb020", color: "#1e293b" }}
                         >
                           <IconLogout2 size={22} />
@@ -563,7 +562,7 @@ const EmployeeDashboard = () => {
                       </div>
                     ) : (
                       <div className="w-100 text-lg-end">
-                        <div className="p-3 bg-light rounded-4 border text-center text-lg-end d-inline-block w-100">
+                        <div className="shift-complete-box p-3 bg-light border text-center text-lg-end d-inline-block w-100">
                           <h6 className="fw-bold text-success mb-2 d-flex align-items-center gap-2 justify-content-center justify-content-lg-end">
                             <IconCircleCheck size={20} /> Shift Completed Today!
                           </h6>
@@ -587,9 +586,9 @@ const EmployeeDashboard = () => {
         </Card>
       )}
 
-      <Row className="g-4 mb-5">
+      <Row className="g-4 mb-4">
         <Col xs={12} xl={7}>
-          <Card className="border-0 shadow-sm h-100 rounded-4 employee-activity-card">
+          <Card className="dashboard-panel border-0 shadow-sm h-100 employee-activity-card">
             <Card.Header className="bg-white border-0 py-3 d-flex align-items-center justify-content-between">
               <div className="d-flex align-items-center gap-2">
                 <IconActivity size={20} className="text-primary" />
@@ -624,7 +623,7 @@ const EmployeeDashboard = () => {
           </Card>
         </Col>
         <Col xs={12} xl={5}>
-          <Card className="border-0 shadow-sm h-100 rounded-4">
+          <Card className="dashboard-panel border-0 shadow-sm h-100">
             <Card.Body className="p-4">
               <div className="d-flex align-items-center gap-3 mb-4">
                 <div className="metric-icon-box bg-success-subtle text-success">
@@ -655,10 +654,9 @@ const EmployeeDashboard = () => {
       </Row>
 
       {/* Key Metrics grid */}
-      <div className="row g-4 mb-5">
-        <div className="col-md-4">
+      <div className="row g-3 g-lg-4 mb-4">
+        <div className="col-12 col-md-4">
           <div className="card border-0 shadow-sm h-100 metric-card position-relative overflow-hidden">
-            <div className="metric-glow bg-primary-subtle"></div>
             <div className="card-body p-4 position-relative d-flex align-items-center gap-3">
               <div className="metric-icon-box bg-primary-subtle text-primary">
                 <IconBriefcase size={24} />
@@ -672,9 +670,8 @@ const EmployeeDashboard = () => {
           </div>
         </div>
 
-        <div className="col-md-4">
+        <div className="col-12 col-md-4">
           <div className="card border-0 shadow-sm h-100 metric-card position-relative overflow-hidden">
-            <div className="metric-glow bg-success-subtle"></div>
             <div className="card-body p-4 position-relative d-flex align-items-center gap-3">
               <div className="metric-icon-box bg-success-subtle text-success">
                 <IconWallet size={24} />
@@ -688,9 +685,8 @@ const EmployeeDashboard = () => {
           </div>
         </div>
 
-        <div className="col-md-4">
+        <div className="col-12 col-md-4">
           <div className="card border-0 shadow-sm h-100 metric-card position-relative overflow-hidden">
-            <div className="metric-glow bg-info-subtle"></div>
             <div className="card-body p-4 position-relative d-flex align-items-center gap-3">
               <div className="metric-icon-box bg-info-subtle text-info">
                 <IconBuilding size={24} />
@@ -706,13 +702,13 @@ const EmployeeDashboard = () => {
       </div>
 
       {/* Quick Action Navigation Grid */}
-      <h4 className="fw-bold mb-4 text-dark d-flex align-items-center gap-2">
+      <h4 className="section-heading fw-bold mb-3 text-dark d-flex align-items-center gap-2">
         <IconShield size={22} className="text-primary" /> Core Workspaces & Actions
       </h4>
       
-      <div className="row g-4">
+      <div className="row g-3 g-lg-4">
         {quickActions.map((action) => (
-          <div className="col-md-6 col-xl-4" key={action.href}>
+          <div className="col-12 col-md-6 col-xl-4" key={action.href}>
             <Link href={action.href} className="card h-100 border-0 shadow-sm quick-action-card text-decoration-none">
               <div className="card-body p-4 d-flex gap-3">
                 <div 
@@ -733,7 +729,7 @@ const EmployeeDashboard = () => {
 
       {/* Attendance Rules Section */}
       {attendanceRules && (
-        <Card className="border-0 shadow-sm mt-5 overflow-hidden rounded-4 bg-white">
+        <Card className="dashboard-panel border-0 shadow-sm mt-4 overflow-hidden bg-white">
           <Card.Header className="bg-light d-flex align-items-center gap-2 py-3 border-bottom-0">
             <IconNotes size={20} className="text-primary" />
             <h5 className="mb-0 fw-bold text-dark">My Attendance Rules</h5>
@@ -751,30 +747,56 @@ const EmployeeDashboard = () => {
           font-family: 'Inter', sans-serif;
         }
 
+        .employee-dashboard-container .card,
+        .employee-dashboard-container .alert {
+          border-radius: 8px !important;
+        }
+
+        .employee-dashboard-container .card-body {
+          min-width: 0;
+        }
+
+        .dashboard-panel {
+          border: 1px solid #eef2f6 !important;
+        }
+
         .welcome-hero-card {
           background: #ffffff;
           border: 1px solid #eef2f6 !important;
-          border-radius: 16px;
         }
 
-        .radial-glow {
-          position: absolute;
-          width: 300px;
-          height: 300px;
-          background: radial-gradient(circle, rgba(99, 102, 241, 0.05) 0%, rgba(255, 255, 255, 0) 70%);
-          right: -50px;
-          top: -50px;
-          pointer-events: none;
+        .employee-hero-body,
+        .attendance-panel .card-body {
+          padding: 22px;
+        }
+
+        .employee-hero-layout {
+          align-items: center;
+          display: grid;
+          gap: 20px;
+          grid-template-columns: auto minmax(0, 1fr) auto;
+        }
+
+        .employee-hero-copy {
+          min-width: 0;
+        }
+
+        .employee-hero-title-row {
+          align-items: center;
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
         }
 
         .employee-avatar {
-          width: 110px;
-          height: 110px;
+          height: 92px;
           object-fit: cover;
+          width: 92px;
         }
 
         .avatar-wrapper {
           display: inline-block;
+          position: relative;
         }
 
         .status-dot {
@@ -787,9 +809,104 @@ const EmployeeDashboard = () => {
           right: 4px;
         }
 
+        .employee-status-badge {
+          border-radius: 999px;
+          font-size: 12px;
+          font-weight: 700;
+          padding: 6px 10px;
+        }
+
+        .employee-designation-line {
+          font-size: 15px;
+          line-height: 1.45;
+        }
+
+        .employee-contact-grid {
+          display: grid;
+          gap: 8px 18px;
+          grid-template-columns: repeat(3, minmax(0, max-content));
+        }
+
+        .employee-contact-grid > span {
+          align-items: center;
+          display: inline-flex;
+          gap: 7px;
+          min-width: 0;
+        }
+
+        .employee-contact-grid > span > span {
+          overflow-wrap: anywhere;
+        }
+
+        .employee-hero-action .btn,
+        .dashboard-action-btn {
+          min-height: 44px;
+          border-radius: 8px;
+        }
+
+        .shift-banner {
+          background: #eff6ff;
+          color: #1e3a8a;
+          line-height: 1.5;
+          padding: 14px 16px;
+        }
+
+        .shift-banner span {
+          display: inline;
+          margin-left: 4px;
+        }
+
+        .attendance-panel-heading {
+          align-items: center;
+          display: flex;
+          gap: 12px;
+        }
+
+        .panel-icon,
+        .metric-icon-box,
+        .action-icon-wrapper {
+          flex-shrink: 0;
+        }
+
+        .panel-icon,
+        .metric-icon-box,
+        .action-icon-wrapper {
+          align-items: center;
+          display: flex;
+          justify-content: center;
+        }
+
+        .panel-icon {
+          border-radius: 8px;
+          height: 46px;
+          width: 46px;
+        }
+
+        .dashboard-clock {
+          align-items: center;
+          background: #f8fafc;
+          border: 1px solid #e8edf3;
+          border-radius: 8px;
+          display: inline-flex;
+          gap: 12px;
+          padding: 12px 14px;
+        }
+
+        .dashboard-clock .font-monospace {
+          font-size: 18px;
+        }
+
+        .dashboard-action-btn {
+          padding: 12px 28px;
+        }
+
+        .shift-complete-box {
+          border-radius: 8px;
+        }
+
         .metric-card {
           border: 1px solid #eef2f6 !important;
-          border-radius: 14px;
+          border-radius: 8px;
           transition: transform 0.2s ease, box-shadow 0.2s ease;
         }
 
@@ -798,30 +915,15 @@ const EmployeeDashboard = () => {
           box-shadow: 0 4px 12px rgba(16, 24, 40, 0.06) !important;
         }
 
-        .metric-glow {
-          position: absolute;
-          width: 150px;
-          height: 150px;
-          background: radial-gradient(circle, rgba(0, 0, 0, 0.02) 0%, rgba(255, 255, 255, 0) 70%);
-          right: -40px;
-          bottom: -40px;
-          pointer-events: none;
-          opacity: 0.5;
-        }
-
         .metric-icon-box {
           width: 48px;
           height: 48px;
-          border-radius: 12px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          flex-shrink: 0;
+          border-radius: 8px;
         }
 
         .quick-action-card {
           border: 1px solid #eef2f6 !important;
-          border-radius: 14px;
+          border-radius: 8px;
           transition: all 0.2s ease;
         }
 
@@ -834,25 +936,148 @@ const EmployeeDashboard = () => {
         .action-icon-wrapper {
           width: 46px;
           height: 46px;
-          border-radius: 10px;
+          border-radius: 8px;
         }
 
-        .animate-pulse {
-          animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-        }
-
-        @keyframes pulse {
-          0%, 100% {
-            opacity: 1;
-          }
-          50% {
-            opacity: .6;
-          }
+        .section-heading {
+          font-size: 18px;
         }
 
         .heading-welcome {
           font-family: 'Outfit', sans-serif;
-          letter-spacing: -0.5px;
+          font-size: 28px;
+          letter-spacing: 0;
+          line-height: 1.15;
+        }
+
+        @media (max-width: 991.98px) {
+          .employee-hero-layout {
+            align-items: flex-start;
+            grid-template-columns: auto minmax(0, 1fr);
+          }
+
+          .employee-hero-action {
+            grid-column: 1 / -1;
+          }
+
+          .employee-hero-action .btn {
+            width: 100%;
+          }
+
+          .employee-contact-grid {
+            grid-template-columns: 1fr;
+          }
+        }
+
+        @media (max-width: 575.98px) {
+          .employee-dashboard-container {
+            padding-top: 8px !important;
+          }
+
+          .employee-hero-body,
+          .attendance-panel .card-body,
+          .employee-dashboard-container .card-body {
+            padding: 16px !important;
+          }
+
+          .employee-hero-layout {
+            gap: 14px;
+            grid-template-columns: 64px minmax(0, 1fr);
+          }
+
+          .employee-avatar {
+            height: 64px;
+            width: 64px;
+          }
+
+          .status-dot {
+            border-width: 2px;
+            height: 12px;
+            width: 12px;
+          }
+
+          .heading-welcome {
+            font-size: 18px;
+          }
+
+          .employee-designation-line {
+            font-size: 12px;
+            grid-column: 1 / -1;
+            margin-bottom: 10px !important;
+          }
+
+          .employee-contact-grid {
+            font-size: 11px;
+            gap: 6px;
+            grid-column: 1 / -1;
+          }
+
+          .employee-hero-copy {
+            display: contents;
+          }
+
+          .employee-hero-title-row {
+            align-content: center;
+            min-height: 64px;
+          }
+
+          .employee-status-badge {
+            font-size: 10px;
+            padding: 4px 8px;
+          }
+
+          .employee-hero-action {
+            grid-column: 1 / -1;
+          }
+
+          .shift-banner {
+            font-size: 12px;
+            padding: 12px;
+          }
+
+          .shift-banner span {
+            display: block;
+            margin-left: 0;
+            margin-top: 2px;
+          }
+
+          .attendance-panel-heading h4 {
+            font-size: 16px;
+          }
+
+          .dashboard-clock {
+            display: flex;
+            width: 100%;
+          }
+
+          .dashboard-clock .font-monospace {
+            font-size: 16px;
+          }
+
+          .dashboard-action-btn {
+            padding: 12px 16px;
+            width: 100%;
+          }
+
+          .metric-card .card-body,
+          .quick-action-card .card-body {
+            padding: 14px !important;
+          }
+
+          .metric-card strong {
+            font-size: 17px !important;
+            overflow-wrap: anywhere;
+          }
+
+          .metric-icon-box,
+          .action-icon-wrapper {
+            height: 40px;
+            width: 40px;
+          }
+
+          .section-heading {
+            font-size: 16px;
+          }
         }
       `}</style>
     </div>

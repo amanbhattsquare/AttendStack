@@ -14,7 +14,7 @@ interface initialStateType {
 
 const initialState: initialStateType = {
   skin: settings.theme.skin,
-  showMenu: true,
+  showMenu: false,
   collapsed: "expanded",
 };
 const appSlice = createSlice({

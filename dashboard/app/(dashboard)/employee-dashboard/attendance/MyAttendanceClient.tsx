@@ -182,6 +182,9 @@ const MyAttendanceClient = () => {
         timestamp: position.timestamp || Date.now(),
       };
     } catch (geoError) {
+      if (securitySettings.ipRestrictionEnabled) {
+        return null;
+      }
       // TypeScript environments may not have the `GeolocationPositionError` type at runtime.
       // Use a defensive check on `.code` where `1` corresponds to PERMISSION_DENIED.
       const geoCode = (geoError as any)?.code;

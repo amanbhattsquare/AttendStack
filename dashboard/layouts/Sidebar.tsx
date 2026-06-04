@@ -51,6 +51,7 @@ const Sidebar: React.FC<SidebarProps> = ({ hideLogo = false, containerId, curren
     if (item.logout) {
       const handleLogout = () => {
         localStorage.removeItem("authToken");
+        localStorage.removeItem("refreshToken");
         localStorage.removeItem("user");
         window.location.href = item.link || "/sign-in";
       };

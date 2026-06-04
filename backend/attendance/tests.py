@@ -146,6 +146,7 @@ class GeofenceBypassTests(APITestCase):
         self.assertEqual(response.data["code"], "OUTSIDE_GEOFENCE")
 
     def test_geofence_bypassed_when_ip_is_whitelisted(self):
+        self.settings.ip_restriction_enabled = True
         self.settings.allowed_ip_ranges = "192.168.1.1, 10.0.0.1"
         self.settings.save()
 
@@ -158,3 +159,32 @@ class GeofenceBypassTests(APITestCase):
         )
         # It should bypass geofencing and succeed!
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_location_match_allows_check_in_when_ip_and_geofence_are_enabled(self):
+        self.settings.ip_restriction_enabled = True
+        self.settings.allowed_ip_ranges = "10.0.0.1"
+        self.settings.save()
+
+        url = reverse("attendance:attendance-check-in")
+        response = self.client.post(
+            url,
+            {"latitude": 26.8342, "longitude": 80.9862, "accuracy": 20},
+            REMOTE_ADDR="203.0.113.10",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_geofence_only_does_not_bypass_from_stale_allowed_ip(self):
+        self.settings.ip_restriction_enabled = False
+        self.settings.allowed_ip_ranges = "10.0.0.1"
+        self.settings.save()
+
+        url = reverse("attendance:attendance-check-in")
+        response = self.client.post(
+            url,
+            {"latitude": 30.0, "longitude": 80.9862},
+            REMOTE_ADDR="10.0.0.1",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data["code"], "OUTSIDE_GEOFENCE")

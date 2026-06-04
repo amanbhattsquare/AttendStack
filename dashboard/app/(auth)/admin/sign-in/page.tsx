@@ -25,6 +25,7 @@ const AdminSignIn = () => {
   useEffect(() => {
     // Clear local storage on component mount
     localStorage.removeItem("authToken");
+    localStorage.removeItem("refreshToken");
     localStorage.removeItem("user");
   }, []);
 
@@ -46,6 +47,7 @@ const AdminSignIn = () => {
         const user = response.data.user;
         if (user && user.role === "SUPER_ADMIN") {
           localStorage.setItem("authToken", response.data.access);
+          localStorage.setItem("refreshToken", response.data.refresh);
           localStorage.setItem("user", JSON.stringify(user));
           router.push("/admin/dashboard");
         } else {

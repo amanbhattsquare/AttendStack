@@ -11,6 +11,16 @@ const authHeaders = () => {
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
+const clearSessionAndGoHome = () => {
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem('authToken');
+  localStorage.removeItem('refreshToken');
+  localStorage.removeItem('user');
+  if (window.location.pathname !== '/') {
+    window.location.assign('/');
+  }
+};
+
 const apiClient = axios.create({
   baseURL: API_URL,
   headers: {
@@ -30,6 +40,16 @@ apiClient.interceptors.request.use((config) => {
   }
   return config;
 });
+
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error?.response?.status === 401) {
+      clearSessionAndGoHome();
+    }
+    return Promise.reject(error);
+  }
+);
 
 export const get = async (url: string, params = {}) => {
   try {

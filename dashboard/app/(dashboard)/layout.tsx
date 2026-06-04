@@ -11,6 +11,25 @@ interface DashboardProps {
   children: React.ReactNode;
 }
 
+const HOME_ROUTE = "/";
+
+const clearSession = () => {
+  localStorage.removeItem("authToken");
+  localStorage.removeItem("refreshToken");
+  localStorage.removeItem("user");
+};
+
+const getTokenExpiryMs = (token: string) => {
+  try {
+    const [, payload] = token.split(".");
+    if (!payload) return null;
+    const decoded = JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/")));
+    return typeof decoded.exp === "number" ? decoded.exp * 1000 : null;
+  } catch {
+    return null;
+  }
+};
+
 const DashboardLayout: React.FC<DashboardProps> = ({ children }) => {
   const pathname = usePathname();
   const router = useRouter();
@@ -25,6 +44,21 @@ const DashboardLayout: React.FC<DashboardProps> = ({ children }) => {
       return;
     }
 
+    const expiresAt = getTokenExpiryMs(token);
+    if (expiresAt && expiresAt <= Date.now()) {
+      clearSession();
+      router.replace(HOME_ROUTE);
+      return;
+    }
+
+    let expiryTimer: number | undefined;
+    if (expiresAt) {
+      expiryTimer = window.setTimeout(() => {
+        clearSession();
+        router.replace(HOME_ROUTE);
+      }, Math.max(expiresAt - Date.now(), 0));
+    }
+
     try {
       const user = JSON.parse(storedUser);
       if (user?.role === "EMPLOYEE" && !pathname.startsWith("/employee-dashboard")) {
@@ -35,9 +69,16 @@ const DashboardLayout: React.FC<DashboardProps> = ({ children }) => {
       }
     } catch {
       localStorage.removeItem("authToken");
+      localStorage.removeItem("refreshToken");
       localStorage.removeItem("user");
       router.replace("/sign-in");
     }
+
+    return () => {
+      if (expiryTimer) {
+        window.clearTimeout(expiryTimer);
+      }
+    };
   }, [pathname, router]);
 
   return (

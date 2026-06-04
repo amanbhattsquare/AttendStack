@@ -75,6 +75,7 @@ const UserMenu = () => {
   const handleLogout = (e: React.MouseEvent) => {
     e.preventDefault();
     localStorage.removeItem("authToken");
+    localStorage.removeItem("refreshToken");
     localStorage.removeItem("user");
     window.location.href = "/sign-in";
   };

@@ -199,6 +199,7 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
         """
         Shared validator for both check-in and check-out.
         Enforces IP restriction (with full CIDR support) and geofencing.
+        When both are enabled, either a whitelisted IP or a valid location is accepted.
         Returns a dict of location data captured (may be empty if restrictions are off).
         Raises ValidationError with a clear, user-friendly message on any violation.
         """
@@ -214,9 +215,10 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
         on_office_network = False
         if allowed_ranges.strip():
             on_office_network = ip_is_allowed(client_ip, allowed_ranges)
+        ip_restriction_required = settings.ip_restriction_enabled and not settings.geofencing_enabled
 
         # ―――――――――― IP Restriction ――――――――――
-        if settings.ip_restriction_enabled:
+        if ip_restriction_required:
             if not allowed_ranges.strip():
                 raise ValidationError({
                     "detail": (
@@ -239,7 +241,7 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
         if settings.geofencing_enabled:
             # If the user is connected to the office network (whitelisted IP),
             # we automatically bypass geofence restriction since they are physically in the office.
-            if on_office_network:
+            if settings.ip_restriction_enabled and on_office_network:
                 raw_lat = request.data.get("latitude")
                 raw_lon = request.data.get("longitude")
                 if raw_lat is not None and raw_lon is not None:
@@ -250,7 +252,7 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
                         pass
                 return location_data
 
-            if not settings.office_latitude or not settings.office_longitude:
+            if settings.office_latitude is None or settings.office_longitude is None:
                 raise ValidationError({
                     "detail": (
                         "Geofencing is enabled but office coordinates are not set. "

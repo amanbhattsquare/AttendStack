@@ -1,9 +1,12 @@
 "use client";
 
 import { Fragment, useState, useEffect } from "react";
-import { IconDownload, IconSearch, IconPlus, IconPencil, IconCheck, IconPrinter, IconInfoCircle } from "@tabler/icons-react";
+import { IconDownload, IconSearch, IconPlus, IconPencil, IconCheck, IconInfoCircle } from "@tabler/icons-react";
 import { Spinner, Alert, Modal, Button, Form, Badge, Table } from "react-bootstrap";
 import Swal from "sweetalert2";
+import PayslipPreview from "components/payroll/PayslipPreview";
+import { downloadPayslipPdf } from "components/payroll/payslipPdf";
+import { useBranding } from "context/BrandingContext";
 
 const BASE_URL = `${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/payroll/`;
 
@@ -17,9 +20,6 @@ const authHeaders = (): HeadersInit => {
 
 const formatCurrency = (val: number | string) =>
   new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(Number(val));
-
-const formatDays = (val: number | string | undefined) =>
-  Number(val || 0).toLocaleString("en-IN", { maximumFractionDigits: 1 });
 
 const monthsList = [
   { value: 1, label: "January" },
@@ -37,6 +37,7 @@ const monthsList = [
 ];
 
 const SalaryPage = () => {
+  const { companyLogo, companyName } = useBranding();
   const [payrolls, setPayrolls] = useState<any[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -256,9 +257,9 @@ const SalaryPage = () => {
     }
   };
 
-  // Payslip Print
-  const handlePrint = () => {
-    window.print();
+  const handleDownloadPdf = async () => {
+    if (!payslipData) return;
+    await downloadPayslipPdf(payslipData, { companyLogo, companyName });
   };
 
   return (
@@ -580,132 +581,23 @@ const SalaryPage = () => {
       </Modal>
 
       {/* Printable Payslip Modal */}
-      <Modal show={showPayslipModal} onHide={() => setShowPayslipModal(false)} size="lg" centered>
-        <Modal.Header closeButton>
-          <Modal.Title className="fw-bold">Payslip Preview</Modal.Title>
+      <Modal show={showPayslipModal} onHide={() => setShowPayslipModal(false)} size="xl" centered>
+        <Modal.Header closeButton className="border-0 pb-0">
+          <Modal.Title className="fw-bold fs-6">
+            {payslipData?.employee_details?.full_name
+              ? `Payslip - ${payslipData.employee_details.full_name} - ${payslipData.month_name || payslipData.month} ${payslipData.year}`
+              : "Payslip Preview"}
+          </Modal.Title>
         </Modal.Header>
-        <Modal.Body>
-          {payslipData && (
-            <div className="p-4" id="payslip-print-area" style={{ background: "#fff", color: "#333", fontFamily: "sans-serif" }}>
-              {/* Header */}
-              <div className="d-flex justify-content-between align-items-center border-bottom pb-4 mb-4">
-                <div>
-                  <h3 className="fw-bold mb-0 text-primary">AttendStack</h3>
-                  <small className="text-muted">Enterprise Workforce Management Systems</small>
-                </div>
-                <div className="text-end">
-                  <h5 className="mb-0 fw-bold">PAY SLIP</h5>
-                  <small className="text-secondary">
-                    Period: {payslipData.month_name} {payslipData.year}
-                  </small>
-                </div>
-              </div>
-
-              {/* Employee Info */}
-              <div className="row mb-5 g-4">
-                <div className="col-md-6">
-                  <span className="text-uppercase text-muted d-block small fw-semibold">Employee Details</span>
-                  <strong className="fs-4 text-dark">{payslipData.employee_details.full_name}</strong>
-                  <div className="mt-2 text-secondary">
-                    <div><strong>ID:</strong> {payslipData.employee_details.employee_id}</div>
-                    <div><strong>Email:</strong> {payslipData.employee_details.email}</div>
-                  </div>
-                </div>
-                <div className="col-md-6 text-md-end">
-                  <span className="text-uppercase text-muted d-block small fw-semibold">Job Details</span>
-                  <div className="mt-2 text-secondary">
-                    <div><strong>Department:</strong> {payslipData.employee_details.department}</div>
-                    <div><strong>Designation:</strong> {payslipData.employee_details.designation}</div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="border rounded mb-4 overflow-hidden">
-                <table className="table mb-0 align-middle">
-                  <thead className="table-light">
-                    <tr>
-                      <th>Present</th>
-                      <th>Half Day</th>
-                      <th>Leave</th>
-                      <th>Paid Leave</th>
-                      <th>Holiday</th>
-                      <th>Sunday Unpaid</th>
-                      <th className="text-end">Unpaid Days</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      <td>{payslipData.attendance_summary?.present ?? 0}</td>
-                      <td>{payslipData.attendance_summary?.half_day ?? 0}</td>
-                      <td>{payslipData.attendance_summary?.leave ?? 0}</td>
-                      <td>{payslipData.attendance_summary?.paid_leave ?? 0}</td>
-                      <td>{payslipData.attendance_summary?.holiday ?? 0}</td>
-                      <td>{payslipData.attendance_summary?.sunday_unpaid ?? 0}</td>
-                      <td className="text-end text-danger fw-semibold">{formatDays(payslipData.attendance_summary?.unpaid_days)}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Salary Breakdown table */}
-              <div className="border rounded mb-4 overflow-hidden">
-                <table className="table mb-0 align-middle">
-                  <thead className="table-light">
-                    <tr>
-                      <th className="py-3">Salary Component</th>
-                      <th className="text-end py-3">Type</th>
-                      <th className="text-end py-3">Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      <td className="py-3">Monthly Salary</td>
-                      <td className="text-end text-success py-3">Earnings</td>
-                      <td className="text-end py-3">{formatCurrency(payslipData.basic_salary)}</td>
-                    </tr>
-                    <tr>
-                      <td className="py-3">Allowances & Incentives</td>
-                      <td className="text-end text-success py-3">Earnings</td>
-                      <td className="text-end py-3">{formatCurrency(payslipData.allowances)}</td>
-                    </tr>
-                    <tr className="border-bottom">
-                      <td className="py-3">Attendance Deductions</td>
-                      <td className="text-end text-danger py-3">Deductions</td>
-                      <td className="text-end text-danger py-3">-{formatCurrency(payslipData.deductions)}</td>
-                    </tr>
-                    <tr className="table-light fw-bold fs-5 border-top">
-                      <td className="py-3 text-dark">Payable Salary</td>
-                      <td className="text-end text-muted py-3">Total Payout</td>
-                      <td className="text-end text-success py-3">{formatCurrency(payslipData.payable_salary ?? payslipData.net_salary)}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Status footer bar */}
-              <div className="d-flex justify-content-between align-items-center border-top pt-4 mt-5">
-                <div>
-                  <span className="small text-muted d-block">Payout Status</span>
-                  <strong className={payslipData.status === "PAID" ? "text-success" : "text-warning"}>
-                    {payslipData.status}
-                  </strong>
-                </div>
-                {payslipData.paid_on && (
-                  <div className="text-end">
-                    <span className="small text-muted d-block">Processed On</span>
-                    <strong>{new Intl.DateTimeFormat("en-IN", { dateStyle: "medium" }).format(new Date(payslipData.paid_on))}</strong>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
+        <Modal.Body className="p-3" style={{ background: "#f1f5f9" }}>
+          {payslipData && <PayslipPreview payroll={payslipData} />}
         </Modal.Body>
-        <Modal.Footer>
+        <Modal.Footer className="border-top">
           <Button variant="outline-secondary" onClick={() => setShowPayslipModal(false)}>
             Close
           </Button>
-          <Button variant="primary" onClick={handlePrint} className="d-flex align-items-center gap-2">
-            <IconPrinter size={18} /> Print Payslip
+          <Button variant="outline-dark" onClick={handleDownloadPdf} className="d-flex align-items-center gap-2">
+            <IconDownload size={16} /> Download PDF
           </Button>
         </Modal.Footer>
       </Modal>
@@ -764,45 +656,6 @@ const SalaryPage = () => {
           </Button>
         </Modal.Footer>
       </Modal>
-
-      <style>{`
-        @media print {
-          body * {
-            visibility: hidden !important;
-          }
-          #payslip-print-area, #payslip-print-area * {
-            visibility: visible !important;
-          }
-          #payslip-print-area {
-            position: absolute !important;
-            left: 0 !important;
-            top: 0 !important;
-            width: 100% !important;
-            margin: 0 !important;
-            padding: 0 !important;
-          }
-          .modal-header, .modal-footer, .btn-close {
-            display: none !important;
-          }
-          .modal-content {
-            border: none !important;
-            background: transparent !important;
-            box-shadow: none !important;
-          }
-          .modal-dialog {
-            max-width: 100% !important;
-            margin: 0 !important;
-          }
-          .modal {
-            position: absolute !important;
-            overflow: visible !important;
-            display: block !important;
-          }
-          .modal-backdrop {
-            display: none !important;
-          }
-        }
-      `}</style>
     </Fragment>
   );
 };

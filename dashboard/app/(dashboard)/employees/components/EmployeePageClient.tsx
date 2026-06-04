@@ -13,10 +13,13 @@ import {
   IconRefresh,
   IconSearch,
   IconTrash,
+  IconUserCheck,
 } from "@tabler/icons-react";
 import { Alert, Button, Dropdown, Form, Modal } from "react-bootstrap";
 import Link from "next/link";
 import EmployeeFormWizard, { EmployeeFormData } from "./EmployeeFormWizard";
+
+type EmployeeStatus = "ACTIVE" | "INACTIVE" | "ON_LEAVE" | "TERMINATED";
 
 type Employee = {
   id: string;
@@ -28,7 +31,7 @@ type Employee = {
   designation: string;
   joining_date: string;
   account_exists: boolean;
-  status: "ACTIVE" | "INACTIVE" | "ON_LEAVE" | "TERMINATED";
+  status: EmployeeStatus;
   status_label: string;
 };
 
@@ -53,6 +56,43 @@ const statusBadgeClass: Record<Employee["status"], string> = {
   ON_LEAVE: "bg-warning-subtle text-warning",
   TERMINATED: "bg-danger-subtle text-danger",
 };
+
+const employeeStatusOptions: Array<{
+  value: EmployeeStatus;
+  label: string;
+  description: string;
+  keepsLoginActive: boolean;
+}> = [
+  {
+    value: "ACTIVE",
+    label: "Active",
+    description: "Employee is currently working and can access the employee portal.",
+    keepsLoginActive: true,
+  },
+  {
+    value: "ON_LEAVE",
+    label: "On Leave",
+    description: "Employee is temporarily away but remains part of active payroll and access.",
+    keepsLoginActive: true,
+  },
+  {
+    value: "INACTIVE",
+    label: "Inactive",
+    description: "Employee is not currently active. Login access will be disabled.",
+    keepsLoginActive: false,
+  },
+  {
+    value: "TERMINATED",
+    label: "Terminated",
+    description: "Employment has ended. Login access will be disabled immediately.",
+    keepsLoginActive: false,
+  },
+];
+
+const statusLabelByValue = employeeStatusOptions.reduce((labels, option) => {
+  labels[option.value] = option.label;
+  return labels;
+}, {} as Record<EmployeeStatus, string>);
 
 const formatDate = (value: string) => {
   if (!value) return "-";
@@ -101,6 +141,8 @@ const EmployeePageClient = () => {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [statusEmployee, setStatusEmployee] = useState<Employee | null>(null);
+  const [selectedStatus, setSelectedStatus] = useState<EmployeeStatus>("ACTIVE");
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Partial<EmployeeFormData> | null>(null);
   const [isEditModalLoading, setIsEditModalLoading] = useState(false);
@@ -235,6 +277,17 @@ const EmployeePageClient = () => {
     setShowPassword(false);
   };
 
+  const openStatusModal = (employee: Employee) => {
+    setStatusEmployee(employee);
+    setSelectedStatus(employee.status);
+  };
+
+  const closeStatusModal = () => {
+    if (actionLoadingKey?.endsWith(":status")) return;
+    setStatusEmployee(null);
+    setSelectedStatus("ACTIVE");
+  };
+
   const closePasswordModal = () => {
     setPasswordEmployee(null);
     setNewPassword("");
@@ -326,6 +379,54 @@ const EmployeePageClient = () => {
     }
   };
 
+  const handleStatusAction = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!statusEmployee || selectedStatus === statusEmployee.status) return;
+
+    try {
+      setError("");
+      setSuccessMessage("");
+      setActionLoadingKey(`${statusEmployee.id}:status`);
+
+      const token = localStorage.getItem("authToken");
+      const response = await fetch(`${API_URL}${statusEmployee.id}/status/`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ status: selectedStatus }),
+      });
+
+      if (!response.ok) {
+        throw new Error(await parseApiError(response));
+      }
+
+      const updatedEmployee = (await response.json()) as Employee;
+      setEmployees((prev) =>
+        prev.map((item) => (item.id === updatedEmployee.id ? { ...item, ...updatedEmployee } : item))
+      );
+      setStatusEmployee(null);
+
+      Swal.fire({
+        title: "Status Updated",
+        text: `${updatedEmployee.full_name} is now ${updatedEmployee.status_label}.`,
+        icon: "success",
+        timer: 1800,
+        showConfirmButton: false,
+      });
+    } catch (statusError) {
+      Swal.fire({
+        title: "Status Update Failed",
+        text: statusError instanceof Error ? statusError.message : "Unable to update employee status.",
+        icon: "error",
+        confirmButtonColor: "#dc3545",
+      });
+    } finally {
+      setActionLoadingKey(null);
+    }
+  };
+
 
 
   const handleUpdate = async (formData: EmployeeFormData) => {
@@ -381,6 +482,8 @@ const EmployeePageClient = () => {
   }, [employees, searchQuery, departmentFilter, statusFilter]);
 
   const uniqueDepartments = [...new Set(employees.map((employee) => employee.department).filter(Boolean))];
+  const selectedStatusOption = employeeStatusOptions.find((option) => option.value === selectedStatus);
+  const canManagePassword = (employee: Employee) => employee.status === "ACTIVE" || employee.status === "ON_LEAVE";
 
   return (
     <Fragment>
@@ -510,16 +613,19 @@ const EmployeePageClient = () => {
                           <Dropdown.Item onClick={() => handleEdit(employee)} className="d-flex align-items-center gap-2">
                             <IconEdit size={16} /> Edit Employee
                           </Dropdown.Item>
+                          <Dropdown.Item onClick={() => openStatusModal(employee)} className="d-flex align-items-center gap-2">
+                            <IconUserCheck size={16} /> Change Status
+                          </Dropdown.Item>
                           <Dropdown.Divider />
                           <Dropdown.Item
-                            disabled={employee.account_exists || actionLoadingKey === `${employee.id}:create-password`}
+                            disabled={employee.account_exists || !canManagePassword(employee) || actionLoadingKey === `${employee.id}:create-password`}
                             onClick={() => openPasswordModal(employee, "create-password")}
                             className="d-flex align-items-center gap-2"
                           >
                             <IconKey size={16} /> {actionLoadingKey === `${employee.id}:create-password` ? "Creating..." : "Create Password"}
                           </Dropdown.Item>
                           <Dropdown.Item
-                            disabled={!employee.account_exists || actionLoadingKey === `${employee.id}:reset-password`}
+                            disabled={!employee.account_exists || !canManagePassword(employee) || actionLoadingKey === `${employee.id}:reset-password`}
                             onClick={() => openPasswordModal(employee, "reset-password")}
                             className="d-flex align-items-center gap-2"
                           >
@@ -607,6 +713,81 @@ const EmployeePageClient = () => {
         </Form>
       </Modal>
 
+      <Modal show={Boolean(statusEmployee)} onHide={closeStatusModal} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>Change Employee Status</Modal.Title>
+        </Modal.Header>
+        <Form onSubmit={handleStatusAction}>
+          <Modal.Body>
+            <div className="employee-status-summary mb-4">
+              <div className="d-flex align-items-center gap-3">
+                <img
+                  src={statusEmployee?.profile_photo_url || "/images/avatar/avatar-fallback.jpg"}
+                  alt={statusEmployee?.full_name || "Employee"}
+                  className="avatar avatar-sm rounded-circle"
+                />
+                <div className="min-w-0">
+                  <div className="fw-semibold">{statusEmployee?.full_name}</div>
+                  <div className="text-muted small">{statusEmployee?.employee_id} - {statusEmployee?.email}</div>
+                </div>
+              </div>
+              {statusEmployee && (
+                <span className={`badge ${statusBadgeClass[statusEmployee.status] || "bg-secondary-subtle text-secondary"}`}>
+                  Current: {statusEmployee.status_label}
+                </span>
+              )}
+            </div>
+
+            <Form.Group className="mb-4" controlId="employeeStatus">
+              <Form.Label className="fw-semibold">New Status</Form.Label>
+              <div className="employee-status-options">
+                {employeeStatusOptions.map((option) => (
+                  <label
+                    key={option.value}
+                    className={`employee-status-option ${selectedStatus === option.value ? "is-selected" : ""}`}
+                  >
+                    <Form.Check
+                      type="radio"
+                      name="employeeStatus"
+                      value={option.value}
+                      checked={selectedStatus === option.value}
+                      onChange={(event) => setSelectedStatus(event.target.value as EmployeeStatus)}
+                    />
+                    <span>
+                      <span className="d-flex align-items-center justify-content-between gap-3">
+                        <span className="fw-semibold">{option.label}</span>
+                        <span className={`badge ${statusBadgeClass[option.value]}`}>{option.label}</span>
+                      </span>
+                      <span className="d-block text-muted small mt-1">{option.description}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </Form.Group>
+
+            <Alert variant={selectedStatusOption?.keepsLoginActive ? "info" : "warning"} className="mb-0">
+              {selectedStatusOption?.keepsLoginActive
+                ? "The employee login remains available when an account exists."
+                : "The linked employee login will be disabled when this status is saved."}
+            </Alert>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button variant="outline-secondary" onClick={closeStatusModal} disabled={actionLoadingKey === `${statusEmployee?.id}:status`}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              type="submit"
+              disabled={!statusEmployee || selectedStatus === statusEmployee.status || actionLoadingKey === `${statusEmployee?.id}:status`}
+            >
+              {actionLoadingKey === `${statusEmployee?.id}:status`
+                ? "Updating..."
+                : `Set ${statusLabelByValue[selectedStatus]}`}
+            </Button>
+          </Modal.Footer>
+        </Form>
+      </Modal>
+
 
 
       <Modal show={isEditModalOpen} onHide={() => setIsEditModalOpen(false)} centered size="lg">
@@ -678,6 +859,58 @@ const EmployeePageClient = () => {
         .employee-action-menu .dropdown-item:active {
           background-color: #e9f7f1;
           color: #0f172a;
+        }
+
+        .employee-status-summary {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 16px;
+          padding: 14px;
+          border: 1px solid #e5eaf0;
+          border-radius: 8px;
+          background: #f8fafc;
+        }
+
+        .employee-status-options {
+          display: grid;
+          gap: 10px;
+        }
+
+        .employee-status-option {
+          display: grid;
+          grid-template-columns: 22px 1fr;
+          gap: 10px;
+          padding: 12px;
+          border: 1px solid #e5eaf0;
+          border-radius: 8px;
+          background: #fff;
+          cursor: pointer;
+          transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+        }
+
+        .employee-status-option:hover {
+          border-color: #b7c8da;
+          background: #fbfdff;
+        }
+
+        .employee-status-option.is-selected {
+          border-color: #0d6efd;
+          box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.12);
+        }
+
+        .employee-status-option .form-check {
+          min-height: 0;
+          margin: 2px 0 0;
+          padding-left: 0;
+        }
+
+        .employee-status-option .form-check-input {
+          margin-left: 0;
+        }
+
+        .min-w-0 {
+          min-width: 0;
         }
 
         @media (max-width: 991.98px) {

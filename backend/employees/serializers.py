@@ -1,7 +1,8 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 
-from .models import Employee
+from accounts.models import UserRole
+from .models import Employee, EmployeeStatus
 
 User = get_user_model()
 
@@ -29,6 +30,7 @@ class EmployeeProfileSerializer(serializers.ModelSerializer):
 
 class EmployeeListSerializer(serializers.ModelSerializer):
     profile_photo_url = serializers.SerializerMethodField()
+    account_exists = serializers.SerializerMethodField()
     status_label = serializers.CharField(source="get_status_display", read_only=True)
 
     class Meta:
@@ -41,6 +43,7 @@ class EmployeeListSerializer(serializers.ModelSerializer):
             "department",
             "designation",
             "profile_photo_url",
+            "account_exists",
             "status",
             "status_label",
             "annual_salary",
@@ -52,6 +55,16 @@ class EmployeeListSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         url = obj.profile_photo.url
         return request.build_absolute_uri(url) if request else url
+
+    def get_account_exists(self, obj):
+        annotated_value = getattr(obj, "account_exists_annotation", None)
+        if annotated_value is not None:
+            return bool(annotated_value)
+        return User.objects.filter(email__iexact=obj.email, role=UserRole.EMPLOYEE).exists()
+
+
+class EmployeeStatusUpdateSerializer(serializers.Serializer):
+    status = serializers.ChoiceField(choices=EmployeeStatus.choices)
 
 
 class EmployeeSerializer(serializers.ModelSerializer):
@@ -127,7 +140,7 @@ class EmployeeSerializer(serializers.ModelSerializer):
         annotated_value = getattr(obj, "account_exists_annotation", None)
         if annotated_value is not None:
             return bool(annotated_value)
-        return User.objects.filter(email__iexact=obj.email).exists()
+        return User.objects.filter(email__iexact=obj.email, role=UserRole.EMPLOYEE).exists()
 
     def _absolute_file_url(self, file_field):
         if not file_field:

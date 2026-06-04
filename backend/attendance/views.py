@@ -483,7 +483,18 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
 class LeaveRequestViewSet(viewsets.ModelViewSet):
     queryset = LeaveRequest.objects.select_related("employee").all()
     serializer_class = LeaveRequestSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminOrHR]
+    pagination_class = StandardResultsSetPagination
+
+    @action(detail=False, methods=["get"], url_path="types")
+    def get_leave_types(self, request):
+        """
+        Returns a list of all available leave types.
+        """
+        return Response([
+            {"value": choice[0], "label": choice[1]}
+            for choice in LeaveType.choices
+        ])
 
     def get_queryset(self):
         queryset = super().get_queryset()

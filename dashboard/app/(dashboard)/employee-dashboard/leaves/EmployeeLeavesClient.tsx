@@ -38,6 +38,7 @@ const EmployeeLeavesClient = () => {
   const [leaveType, setLeaveType] = useState("CASUAL");
   const [reason, setReason] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [leaveTypes, setLeaveTypes] = useState<{ value: string; label: string }[]>([]);
 
   const fetchLeaves = async () => {
     setIsLoading(true);
@@ -65,8 +66,28 @@ const EmployeeLeavesClient = () => {
     }
   };
 
+  const fetchLeaveTypes = async () => {
+    const token = localStorage.getItem("authToken");
+    if (!token) return;
+
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/attendance/leaves/types/`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setLeaveTypes(data);
+      } else {
+        console.error("Failed to fetch leave types:", res.statusText);
+      }
+    } catch (err) {
+      console.error("Error fetching leave types:", err);
+    }
+  };
+
   useEffect(() => {
     fetchLeaves();
+    fetchLeaveTypes();
   }, []);
 
   const resetFormAndCloseModal = () => {
@@ -464,16 +485,13 @@ const EmployeeLeavesClient = () => {
                     onChange={(e) => setLeaveType(e.target.value)}
                     className="form-control rounded-3 p-2.5"
                   >
-                    <option value="CASUAL">Casual Leave</option>
-                    <option value="SICK">Sick / Medical Leave</option>
-                    <option value="ANNUAL">Annual Leave</option>
-                    <option value="MATERNITY">Maternity Leave</option>
-                    <option value="PATERNITY">Paternity Leave</option>
-                    <option value="BEREAVEMENT">Bereavement Leave</option>
-                    <option value="MARRIAGE">Marriage Leave</option>
-                    <option value="STUDY">Study Leave</option>
-                    <option value="OTHER">Other / Unpaid</option>
-                  </Form.Select>
+                    {leaveTypes.map((type) => (
+                      <option key={type.value} value={type.value}>
+                        {type.label}
+                      </option>
+                    ))}
+                    </Form.Select>
+
                 </Form.Group>
               </Col>
               <Col xs={12} md={6}>

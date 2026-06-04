@@ -6,13 +6,23 @@ from rest_framework.response import Response
 from rest_framework.exceptions import NotFound
 
 from accounts.permissions import IsAdminOrHR
+from accounts.models import UserRole
 from django.contrib.auth import get_user_model
 from django.db.models import Exists, OuterRef
 
 from organizations.models import Organization
 from .models import Employee
-from .serializers import EmployeeSerializer, EmployeeProfileSerializer, EmployeeListSerializer
-from .services import create_employee_user, reset_employee_user_password
+from .serializers import (
+    EmployeeListSerializer,
+    EmployeeProfileSerializer,
+    EmployeeSerializer,
+    EmployeeStatusUpdateSerializer,
+)
+from .services import (
+    create_employee_user,
+    reset_employee_user_password,
+    sync_employee_user_access,
+)
 
 User = get_user_model()
 
@@ -45,7 +55,7 @@ class EmployeeViewSet(viewsets.ModelViewSet):
 
         queryset = queryset.annotate(
             account_exists_annotation=Exists(
-                User.objects.filter(email__iexact=OuterRef("email"))
+                User.objects.filter(email__iexact=OuterRef("email"), role=UserRole.EMPLOYEE)
             )
         )
         department = self.request.query_params.get("department")
@@ -166,3 +176,16 @@ class EmployeeViewSet(viewsets.ModelViewSet):
                 "temporary_password": employee_password,
             }
         )
+
+    @action(detail=True, methods=["patch"], url_path="status")
+    def update_status(self, request, pk=None):
+        employee = self.get_object()
+        serializer = EmployeeStatusUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        employee.status = serializer.validated_data["status"]
+        employee.save(update_fields=["status", "updated_at"])
+        sync_employee_user_access(employee)
+
+        response_serializer = EmployeeListSerializer(employee, context={"request": request})
+        return Response(response_serializer.data)

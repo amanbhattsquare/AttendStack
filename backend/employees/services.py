@@ -8,9 +8,31 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError, transaction
 from rest_framework.exceptions import ValidationError
 
-from .models import Employee
+from .models import Employee, EmployeeStatus
 
 User = get_user_model()
+
+
+LOGIN_ENABLED_STATUSES = {
+    EmployeeStatus.ACTIVE,
+    EmployeeStatus.ON_LEAVE,
+}
+
+
+def employee_allows_login(employee: Employee):
+    return employee.status in LOGIN_ENABLED_STATUSES
+
+
+def sync_employee_user_access(employee: Employee):
+    user = User.objects.filter(email__iexact=employee.email, role=UserRole.EMPLOYEE).first()
+    if user is None:
+        return None
+
+    should_be_active = employee_allows_login(employee)
+    if user.is_active != should_be_active:
+        user.is_active = should_be_active
+        user.save(update_fields=["is_active"])
+    return user
 
 
 def generate_temporary_password(length=14):
@@ -45,6 +67,9 @@ def resolve_employee_password(password=None):
 
 
 def create_employee_user(employee: Employee, password=None):
+    if not employee_allows_login(employee):
+        raise ValidationError({"detail": "Login access can only be created for active or on-leave employees."})
+
     if User.objects.filter(email__iexact=employee.email).exists():
         raise ValidationError({"detail": "A login account already exists for this employee."})
 
@@ -72,13 +97,16 @@ def create_employee_user(employee: Employee, password=None):
 
 
 def reset_employee_user_password(employee: Employee, password=None):
+    if not employee_allows_login(employee):
+        raise ValidationError({"detail": "Reactivate the employee before resetting login access."})
+
     try:
-        user = User.objects.get(email__iexact=employee.email)
+        user = User.objects.get(email__iexact=employee.email, role=UserRole.EMPLOYEE)
     except User.DoesNotExist as exc:
         raise ValidationError({"detail": "No login account exists for this employee. Create a password first."}) from exc
 
     employee_password = resolve_employee_password(password)
     user.set_password(employee_password)
-    user.is_active = True
+    user.is_active = employee_allows_login(employee)
     user.save(update_fields=["password", "is_active"])
     return user, employee_password

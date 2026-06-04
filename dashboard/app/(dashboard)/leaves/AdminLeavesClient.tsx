@@ -14,6 +14,7 @@ interface LeaveRequest {
   employee_email: string;
   employee_department: string;
   employee_designation: string;
+  employee_avatar_url: string;
   start_date: string;
   end_date: string;
   leave_type: string;
@@ -342,7 +343,7 @@ const AdminLeavesClient = () => {
                           <div className="d-flex align-items-center gap-2.5">
                             <Avatar
                               type="image"
-                              src={getAssetPath("/images/avatar/avatar-fallback.jpg")}
+                              src={leave.employee_avatar_url || getAssetPath("/images/avatar/avatar-fallback.jpg")}
                               size="md"
                               className="rounded-circle border"
                             />
@@ -426,7 +427,7 @@ const AdminLeavesClient = () => {
               <div className="d-flex align-items-center gap-3 bg-light p-3 rounded-4 mb-4 border">
                 <Avatar
                   type="image"
-                  src={getAssetPath("/images/avatar/avatar-fallback.jpg")}
+                  src={selectedLeave.employee_avatar_url || getAssetPath("/images/avatar/avatar-fallback.jpg")}
                   size="lg"
                   className="rounded-circle border border-2 border-white shadow-sm"
                 />

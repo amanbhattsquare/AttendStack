@@ -188,8 +188,16 @@ class LeaveRequestSerializer(serializers.ModelSerializer):
     employee_email = serializers.EmailField(source="employee.email", read_only=True)
     employee_department = serializers.CharField(source="employee.department", read_only=True)
     employee_designation = serializers.CharField(source="employee.designation", read_only=True)
+    employee_avatar_url = serializers.SerializerMethodField()
     leave_type_label = serializers.CharField(source="get_leave_type_display", read_only=True)
     status_label = serializers.CharField(source="get_status_display", read_only=True)
+
+    def get_employee_avatar_url(self, obj):
+        if not obj.employee.profile_photo:
+            return None
+        request = self.context.get("request")
+        url = obj.employee.profile_photo.url
+        return request.build_absolute_uri(url) if request else url
 
     class Meta:
         model = LeaveRequest
@@ -202,6 +210,7 @@ class LeaveRequestSerializer(serializers.ModelSerializer):
             "employee_email",
             "employee_department",
             "employee_designation",
+            "employee_avatar_url",
             "start_date",
             "end_date",
             "leave_type",

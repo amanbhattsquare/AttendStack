@@ -427,6 +427,29 @@
   text-decoration: none;
 }
 
+.footerCredits {
+  display: flex;
+  align-items: flex-end;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.footerDeveloperCredit {
+  color: rgba(255, 255, 255, 0.16);
+  font-size: 6px;
+  font-weight: 550;
+  letter-spacing: 0.15px;
+}
+
+.footerDeveloperCredit a {
+  color: rgba(120, 219, 176, 0.28);
+  transition: color 180ms ease;
+}
+
+.footerDeveloperCredit a:hover {
+  color: #78dbb0;
+}
+
 .footerTrust {
   display: flex;
   align-items: center;
@@ -521,6 +544,10 @@
   .footerBottom {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .footerCredits {
+    align-items: flex-start;
   }
 }
 

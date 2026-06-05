@@ -61,31 +61,26 @@ const employeeStatusOptions: Array<{
   value: EmployeeStatus;
   label: string;
   description: string;
-  keepsLoginActive: boolean;
 }> = [
   {
     value: "ACTIVE",
     label: "Active",
     description: "Employee is currently working and can access the employee portal.",
-    keepsLoginActive: true,
   },
   {
     value: "ON_LEAVE",
     label: "On Leave",
-    description: "Employee is temporarily away but remains part of active payroll and access.",
-    keepsLoginActive: true,
+    description: "Employee is temporarily away. Their employee portal access remains available.",
   },
   {
     value: "INACTIVE",
     label: "Inactive",
-    description: "Employee is not currently active. Login access will be disabled.",
-    keepsLoginActive: false,
+    description: "Employee is not currently active. Their account and login remain available.",
   },
   {
     value: "TERMINATED",
     label: "Terminated",
-    description: "Employment has ended. Login access will be disabled immediately.",
-    keepsLoginActive: false,
+    description: "Employment has ended. Login remains available until the employee is deleted.",
   },
 ];
 
@@ -218,7 +213,7 @@ const EmployeePageClient = () => {
   const handleDelete = async (employeeId: string) => {
     const result = await Swal.fire({
       title: "Delete Employee?",
-      text: "Are you sure you want to permanently delete this employee record?",
+      text: "This permanently deletes the employee record and their linked login account. They will no longer be able to sign in.",
       icon: "warning",
       showCancelButton: true,
       confirmButtonColor: "#dc3545",
@@ -245,7 +240,7 @@ const EmployeePageClient = () => {
       setEmployees((prev) => prev.filter((employee) => employee.id !== employeeId));
       Swal.fire({
         title: "Deleted!",
-        text: "Employee deleted successfully.",
+        text: "Employee and linked login account deleted successfully.",
         icon: "success",
         timer: 1500,
         showConfirmButton: false,
@@ -452,9 +447,6 @@ const EmployeePageClient = () => {
   }, [employees, searchQuery, departmentFilter, statusFilter]);
 
   const uniqueDepartments = [...new Set(employees.map((employee) => employee.department).filter(Boolean))];
-  const selectedStatusOption = employeeStatusOptions.find((option) => option.value === selectedStatus);
-  const canManagePassword = (employee: Employee) => employee.status === "ACTIVE" || employee.status === "ON_LEAVE";
-
   return (
     <Fragment>
       <div className="mb-6 d-flex align-items-center justify-content-between">
@@ -588,14 +580,14 @@ const EmployeePageClient = () => {
                           </Dropdown.Item>
                           <Dropdown.Divider />
                           <Dropdown.Item
-                            disabled={employee.account_exists || !canManagePassword(employee) || actionLoadingKey === `${employee.id}:create-password`}
+                            disabled={employee.account_exists || actionLoadingKey === `${employee.id}:create-password`}
                             onClick={() => openPasswordModal(employee, "create-password")}
                             className="d-flex align-items-center gap-2"
                           >
                             <IconKey size={16} /> {actionLoadingKey === `${employee.id}:create-password` ? "Creating..." : "Create Password"}
                           </Dropdown.Item>
                           <Dropdown.Item
-                            disabled={!employee.account_exists || !canManagePassword(employee) || actionLoadingKey === `${employee.id}:reset-password`}
+                            disabled={!employee.account_exists || actionLoadingKey === `${employee.id}:reset-password`}
                             onClick={() => openPasswordModal(employee, "reset-password")}
                             className="d-flex align-items-center gap-2"
                           >
@@ -735,10 +727,8 @@ const EmployeePageClient = () => {
               </div>
             </Form.Group>
 
-            <Alert variant={selectedStatusOption?.keepsLoginActive ? "info" : "warning"} className="mb-0">
-              {selectedStatusOption?.keepsLoginActive
-                ? "The employee login remains available when an account exists."
-                : "The linked employee login will be disabled when this status is saved."}
+            <Alert variant="info" className="mb-0">
+              Employment status does not affect login access. The linked login account is removed only when the employee record is deleted.
             </Alert>
           </Modal.Body>
           <Modal.Footer>

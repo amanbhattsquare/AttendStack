@@ -4,6 +4,7 @@ Roles: SUPER_ADMIN | HR | EMPLOYEE
 """
 
 import uuid
+from django.conf import settings
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.db import models
 from django.utils import timezone
@@ -100,3 +101,32 @@ class User(AbstractBaseUser, PermissionsMixin):
     @property
     def is_employee(self):
         return self.role == UserRole.EMPLOYEE
+
+
+class PasswordResetOTP(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="password_reset_otps",
+    )
+    otp_hash = models.CharField(max_length=128)
+    expires_at = models.DateTimeField()
+    attempts = models.PositiveSmallIntegerField(default=0)
+    is_used = models.BooleanField(default=False, db_index=True)
+    requested_ip = models.GenericIPAddressField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    used_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["user", "is_used", "created_at"]),
+        ]
+
+    def __str__(self):
+        return f"Password reset request for {self.user.email}"
+
+    @property
+    def is_expired(self):
+        return timezone.now() >= self.expires_at

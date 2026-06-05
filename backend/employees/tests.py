@@ -1,4 +1,4 @@
-from django.contrib.auth import get_user_model
+from django.contrib.auth import authenticate, get_user_model
 from django.test import override_settings
 from rest_framework import status as http_status
 from rest_framework.test import APITestCase
@@ -41,7 +41,30 @@ class EmployeeStatusActionTests(APITestCase):
         )
         self.client.force_authenticate(self.admin_user)
 
-    def test_status_action_updates_employee_and_disables_login(self):
+    def test_status_action_keeps_login_active_for_every_status(self):
+        for employee_status in EmployeeStatus.values:
+            with self.subTest(employee_status=employee_status):
+                response = self.client.patch(
+                    f"/{self.employee.id}/status/",
+                    {"status": employee_status},
+                    format="json",
+                )
+
+                self.assertEqual(response.status_code, http_status.HTTP_200_OK)
+                self.employee.refresh_from_db()
+                self.employee_user.refresh_from_db()
+                self.assertEqual(self.employee.status, employee_status)
+                self.assertTrue(self.employee_user.is_active)
+                self.assertEqual(response.data["status"], employee_status)
+                self.assertEqual(
+                    authenticate(email=self.employee_user.email, password="StrongPass123!"),
+                    self.employee_user,
+                )
+
+    def test_status_action_reactivates_previously_disabled_employee_login(self):
+        self.employee_user.is_active = False
+        self.employee_user.save(update_fields=["is_active"])
+
         response = self.client.patch(
             f"/{self.employee.id}/status/",
             {"status": EmployeeStatus.TERMINATED},
@@ -49,12 +72,8 @@ class EmployeeStatusActionTests(APITestCase):
         )
 
         self.assertEqual(response.status_code, http_status.HTTP_200_OK)
-        self.employee.refresh_from_db()
         self.employee_user.refresh_from_db()
-        self.assertEqual(self.employee.status, EmployeeStatus.TERMINATED)
-        self.assertFalse(self.employee_user.is_active)
-        self.assertEqual(response.data["status"], EmployeeStatus.TERMINATED)
-        self.assertEqual(response.data["status_label"], "Terminated")
+        self.assertTrue(self.employee_user.is_active)
 
     def test_status_action_rejects_invalid_status(self):
         response = self.client.patch(
@@ -96,3 +115,44 @@ class EmployeeStatusActionTests(APITestCase):
         self.employee_user.refresh_from_db()
         self.assertEqual(self.employee.email, "aarav@example.com")
         self.assertEqual(self.employee_user.email, "aarav@example.com")
+
+    def test_password_can_be_reset_for_terminated_employee(self):
+        self.employee.status = EmployeeStatus.TERMINATED
+        self.employee.save(update_fields=["status", "updated_at"])
+
+        response = self.client.post(
+            f"/{self.employee.id}/reset-password/",
+            {"password": "NewStrongPass456!"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, http_status.HTTP_200_OK)
+        self.employee_user.refresh_from_db()
+        self.assertTrue(self.employee_user.is_active)
+        self.assertTrue(self.employee_user.check_password("NewStrongPass456!"))
+
+    def test_login_account_can_be_created_for_terminated_employee(self):
+        self.employee_user.delete()
+        self.employee.status = EmployeeStatus.TERMINATED
+        self.employee.save(update_fields=["status", "updated_at"])
+
+        response = self.client.post(
+            f"/{self.employee.id}/create-password/",
+            {"password": "NewStrongPass456!"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, http_status.HTTP_200_OK)
+        self.assertIsNotNone(
+            authenticate(email=self.employee.email, password="NewStrongPass456!")
+        )
+
+    def test_deleting_employee_also_deletes_linked_login_account(self):
+        employee_email = self.employee_user.email
+        employee_user_id = self.employee_user.id
+
+        response = self.client.delete(f"/{self.employee.id}/")
+
+        self.assertEqual(response.status_code, http_status.HTTP_204_NO_CONTENT)
+        self.assertFalse(User.objects.filter(pk=employee_user_id).exists())
+        self.assertIsNone(authenticate(email=employee_email, password="StrongPass123!"))

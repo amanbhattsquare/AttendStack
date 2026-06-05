@@ -9,6 +9,8 @@ from .views import (
     CreateHRView,
     HealthCheckView,
     LoginView,
+    RequestPasswordResetOTPView,
+    ResetPasswordWithOTPView,
     UserProfileView,
 )
 
@@ -18,6 +20,16 @@ urlpatterns = [
     # Auth
     path("login/", LoginView.as_view(), name="login"),
     path("login/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
+    path(
+        "password-reset/request/",
+        RequestPasswordResetOTPView.as_view(),
+        name="password_reset_request",
+    ),
+    path(
+        "password-reset/confirm/",
+        ResetPasswordWithOTPView.as_view(),
+        name="password_reset_confirm",
+    ),
 
     # Profile
     path("profile/", UserProfileView.as_view(), name="profile"),

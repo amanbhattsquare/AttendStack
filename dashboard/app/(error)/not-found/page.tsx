@@ -1,41 +1,14 @@
 //import node modules libraries
-import { getAssetPath } from "helper/assetPath";
 import { Metadata } from "next";
-import { Fragment } from "react";
-import { Button, Col, Image, Row } from "react-bootstrap";
+import { notFound } from "next/navigation";
 
 export const metadata: Metadata = {
-  title: "404 error | Dasher - Responsive Bootstrap 5 Admin Dashboard",
-  description: "Dasher - Responsive Bootstrap 5 Admin Dashboard",
+  title: "Page Not Found | AttendStack",
+  description: "The requested AttendStack page could not be found.",
 };
 
 const NotFound = () => {
-  return (
-    <Fragment>
-      <Row className='justify-content-center'>
-        <Col>
-          <div className='text-center'>
-            <div>
-              <Image
-                src={getAssetPath("/images/svg/404.svg")}
-                alt='Image'
-                className='img-fluid'
-              />
-            </div>
-
-            <h1 className='display-4'>Oops! the page not found.</h1>
-            <p className='mb-6 fs-5'>
-              Or simply leverage the expertise of our consultation team.
-            </p>
-
-            <Button href='/dasher-ui' variant='primary' size='lg'>
-              Go Home
-            </Button>
-          </div>
-        </Col>
-      </Row>
-    </Fragment>
-  );
+  notFound();
 };
 
 export default NotFound;

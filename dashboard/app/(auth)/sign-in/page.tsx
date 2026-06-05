@@ -1,13 +1,15 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Container, Row, Col, Card, Form, Button, Alert, Spinner } from "react-bootstrap";
+import { Container, Row, Col, Card, Form, Button, Alert, Spinner, InputGroup, Image } from "react-bootstrap";
+import { IconEye, IconEyeOff } from "@tabler/icons-react";
 import axios from "axios";
 import Link from "next/link";
 
 const SignInPage = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -38,8 +40,8 @@ const SignInPage = () => {
       } else {
         setError("Login failed. Please check your credentials.");
       }
-    } catch (err: any) {
-      if (err.response && err.response.data && err.response.data.detail) {
+    } catch (err: unknown) {
+      if (axios.isAxiosError(err) && typeof err.response?.data?.detail === "string") {
         setError(err.response.data.detail);
       } else {
         setError("An unexpected error occurred. Please try again.");
@@ -50,14 +52,25 @@ const SignInPage = () => {
   };
 
   return (
-    <Container fluid className="vh-100 d-flex align-items-center justify-content-center bg-light">
+    <Container fluid className="min-vh-100 d-flex align-items-center justify-content-center bg-light py-4">
       <Row>
         <Col md={12}>
-          <Card style={{ width: '25rem' }} className="p-4 shadow-sm">
+          <Card
+            style={{ width: "min(25rem, calc(100vw - 2rem))" }}
+            className="p-4 shadow-sm"
+          >
             <Card.Body>
               <div className="text-center mb-4">
-                <h2 className="fw-bold">AttendStack</h2>
-                <p className="text-muted">Sign in to your account</p>
+                <Link href="/" aria-label="AttendStack home">
+                  <Image
+                    src="/images/brand/logo/logo.png"
+                    className="mb-3 rounded-3"
+                    alt="AttendStack logo"
+                    style={{ height: "72px", width: "72px", objectFit: "contain" }}
+                  />
+                </Link>
+                <h1 className="h3 fw-bold mb-1">AttendStack</h1>
+                <p className="text-muted mb-0">Sign in to your account</p>
               </div>
               
               {error && <Alert variant="danger">{error}</Alert>}
@@ -70,19 +83,32 @@ const SignInPage = () => {
                     placeholder="Enter email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
+                    autoComplete="email"
                     required
                   />
                 </Form.Group>
 
                 <Form.Group className="mb-3" controlId="formBasicPassword">
                   <Form.Label>Password</Form.Label>
-                  <Form.Control
-                    type="password"
-                    placeholder="Password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                  />
+                  <InputGroup>
+                    <Form.Control
+                      type={showPassword ? "text" : "password"}
+                      placeholder="Password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      autoComplete="current-password"
+                      required
+                    />
+                    <Button
+                      type="button"
+                      variant="outline-secondary"
+                      onClick={() => setShowPassword((visible) => !visible)}
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                      title={showPassword ? "Hide password" : "Show password"}
+                    >
+                      {showPassword ? <IconEyeOff size={18} /> : <IconEye size={18} />}
+                    </Button>
+                  </InputGroup>
                 </Form.Group>
 
                 <div className="d-flex justify-content-between align-items-center mb-3">
@@ -107,10 +133,22 @@ const SignInPage = () => {
                   )}
                 </Button>
               </Form>
-              <div className="text-center mt-3">
-                <p className="text-muted">
-                  Don't have an account? <Link href="/sign-up">Sign up</Link>
-                </p>
+              <p className="text-muted text-center mt-3 mb-0">
+                Need an account? Contact your administrator.
+              </p>
+              <div className="border-top text-center mt-4 pt-3">
+                <small className="text-muted">
+                  AttendStack is a{" "}
+                  <a
+                    href="https://bhattsquare.com"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="fw-semibold"
+                  >
+                    Bhatt Square
+                  </a>{" "}
+                  project.
+                </small>
               </div>
             </Card.Body>
           </Card>

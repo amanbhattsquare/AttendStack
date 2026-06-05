@@ -14,9 +14,12 @@ from .serializers import (
     ChangePasswordSerializer,
     CreateHRSerializer,
     CustomTokenObtainPairSerializer,
+    RequestPasswordResetOTPSerializer,
+    ResetPasswordWithOTPSerializer,
     UserProfileSerializer,
     UserUpdateSerializer,
 )
+from .services import request_password_reset_otp, reset_password_with_otp
 
 User = get_user_model()
 
@@ -30,6 +33,42 @@ class LoginView(TokenObtainPairView):
     Returns access/refresh token pair + user profile.
     """
     serializer_class = CustomTokenObtainPairSerializer
+
+
+class RequestPasswordResetOTPView(APIView):
+    """Email a password-reset verification code."""
+
+    authentication_classes = []
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        serializer = RequestPasswordResetOTPSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        message = request_password_reset_otp(
+            serializer.validated_data["email"],
+            requested_ip=request.META.get("REMOTE_ADDR"),
+        )
+        return Response({"detail": message}, status=status.HTTP_200_OK)
+
+
+class ResetPasswordWithOTPView(APIView):
+    """Set a new password using a valid verification code."""
+
+    authentication_classes = []
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        serializer = ResetPasswordWithOTPSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        reset_password_with_otp(
+            serializer.validated_data["email"],
+            serializer.validated_data["otp"],
+            serializer.validated_data["new_password"],
+        )
+        return Response(
+            {"detail": "Password reset successfully. You can now sign in."},
+            status=status.HTTP_200_OK,
+        )
 
 
 class UserProfileView(generics.RetrieveUpdateAPIView):

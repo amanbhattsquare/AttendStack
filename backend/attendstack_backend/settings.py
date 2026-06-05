@@ -141,6 +141,36 @@ STATIC_ROOT = config("STATIC_ROOT", default=str(BASE_DIR / "staticfiles"))
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+# EMAIL & PASSWORD RECOVERY
+EMAIL_BACKEND = config(
+    "EMAIL_BACKEND",
+    default="django.core.mail.backends.console.EmailBackend",
+)
+EMAIL_HOST = config("EMAIL_HOST", default="")
+EMAIL_PORT = config("EMAIL_PORT", default=587, cast=int)
+EMAIL_HOST_USER = config("EMAIL_HOST_USER", default="")
+EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default="")
+EMAIL_USE_TLS = config("EMAIL_USE_TLS", default=True, cast=bool)
+EMAIL_TIMEOUT = config("EMAIL_TIMEOUT", default=15, cast=int)
+DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="AttendStack <no-reply@attendstack.com>")
+PASSWORD_RESET_SUPPORT_EMAIL = config(
+    "PASSWORD_RESET_SUPPORT_EMAIL",
+    default=EMAIL_HOST_USER or "support@attendstack.com",
+)
+
+PASSWORD_RESET_OTP_TTL_MINUTES = config(
+    "PASSWORD_RESET_OTP_TTL_MINUTES", default=10, cast=int
+)
+PASSWORD_RESET_OTP_RESEND_SECONDS = config(
+    "PASSWORD_RESET_OTP_RESEND_SECONDS", default=60, cast=int
+)
+PASSWORD_RESET_OTP_MAX_REQUESTS_PER_HOUR = config(
+    "PASSWORD_RESET_OTP_MAX_REQUESTS_PER_HOUR", default=5, cast=int
+)
+PASSWORD_RESET_OTP_MAX_ATTEMPTS = config(
+    "PASSWORD_RESET_OTP_MAX_ATTEMPTS", default=5, cast=int
+)
+
 # ──────────────────────────────────────────────────────────────────────────────
 # DJANGO REST FRAMEWORK
 # ──────────────────────────────────────────────────────────────────────────────

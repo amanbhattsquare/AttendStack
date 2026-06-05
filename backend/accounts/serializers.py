@@ -112,6 +112,32 @@ class ChangePasswordSerializer(serializers.Serializer):
 # ──────────────────────────────────────────────────────────────────────────────
 # Admin – Create HR/Employee user
 # ──────────────────────────────────────────────────────────────────────────────
+class RequestPasswordResetOTPSerializer(serializers.Serializer):
+    """Request a password-reset verification code."""
+
+    email = serializers.EmailField()
+
+
+class ResetPasswordWithOTPSerializer(serializers.Serializer):
+    """Reset a password using the emailed verification code."""
+
+    email = serializers.EmailField()
+    otp = serializers.RegexField(
+        regex=r"^\d{6}$",
+        write_only=True,
+        error_messages={"invalid": "Enter the 6-digit verification code."},
+    )
+    new_password = serializers.CharField(write_only=True, validators=[validate_password])
+    confirm_password = serializers.CharField(write_only=True)
+
+    def validate(self, attrs):
+        if attrs["new_password"] != attrs["confirm_password"]:
+            raise serializers.ValidationError(
+                {"confirm_password": "New passwords do not match."}
+            )
+        return attrs
+
+
 class CreateHRSerializer(serializers.ModelSerializer):
     """Super Admin creates a new HR manager account."""
 

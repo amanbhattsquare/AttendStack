@@ -1,11 +1,14 @@
 "use client";
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Container, Form, Button, Card } from 'react-bootstrap';
+import { Container, Form, Button, Card, InputGroup } from 'react-bootstrap';
+import { IconEye, IconEyeOff } from '@tabler/icons-react';
+import Link from 'next/link';
 
 const AdminLoginPage = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const router = useRouter();
 
   const handleLogin = (e: React.FormEvent) => {
@@ -34,13 +37,27 @@ const AdminLoginPage = () => {
 
             <Form.Group className="mb-3" controlId="formBasicPassword">
               <Form.Label>Password</Form.Label>
-              <Form.Control
-                type="password"
-                placeholder="Password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
+              <InputGroup>
+                <Form.Control
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="Password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+                <Button
+                  type="button"
+                  variant="outline-secondary"
+                  onClick={() => setShowPassword((visible) => !visible)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  title={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <IconEyeOff size={18} /> : <IconEye size={18} />}
+                </Button>
+              </InputGroup>
             </Form.Group>
+            <div className="text-end mb-3">
+              <Link href="/forgot-password">Forgot password?</Link>
+            </div>
             <Button variant="primary" type="submit" className="w-100">
               Login
             </Button>

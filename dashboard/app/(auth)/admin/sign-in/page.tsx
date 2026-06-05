@@ -11,13 +11,16 @@ import {
   Image,
   Alert,
   Spinner,
+  InputGroup,
 } from "react-bootstrap";
+import { IconEye, IconEyeOff } from "@tabler/icons-react";
 import Link from "next/link";
 import axios from "axios";
 
 const AdminSignIn = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -56,8 +59,8 @@ const AdminSignIn = () => {
       } else {
         setError("Login failed. Please check your credentials.");
       }
-    } catch (err: any) {
-      if (err.response && err.response.data && err.response.data.detail) {
+    } catch (err: unknown) {
+      if (axios.isAxiosError(err) && typeof err.response?.data?.detail === "string") {
         setError(err.response.data.detail);
       } else {
         setError("An unexpected error occurred. Please try again.");
@@ -104,14 +107,29 @@ const AdminSignIn = () => {
 
                 <Form.Group className="mb-3" controlId="password">
                   <Form.Label>Password</Form.Label>
-                  <Form.Control
-                    type="password"
-                    placeholder="Password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                  />
+                  <InputGroup>
+                    <Form.Control
+                      type={showPassword ? "text" : "password"}
+                      placeholder="Password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                    />
+                    <Button
+                      type="button"
+                      variant="outline-secondary"
+                      onClick={() => setShowPassword((visible) => !visible)}
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                      title={showPassword ? "Hide password" : "Show password"}
+                    >
+                      {showPassword ? <IconEyeOff size={18} /> : <IconEye size={18} />}
+                    </Button>
+                  </InputGroup>
                 </Form.Group>
+
+                <div className="text-end mb-3">
+                  <Link href="/forgot-password">Forgot password?</Link>
+                </div>
 
                 <Button
                   variant="primary"

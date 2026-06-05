@@ -84,11 +84,23 @@ export default function MarketingFooter() {
             <IconShieldCheck size={15} />
             Role-based workforce access
           </span>
-          <span>
-            Built by{" "}
-            <a href="https://bhattsquare.com" target="_blank" rel="noopener noreferrer">
-              Bhatt Square
-            </a>
+          <span className={styles.footerCredits}>
+            <span>
+              Built by{" "}
+              <a href="https://bhattsquare.com" target="_blank" rel="noopener noreferrer">
+                Bhatt Square Pvt. Ltd.
+              </a>
+            </span>
+            <small className={styles.footerDeveloperCredit}>
+              Developed by{" "}
+              <a
+                href="https://in.linkedin.com/in/amanktyr"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Aman Katiyar
+              </a>
+            </small>
           </span>
         </div>
       </div>

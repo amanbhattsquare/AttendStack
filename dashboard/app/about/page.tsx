@@ -3,10 +3,8 @@ import Image from "next/image";
 import Link from "next/link";
 import {
   IconArrowRight,
-  IconBrandLinkedin,
   IconBuilding,
   IconCheck,
-  IconCode,
   IconExternalLink,
   IconShieldCheck,
   IconTarget,
@@ -19,7 +17,7 @@ import styles from "../marketing-pages.module.css";
 export const metadata: Metadata = {
   title: "About AttendStack | A Product of Bhatt Square Pvt. Ltd.",
   description:
-    "Discover AttendStack, a Bhatt Square Pvt. Ltd. workforce management project developed by Aman Katiyar to bring clarity to everyday people operations.",
+    "Discover AttendStack, a Bhatt Square Pvt. Ltd. workforce management project created to bring clarity to everyday people operations.",
 };
 
 const principles = [
@@ -178,13 +176,13 @@ export default function AboutPage() {
                 modern workforce operations.
               </p>
             </div>
-            <div className={styles.attributionDetails}>
-              <div className={styles.attributionItem}>
+            <div className={styles.companyProfile}>
+              <div className={styles.companyProfileHeader}>
                 <span className={styles.attributionIcon}>
-                  <IconBuilding size={22} strokeWidth={1.8} />
+                  <IconBuilding size={24} strokeWidth={1.8} />
                 </span>
                 <div>
-                  <small>Product of</small>
+                  <small>Product company</small>
                   <a
                     href="https://bhattsquare.com"
                     target="_blank"
@@ -194,33 +192,35 @@ export default function AboutPage() {
                     Bhatt Square Pvt. Ltd.
                     <IconExternalLink size={15} />
                   </a>
-                  <p>Workforce technology designed for organized teams.</p>
                 </div>
               </div>
-              <div className={styles.attributionItem}>
-                <span className={styles.attributionIcon}>
-                  <IconCode size={22} strokeWidth={1.8} />
-                </span>
-                <div>
-                  <small>Developed by</small>
-                  <a
-                    href="https://in.linkedin.com/in/amanktyr"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className={styles.developerLink}
-                  >
-                    Aman Katiyar
-                    <IconBrandLinkedin size={16} />
-                  </a>
-                  <p>Product engineering and development.</p>
-                </div>
+
+              <p>
+                Bhatt Square builds practical digital products that help
+                organizations operate with greater structure, visibility, and
+                confidence.
+              </p>
+
+              <div className={styles.companySignals}>
+                <span>Professional workforce technology</span>
+                <span>Built for growing organizations</span>
               </div>
+
+              <a
+                href="https://bhattsquare.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className={styles.companyWebsite}
+              >
+                Visit company website
+                <IconArrowRight size={16} />
+              </a>
             </div>
           </div>
 
           <div className={styles.productBand}>
-            <div><strong>2</strong><span>Focused role-based workspaces</span></div>
-            <div><strong>1</strong><span>Connected workforce system</span></div>
+            <div><strong>205</strong><span>Focused role-based workspaces</span></div>
+            <div><strong>25</strong><span>Connected workforce system</span></div>
             <div><strong>Live</strong><span>Attendance and activity visibility</span></div>
             <div><strong>Clear</strong><span>Records, reports, and workflows</span></div>
           </div>

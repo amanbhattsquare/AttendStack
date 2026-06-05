@@ -8,6 +8,7 @@
 }
 
 .headerInner {
+  position: relative;
   display: flex;
   width: min(1240px, calc(100% - 40px));
   min-height: 78px;
@@ -112,6 +113,126 @@
   transform: translateY(-2px);
   color: #fff;
   box-shadow: 0 14px 26px rgba(0, 167, 111, 0.28);
+}
+
+.menuToggle {
+  display: none;
+  width: 42px;
+  height: 42px;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 1px solid rgba(16, 35, 29, 0.12);
+  border-radius: 10px;
+  background: #fff;
+  color: #10231d;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(16, 35, 29, 0.07);
+}
+
+.mobileMenu {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 10px);
+  right: 0;
+  left: 0;
+  display: none;
+  padding: 12px;
+  border: 1px solid rgba(16, 35, 29, 0.1);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 24px 55px rgba(16, 35, 29, 0.16);
+  backdrop-filter: blur(18px);
+}
+
+.mobileNavLinks {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 4px;
+}
+
+.mobileNavLinks a {
+  padding: 12px 13px;
+  border-radius: 9px;
+  color: #33483f;
+  font-size: 11px;
+  font-weight: 760;
+  text-decoration: none;
+}
+
+.mobileNavLinks a:hover {
+  background: #eef8f3;
+  color: #007d54;
+}
+
+.mobileMenuActions {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 9px;
+  margin-top: 9px;
+  padding-top: 11px;
+  border-top: 1px solid #e5ece8;
+}
+
+.mobileEmployeeLogin {
+  display: flex;
+  min-height: 54px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 13px;
+  border-radius: 11px;
+  background: #00a76f;
+  color: #fff;
+  text-decoration: none;
+  box-shadow: 0 10px 22px rgba(0, 167, 111, 0.18);
+}
+
+.mobileEmployeeLogin:hover {
+  color: #fff;
+}
+
+.mobileEmployeeLogin > span {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.mobileEmployeeLogin > span > span {
+  display: flex;
+  flex-direction: column;
+}
+
+.mobileEmployeeLogin strong {
+  font-size: 10px;
+  font-weight: 820;
+}
+
+.mobileEmployeeLogin small {
+  margin-top: 2px;
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 7px;
+}
+
+.mobileCompanyLogin {
+  display: inline-flex;
+  min-height: 54px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 15px;
+  border: 1px solid #d8e4de;
+  border-radius: 11px;
+  color: #33483f;
+  font-size: 9px;
+  font-weight: 780;
+  text-decoration: none;
+}
+
+.mobileCompanyLogin:hover {
+  color: #007d54;
 }
 
 .footer {
@@ -321,6 +442,18 @@
     display: none;
   }
 
+  .companyLogin {
+    display: none;
+  }
+
+  .menuToggle {
+    display: inline-flex;
+  }
+
+  .mobileMenuOpen {
+    display: block;
+  }
+
   .footerTop {
     grid-template-columns: 1.4fr 0.8fr 0.8fr;
   }
@@ -361,10 +494,6 @@
     height: 33px;
   }
 
-  .companyLogin {
-    display: none;
-  }
-
   .employeeLogin {
     min-height: 40px;
     padding: 0 11px;
@@ -392,5 +521,45 @@
   .footerBottom {
     align-items: flex-start;
     flex-direction: column;
+  }
+}
+
+@media (max-width: 480px) {
+  .headerInner {
+    width: min(100% - 20px, 1180px);
+  }
+
+  .brand {
+    gap: 7px;
+  }
+
+  .brandCopy small {
+    display: none;
+  }
+
+  .navActions {
+    gap: 7px;
+  }
+
+  .employeeLogin {
+    padding: 0 9px;
+  }
+
+  .employeeLogin svg:first-child {
+    display: none;
+  }
+
+  .menuToggle {
+    width: 40px;
+    height: 40px;
+  }
+
+  .mobileMenu {
+    top: calc(100% + 7px);
+  }
+
+  .mobileNavLinks,
+  .mobileMenuActions {
+    grid-template-columns: 1fr;
   }
 }

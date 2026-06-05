@@ -1,0 +1,396 @@
+.header {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 30;
+  border-bottom: 1px solid rgba(16, 35, 29, 0.08);
+  background: rgba(249, 252, 250, 0.86);
+  backdrop-filter: blur(18px);
+}
+
+.headerInner {
+  display: flex;
+  width: min(1240px, calc(100% - 40px));
+  min-height: 78px;
+  margin: 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.brand,
+.footerBrand {
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
+  text-decoration: none;
+}
+
+.logoWrap {
+  display: grid;
+  width: 43px;
+  height: 43px;
+  flex: 0 0 auto;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid rgba(0, 167, 111, 0.12);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 5px 16px rgba(16, 35, 29, 0.07);
+}
+
+.logoWrap img {
+  width: 37px;
+  height: 37px;
+}
+
+.brandCopy {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.brandCopy strong {
+  color: #10231d;
+  font-size: 19px;
+  font-weight: 850;
+  letter-spacing: -0.65px;
+  line-height: 1.1;
+}
+
+.brandCopy small {
+  color: #73837c;
+  font-size: 7px;
+  font-weight: 750;
+  letter-spacing: 0.75px;
+  text-transform: uppercase;
+}
+
+.navLinks {
+  display: flex;
+  align-items: center;
+  gap: 29px;
+}
+
+.navLinks a,
+.companyLogin {
+  color: #4c5f56;
+  font-size: 11px;
+  font-weight: 750;
+  text-decoration: none;
+  transition: color 180ms ease;
+}
+
+.navLinks a:hover,
+.companyLogin:hover {
+  color: #007d54;
+}
+
+.navActions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.employeeLogin {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 16px;
+  border-radius: 10px;
+  background: #00a76f;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  text-decoration: none;
+  box-shadow: 0 10px 22px rgba(0, 167, 111, 0.2);
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+
+.employeeLogin:hover {
+  transform: translateY(-2px);
+  color: #fff;
+  box-shadow: 0 14px 26px rgba(0, 167, 111, 0.28);
+}
+
+.footer {
+  padding: 72px 0 25px;
+  background:
+    radial-gradient(circle at 95% 5%, rgba(0, 167, 111, 0.16), transparent 22%),
+    #071d17;
+}
+
+.footerContainer {
+  width: min(1180px, calc(100% - 40px));
+  margin: 0 auto;
+}
+
+.footerTop {
+  display: grid;
+  grid-template-columns: 1.7fr 0.75fr 0.75fr 1.4fr;
+  gap: 55px;
+  padding-bottom: 52px;
+}
+
+.footerBrandColumn p,
+.accessColumn > p {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 10px;
+  font-weight: 550;
+  line-height: 1.75;
+}
+
+.footerBrand {
+  color: #fff;
+}
+
+.footerBrand:hover {
+  color: #fff;
+}
+
+.footerBrand img {
+  border-radius: 10px;
+}
+
+.footerBrand > span {
+  display: flex;
+  flex-direction: column;
+}
+
+.footerBrand strong {
+  color: #fff;
+  font-size: 18px;
+  font-weight: 850;
+  letter-spacing: -0.5px;
+}
+
+.footerBrand small {
+  color: #71d5aa;
+  font-size: 7px;
+  font-weight: 750;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+
+.footerBrandColumn p {
+  max-width: 330px;
+  margin: 17px 0 0;
+}
+
+.bhattSquareLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 18px;
+  color: #7ce0b4;
+  font-size: 9px;
+  font-weight: 750;
+  text-decoration: none;
+}
+
+.bhattSquareLink:hover {
+  color: #fff;
+}
+
+.footerColumn,
+.accessColumn {
+  display: flex;
+  align-items: flex-start;
+  flex-direction: column;
+}
+
+.footerColumn h2,
+.accessColumn h2 {
+  margin: 3px 0 17px;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.footerColumn a {
+  margin-bottom: 11px;
+  color: rgba(255, 255, 255, 0.52);
+  font-size: 9px;
+  font-weight: 650;
+  text-decoration: none;
+  transition: color 180ms ease;
+}
+
+.footerColumn a:hover {
+  color: #fff;
+}
+
+.accessColumn > p {
+  margin: -7px 0 13px;
+}
+
+.footerEmployeeLogin {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 13px;
+  border: 1px solid rgba(124, 224, 180, 0.18);
+  border-radius: 11px;
+  background: rgba(0, 167, 111, 0.13);
+  color: #fff;
+  text-decoration: none;
+  transition: background-color 180ms ease, border-color 180ms ease;
+}
+
+.footerEmployeeLogin:hover {
+  border-color: rgba(124, 224, 180, 0.38);
+  background: rgba(0, 167, 111, 0.22);
+  color: #fff;
+}
+
+.footerEmployeeLogin > span {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.footerEmployeeLogin > span > svg {
+  color: #7ce0b4;
+}
+
+.footerEmployeeLogin > span > span {
+  display: flex;
+  flex-direction: column;
+}
+
+.footerEmployeeLogin strong {
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.footerEmployeeLogin small {
+  margin-top: 2px;
+  color: rgba(255, 255, 255, 0.48);
+  font-size: 6px;
+}
+
+.footerCompanyLogin {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 13px;
+  color: rgba(255, 255, 255, 0.56);
+  font-size: 8px;
+  font-weight: 750;
+  text-decoration: none;
+}
+
+.footerCompanyLogin:hover {
+  color: #fff;
+}
+
+.footerBottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding-top: 22px;
+  border-top: 1px solid rgba(255, 255, 255, 0.09);
+  color: rgba(255, 255, 255, 0.38);
+  font-size: 8px;
+  font-weight: 650;
+}
+
+.footerBottom a {
+  color: #78dbb0;
+  text-decoration: none;
+}
+
+.footerTrust {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.footerTrust svg {
+  color: #69d6a6;
+}
+
+@media (max-width: 1050px) {
+  .navLinks {
+    display: none;
+  }
+
+  .footerTop {
+    grid-template-columns: 1.4fr 0.8fr 0.8fr;
+  }
+
+  .accessColumn {
+    grid-column: 1 / -1;
+    max-width: 440px;
+  }
+}
+
+@media (max-width: 680px) {
+  .headerInner,
+  .footerContainer {
+    width: min(100% - 28px, 1180px);
+  }
+
+  .headerInner {
+    min-height: 70px;
+    gap: 10px;
+  }
+
+  .brandCopy strong {
+    font-size: 16px;
+  }
+
+  .brandCopy small {
+    font-size: 5.5px;
+    letter-spacing: 0.45px;
+  }
+
+  .logoWrap {
+    width: 38px;
+    height: 38px;
+  }
+
+  .logoWrap img {
+    width: 33px;
+    height: 33px;
+  }
+
+  .companyLogin {
+    display: none;
+  }
+
+  .employeeLogin {
+    min-height: 40px;
+    padding: 0 11px;
+    font-size: 9px;
+  }
+
+  .employeeLogin svg:last-child {
+    display: none;
+  }
+
+  .footer {
+    padding-top: 55px;
+  }
+
+  .footerTop {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 35px 24px;
+  }
+
+  .footerBrandColumn,
+  .accessColumn {
+    grid-column: 1 / -1;
+  }
+
+  .footerBottom {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

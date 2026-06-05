@@ -220,10 +220,10 @@
   max-width: 570px;
   margin: 0;
   color: var(--ink);
-  font-size: clamp(49px, 5.1vw, 72px);
+  font-size: clamp(42px, 4.35vw, 60px);
   font-weight: 800;
-  letter-spacing: -4px;
-  line-height: 1.01;
+  letter-spacing: -3px;
+  line-height: 1.04;
 }
 
 .hero h1 span {
@@ -1383,8 +1383,8 @@
   }
 
   .hero h1 {
-    font-size: clamp(42px, 13vw, 58px);
-    letter-spacing: -2.7px;
+    font-size: clamp(37px, 11vw, 48px);
+    letter-spacing: -2.2px;
   }
 
   .heroDescription {

@@ -3,7 +3,6 @@ import Image from "next/image";
 import Link from "next/link";
 import {
   IconArrowRight,
-  IconArrowUpRight,
   IconBeach,
   IconBuilding,
   IconChartBar,
@@ -15,6 +14,8 @@ import {
   IconUsers,
   IconWallet,
 } from "@tabler/icons-react";
+import MarketingFooter from "components/marketing/MarketingFooter";
+import MarketingHeader from "components/marketing/MarketingHeader";
 import styles from "./page.module.css";
 
 export const metadata: Metadata = {
@@ -86,38 +87,7 @@ const workflow = [
 export default function Home() {
   return (
     <main className={styles.home}>
-      <nav className={styles.navbar} aria-label="Main navigation">
-        <div className={styles.navInner}>
-          <Link href="/" className={styles.brand} aria-label="AttendStack home">
-            <span className={styles.logoWrap}>
-              <Image
-                src="/images/brand/logo/android-chrome-192x192.png"
-                alt=""
-                width={38}
-                height={38}
-                priority
-              />
-            </span>
-            <span>AttendStack</span>
-          </Link>
-
-          <div className={styles.navLinks}>
-            <a href="#platform">Platform</a>
-            <a href="#features">Capabilities</a>
-            <a href="#workflow">How it works</a>
-          </div>
-
-          <div className={styles.navActions}>
-            <Link href="/sign-in" className={styles.textButton}>
-              Employee login
-            </Link>
-            <Link href="/admin/sign-in" className={styles.primaryButtonSmall}>
-              Company login
-              <IconArrowUpRight size={16} strokeWidth={2} />
-            </Link>
-          </div>
-        </div>
-      </nav>
+      <MarketingHeader />
 
       <section className={styles.hero} id="platform">
         <div className={styles.heroGlowOne} />
@@ -142,12 +112,12 @@ export default function Home() {
                 matters.
               </p>
               <div className={styles.heroActions}>
-                <Link href="/admin/sign-in" className={styles.primaryButton}>
-                  Open company portal
+                <Link href="/sign-in" className={styles.primaryButton}>
+                  Employee login
                   <IconArrowRight size={19} strokeWidth={2} />
                 </Link>
-                <Link href="/sign-in" className={styles.secondaryButton}>
-                  Employee portal
+                <Link href="/admin/sign-in" className={styles.secondaryButton}>
+                  Company login
                 </Link>
               </div>
               <div className={styles.heroPoints}>
@@ -346,53 +316,19 @@ export default function Home() {
               </p>
             </div>
             <div className={styles.ctaActions}>
-              <Link href="/admin/sign-in" className={styles.ctaPrimary}>
-                Company login
+              <Link href="/sign-in" className={styles.ctaPrimary}>
+                Employee login
                 <IconArrowRight size={18} />
               </Link>
-              <Link href="/sign-in" className={styles.ctaSecondary}>
-                Employee login
+              <Link href="/admin/sign-in" className={styles.ctaSecondary}>
+                Company login
               </Link>
             </div>
           </div>
         </div>
       </section>
 
-      <footer className={styles.footer}>
-        <div className={styles.container}>
-          <div className={styles.footerTop}>
-            <div>
-              <Link href="/" className={styles.footerBrand}>
-                <Image
-                  src="/images/brand/logo/android-chrome-192x192.png"
-                  alt=""
-                  width={35}
-                  height={35}
-                />
-                AttendStack
-              </Link>
-              <p>Modern workforce management for organized, productive teams.</p>
-            </div>
-            <div className={styles.footerLinks}>
-              <a href="#platform">Platform</a>
-              <a href="#features">Capabilities</a>
-              <a href="#workflow">How it works</a>
-              <Link href="/sign-in">Employee login</Link>
-              <Link href="/admin/sign-in">Company login</Link>
-            </div>
-          </div>
-          <div className={styles.footerBottom}>
-            <span>&copy; {new Date().getFullYear()} AttendStack. All rights reserved.</span>
-            <span>
-              A{" "}
-              <a href="https://bhattsquare.com" target="_blank" rel="noopener noreferrer">
-                Bhatt Square
-              </a>{" "}
-              project.
-            </span>
-          </div>
-        </div>
-      </footer>
+      <MarketingFooter />
     </main>
   );
 }

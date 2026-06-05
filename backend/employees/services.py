@@ -35,6 +35,23 @@ def sync_employee_user_access(employee: Employee):
     return user
 
 
+def sync_employee_user_email(employee: Employee, previous_email: str):
+    employee_users = User.objects.filter(role=UserRole.EMPLOYEE)
+    user = employee_users.filter(employee_id=employee.employee_id).first()
+    if user is None:
+        user = employee_users.filter(email__iexact=previous_email).first()
+    if user is None:
+        return None
+
+    if User.objects.filter(email__iexact=employee.email).exclude(pk=user.pk).exists():
+        raise ValidationError({"email": "A login account with this email already exists."})
+
+    if user.email != employee.email:
+        user.email = employee.email
+        user.save(update_fields=["email"])
+    return user
+
+
 def generate_temporary_password(length=14):
     alphabet = string.ascii_letters + string.digits + "!@#$%&*?"
     required = [

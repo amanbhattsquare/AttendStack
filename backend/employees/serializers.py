@@ -1,8 +1,10 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
+from django.db import transaction
 
 from accounts.models import UserRole
 from .models import Employee, EmployeeStatus
+from .services import sync_employee_user_email
 
 User = get_user_model()
 
@@ -129,6 +131,14 @@ class EmployeeSerializer(serializers.ModelSerializer):
         if value <= 0:
             raise serializers.ValidationError("Annual salary must be greater than zero.")
         return value
+
+    def update(self, instance, validated_data):
+        previous_email = instance.email
+        with transaction.atomic():
+            employee = super().update(instance, validated_data)
+            if employee.email != previous_email:
+                sync_employee_user_email(employee, previous_email)
+        return employee
 
     def get_profile_photo_url(self, obj):
         return self._absolute_file_url(obj.profile_photo)

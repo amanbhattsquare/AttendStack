@@ -64,3 +64,35 @@ class EmployeeStatusActionTests(APITestCase):
         )
 
         self.assertEqual(response.status_code, http_status.HTTP_400_BAD_REQUEST)
+
+    def test_employee_email_update_also_updates_linked_login(self):
+        response = self.client.patch(
+            f"/{self.employee.id}/",
+            {"email": "aarav.updated@example.com"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, http_status.HTTP_200_OK)
+        self.employee.refresh_from_db()
+        self.employee_user.refresh_from_db()
+        self.assertEqual(self.employee.email, "aarav.updated@example.com")
+        self.assertEqual(self.employee_user.email, "aarav.updated@example.com")
+
+    def test_employee_email_update_rolls_back_when_login_email_conflicts(self):
+        User.objects.create_user(
+            email="existing@example.com",
+            password="StrongPass123!",
+            employee_id="EMP-OTHER",
+        )
+
+        response = self.client.patch(
+            f"/{self.employee.id}/",
+            {"email": "existing@example.com"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, http_status.HTTP_400_BAD_REQUEST)
+        self.employee.refresh_from_db()
+        self.employee_user.refresh_from_db()
+        self.assertEqual(self.employee.email, "aarav@example.com")
+        self.assertEqual(self.employee_user.email, "aarav@example.com")

@@ -429,41 +429,11 @@ const EmployeePageClient = () => {
 
 
 
-  const handleUpdate = async (formData: EmployeeFormData) => {
-    if (!editingEmployee?.id) return;
-
-    try {
-      const token = localStorage.getItem("authToken");
-      const body = new FormData();
-
-      Object.entries(formData).forEach(([key, value]) => {
-        if (value instanceof File) {
-          body.append(key, value, value.name);
-        } else if (value !== null && value !== undefined) {
-          body.append(key, String(value));
-        }
-      });
-
-      const response = await fetch(`${API_URL}${editingEmployee.id}/`, {
-        method: "PATCH",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        body: body,
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || "Failed to update employee.");
-      }
-
-      await loadEmployees();
-      setIsEditModalOpen(false);
-      Swal.fire("Success", "Employee updated successfully!", "success");
-
-    } catch (error) {
-      Swal.fire("Error", error instanceof Error ? error.message : "An unknown error occurred.", "error");
-    }
+  const handleEditSaved = async () => {
+    await loadEmployees();
+    setIsEditModalOpen(false);
+    setEditingEmployee(null);
+    Swal.fire("Success", "Employee updated successfully!", "success");
   };
 
   const filteredEmployees = useMemo(() => {
@@ -800,7 +770,7 @@ const EmployeePageClient = () => {
           ) : (
             <EmployeeFormWizard
                 initialData={editingEmployee || undefined}
-                onSave={() => handleUpdate(editingEmployee as EmployeeFormData)}
+                onSave={handleEditSaved}
                 mode="edit"
               />
           )}

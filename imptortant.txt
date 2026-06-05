@@ -27,7 +27,7 @@ python3 manage.py makemigrations
 sudo systemctl restart nginx
 
 
-
+pm2 restart attendstack-frontend
 
 python3 manage.py changepassword bhattsquare1@gmail.com
 

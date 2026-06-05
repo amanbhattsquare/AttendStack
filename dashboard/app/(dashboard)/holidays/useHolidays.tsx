@@ -10,7 +10,7 @@ import { useState } from "react";
 
 import { Holiday } from "./types";
 
-export const useHolidays = (data: Holiday[], isAdmin: boolean) => {
+export const useHolidays = (data: Holiday[], isAdmin: boolean, pageCount: number) => {
   const [sorting, setSorting] = useState<any>([]);
   const [columnFilters, setColumnFilters] = useState<any>([]);
   const [pagination, setPagination] = useState({
@@ -80,7 +80,8 @@ export const useHolidays = (data: Holiday[], isAdmin: boolean) => {
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
+    manualPagination: true,
+    pageCount: pageCount,
   });
 
   return { table };

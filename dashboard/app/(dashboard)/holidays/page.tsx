@@ -26,10 +26,16 @@ const HolidaysPage = () => {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
+  const [totalHolidaysCount, setTotalHolidaysCount] = useState(0);
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedHoliday, setSelectedHoliday] = useState<Holiday | null>(null);
+
+  const [pagination, setPagination] = useState({
+    pageIndex: 0,
+    pageSize: 10,
+  });
 
   // Determine user role
   useEffect(() => {
@@ -45,15 +51,16 @@ const HolidaysPage = () => {
   }, []);
 
   // Fetch holidays from Django API
-  const fetchHolidays = async () => {
+  const fetchHolidays = async (pageIndex: number, pageSize: number) => {
     setIsLoading(true);
     setError("");
     try {
-      const res = await fetch(BASE_URL, { headers: authHeaders() });
+      const url = `${BASE_URL}?page=${pageIndex + 1}&page_size=${pageSize}`;
+      const res = await fetch(url, { headers: authHeaders() });
       if (!res.ok) throw new Error("Failed to load company holidays.");
       const data = await res.json();
-      const results = Array.isArray(data) ? data : data.results || [];
-      setHolidays(results);
+      setHolidays(data.results || []);
+      setTotalHolidaysCount(data.count || 0);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load holidays.");
     } finally {
@@ -62,11 +69,17 @@ const HolidaysPage = () => {
   };
 
   useEffect(() => {
-    fetchHolidays();
-  }, []);
+    fetchHolidays(pagination.pageIndex, pagination.pageSize);
+  }, [pagination.pageIndex, pagination.pageSize]);
 
   // Table setup
-  const { table } = useHolidays(holidays, isAdmin);
+  const pageCount = Math.ceil(totalHolidaysCount / pagination.pageSize);
+  const { table } = useHolidays(holidays, isAdmin, pageCount);
+
+  // Sync pagination state from table to local state
+  useEffect(() => {
+    setPagination(table.getState().pagination);
+  }, [table.getState().pagination]);
 
   const handleShowAddModal = () => setShowAddModal(true);
   const handleCloseAddModal = () => setShowAddModal(false);
@@ -92,7 +105,7 @@ const HolidaysPage = () => {
         const errorData = await res.json();
         throw new Error(errorData.detail || errorData.date?.[0] || "Failed to create holiday.");
       }
-      await fetchHolidays();
+      await fetchHolidays(pagination.pageIndex, pagination.pageSize);
     } catch (err) {
       Swal.fire({
         title: "Creation Failed",
@@ -119,7 +132,7 @@ const HolidaysPage = () => {
         const errorData = await res.json();
         throw new Error(errorData.detail || errorData.date?.[0] || "Failed to update holiday.");
       }
-      await fetchHolidays();
+      await fetchHolidays(pagination.pageIndex, pagination.pageSize);
     } catch (err) {
       Swal.fire({
         title: "Update Failed",
@@ -149,7 +162,7 @@ const HolidaysPage = () => {
         headers: authHeaders(),
       });
       if (!res.ok) throw new Error("Failed to delete the holiday record.");
-      await fetchHolidays();
+      await fetchHolidays(pagination.pageIndex, pagination.pageSize);
       Swal.fire({
         title: "Deleted!",
         text: "The holiday record has been deleted successfully.",
@@ -177,7 +190,7 @@ const HolidaysPage = () => {
           </p>
         </div>
         <div className="d-flex gap-2">
-          <Button variant="outline-secondary" size="sm" onClick={fetchHolidays} className="d-flex align-items-center gap-2">
+          <Button variant="outline-secondary" size="sm" onClick={() => fetchHolidays(pagination.pageIndex, pagination.pageSize)} className="d-flex align-items-center gap-2">
             <IconRefresh size={16} /> Sync
           </Button>
           {isAdmin && (

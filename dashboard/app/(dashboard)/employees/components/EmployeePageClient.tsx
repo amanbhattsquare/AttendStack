@@ -60,27 +60,22 @@ const statusBadgeClass: Record<Employee["status"], string> = {
 const employeeStatusOptions: Array<{
   value: EmployeeStatus;
   label: string;
-  description: string;
 }> = [
   {
     value: "ACTIVE",
     label: "Active",
-    description: "Employee is currently working and can access the employee portal.",
   },
   {
     value: "ON_LEAVE",
     label: "On Leave",
-    description: "Employee is temporarily away. Their employee portal access remains available.",
   },
   {
     value: "INACTIVE",
     label: "Inactive",
-    description: "Employee is not currently active. Their account and login remain available.",
   },
   {
     value: "TERMINATED",
     label: "Terminated",
-    description: "Employment has ended. Login remains available until the employee is deleted.",
   },
 ];
 
@@ -720,16 +715,11 @@ const EmployeePageClient = () => {
                         <span className="fw-semibold">{option.label}</span>
                         <span className={`badge ${statusBadgeClass[option.value]}`}>{option.label}</span>
                       </span>
-                      <span className="d-block text-muted small mt-1">{option.description}</span>
                     </span>
                   </label>
                 ))}
               </div>
             </Form.Group>
-
-            <Alert variant="info" className="mb-0">
-              Employment status does not affect login access. The linked login account is removed only when the employee record is deleted.
-            </Alert>
           </Modal.Body>
           <Modal.Footer>
             <Button variant="outline-secondary" onClick={closeStatusModal} disabled={actionLoadingKey === `${statusEmployee?.id}:status`}>

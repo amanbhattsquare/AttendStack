@@ -6,13 +6,11 @@ import {
   IconArrowUpRight,
   IconBeach,
   IconBuilding,
-  IconCalendarCheck,
   IconChartBar,
   IconCheck,
   IconClock,
   IconFingerprint,
   IconListCheck,
-  IconMapPin,
   IconShield,
   IconUsers,
   IconWallet,
@@ -83,12 +81,6 @@ const workflow = [
     description:
       "Use attendance reports, salary records, and activity insights to make informed decisions.",
   },
-];
-
-const activityRows = [
-  { initials: "AK", name: "Aarav Kapoor", detail: "Checked in", time: "09:48", color: "green" },
-  { initials: "NS", name: "Nisha Shah", detail: "Leave approved", time: "09:32", color: "blue" },
-  { initials: "RM", name: "Rohan Mehta", detail: "Checked in", time: "09:24", color: "purple" },
 ];
 
 export default function Home() {
@@ -174,122 +166,36 @@ export default function Home() {
               </div>
             </div>
 
-            <div className={styles.heroVisual} aria-label="AttendStack dashboard preview">
+            <div className={styles.heroVisual} aria-label="AttendStack company dashboard preview">
               <div className={styles.visualBadge}>
-                <IconMapPin size={17} strokeWidth={2} />
-                Location-aware check-in
+                <IconBuilding size={17} strokeWidth={2} />
+                Company workspace
               </div>
-              <div className={styles.dashboardCard}>
-                <div className={styles.dashboardTop}>
-                  <div className={styles.dashboardBrand}>
-                    <Image
-                      src="/images/brand/logo/android-chrome-192x192.png"
-                      alt=""
-                      width={29}
-                      height={29}
-                    />
-                    <span>AttendStack</span>
-                  </div>
-                  <div className={styles.dashboardUser}>
+              <div className={`${styles.productFrame} ${styles.companyFrame}`}>
+                <div className={styles.browserBar}>
+                  <div className={styles.browserDots} aria-hidden="true">
                     <span />
-                    Admin workspace
+                    <span />
+                    <span />
                   </div>
+                  <span>Company dashboard</span>
+                  <IconShield size={15} strokeWidth={2} />
                 </div>
-
-                <div className={styles.dashboardBody}>
-                  <div className={styles.previewHeading}>
-                    <div>
-                      <span>Good morning</span>
-                      <strong>Workforce overview</strong>
-                    </div>
-                    <span className={styles.previewDate}>
-                      <IconCalendarCheck size={15} />
-                      Today
-                    </span>
-                  </div>
-
-                  <div className={styles.statGrid}>
-                    <div className={styles.statCard}>
-                      <span className={`${styles.statIcon} ${styles.statIconGreen}`}>
-                        <IconUsers size={18} />
-                      </span>
-                      <small>Workforce</small>
-                      <strong>128</strong>
-                      <em>+6 this month</em>
-                    </div>
-                    <div className={styles.statCard}>
-                      <span className={`${styles.statIcon} ${styles.statIconBlue}`}>
-                        <IconFingerprint size={18} />
-                      </span>
-                      <small>Present today</small>
-                      <strong>116</strong>
-                      <em>90.6% attendance</em>
-                    </div>
-                    <div className={styles.statCard}>
-                      <span className={`${styles.statIcon} ${styles.statIconAmber}`}>
-                        <IconClock size={18} />
-                      </span>
-                      <small>Late arrivals</small>
-                      <strong>04</strong>
-                      <em>Within policy</em>
-                    </div>
-                  </div>
-
-                  <div className={styles.previewBottom}>
-                    <div className={styles.attendancePanel}>
-                      <div className={styles.panelHeading}>
-                        <div>
-                          <strong>Attendance by team</strong>
-                          <span>Live today</span>
-                        </div>
-                        <IconChartBar size={18} />
-                      </div>
-                      <div className={styles.progressList}>
-                        <div>
-                          <span><b>Operations</b><small>94%</small></span>
-                          <i><em style={{ width: "94%" }} /></i>
-                        </div>
-                        <div>
-                          <span><b>Product</b><small>88%</small></span>
-                          <i><em style={{ width: "88%" }} /></i>
-                        </div>
-                        <div>
-                          <span><b>Sales</b><small>82%</small></span>
-                          <i><em style={{ width: "82%" }} /></i>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className={styles.activityPanel}>
-                      <div className={styles.panelHeading}>
-                        <div>
-                          <strong>Recent activity</strong>
-                          <span>Latest updates</span>
-                        </div>
-                      </div>
-                      <div className={styles.activityList}>
-                        {activityRows.map((activity) => (
-                          <div className={styles.activityRow} key={activity.name}>
-                            <span className={`${styles.avatar} ${styles[activity.color]}`}>
-                              {activity.initials}
-                            </span>
-                            <span>
-                              <b>{activity.name}</b>
-                              <small>{activity.detail}</small>
-                            </span>
-                            <time>{activity.time}</time>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                <Image
+                  src="/images/product/company-dashboard.png"
+                  alt="AttendStack company dashboard showing workforce metrics, attendance overview, and live activity"
+                  width={1364}
+                  height={646}
+                  className={styles.productScreenshot}
+                  sizes="(max-width: 1080px) 92vw, 55vw"
+                  priority
+                />
               </div>
               <div className={styles.statusBadge}>
                 <span><IconCheck size={16} strokeWidth={3} /></span>
                 <div>
-                  <strong>Checked in</strong>
-                  <small>Right on schedule</small>
+                  <strong>Live workforce visibility</strong>
+                  <small>Attendance, leave, and payroll</small>
                 </div>
               </div>
             </div>
@@ -377,7 +283,7 @@ export default function Home() {
               </div>
             </div>
 
-            <div className={styles.employeePreview}>
+            <div className={styles.employeeShowcase}>
               <div className={styles.employeeTop}>
                 <div>
                   <span className={styles.onlineDot} />
@@ -385,23 +291,24 @@ export default function Home() {
                 </div>
                 <IconFingerprint size={22} />
               </div>
-              <div className={styles.welcomeCard}>
-                <div>
-                  <span>Today&apos;s workday</span>
-                  <h3>Good morning, Aarav.</h3>
-                  <p>Your workday is ready when you are.</p>
+              <div className={`${styles.productFrame} ${styles.employeeFrame}`}>
+                <div className={styles.browserBar}>
+                  <div className={styles.browserDots} aria-hidden="true">
+                    <span />
+                    <span />
+                    <span />
+                  </div>
+                  <span>Employee dashboard</span>
+                  <IconShield size={15} strokeWidth={2} />
                 </div>
-                <span className={styles.previewCheckIn}>
-                  <IconFingerprint size={19} />
-                  Check in
-                </span>
-              </div>
-              <div className={styles.quickActionLabel}>Your workspace</div>
-              <div className={styles.quickActions}>
-                <div><span><IconCalendarCheck size={20} /></span><b>Attendance</b><small>Review records</small></div>
-                <div><span><IconListCheck size={20} /></span><b>My leaves</b><small>Manage requests</small></div>
-                <div><span><IconChartBar size={20} /></span><b>Reports</b><small>View insights</small></div>
-                <div><span><IconWallet size={20} /></span><b>Payslips</b><small>Salary history</small></div>
+                <Image
+                  src="/images/product/employee-dashboard.png"
+                  alt="AttendStack employee dashboard showing attendance punch, live activity, and work readiness"
+                  width={1366}
+                  height={642}
+                  className={styles.productScreenshot}
+                  sizes="(max-width: 1080px) 92vw, 58vw"
+                />
               </div>
             </div>
           </div>

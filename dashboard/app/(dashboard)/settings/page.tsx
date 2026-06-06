@@ -496,10 +496,6 @@ const SettingsPage = () => {
     (leaveSettings.sickLeaveDays || 0) +
     (leaveSettings.casualLeaveDays || 0);
 
-  const totalHolidays = 
-    (leaveSettings.nationalHolidaysCount || 0) + 
-    (leaveSettings.festivalHolidaysCount || 0);
-
   if (isLoading) {
     return (
       <div className="d-flex justify-content-center align-items-center" style={{ minHeight: "60vh" }}>
@@ -835,7 +831,7 @@ const SettingsPage = () => {
                   <div className="p-4 border-top">
                     {/* Leave Policy Overview Cards */}
                     <Row className="mb-4 g-4">
-                      <Col md={3}>
+                      <Col md={4}>
                         <Card className="border-0 bg-primary bg-opacity-10">
                           <Card.Body className="text-center">
                             <h3 className="fw-bold text-primary mb-0">{totalLeaveDays}</h3>
@@ -843,15 +839,7 @@ const SettingsPage = () => {
                           </Card.Body>
                         </Card>
                       </Col>
-                      <Col md={3}>
-                        <Card className="border-0 bg-success bg-opacity-10">
-                          <Card.Body className="text-center">
-                            <h3 className="fw-bold text-success mb-0">{totalHolidays}</h3>
-                            <p className="text-muted small mb-0">Company Holidays</p>
-                          </Card.Body>
-                        </Card>
-                      </Col>
-                      <Col md={3}>
+                      <Col md={4}>
                         <Card className="border-0 bg-info bg-opacity-10">
                           <Card.Body className="text-center">
                             <h3 className="fw-bold text-info mb-0">{leaveSettings.maxConsecutiveDays}</h3>
@@ -859,11 +847,11 @@ const SettingsPage = () => {
                           </Card.Body>
                         </Card>
                       </Col>
-                      <Col md={3}>
+                      <Col md={4}>
                         <Card className="border-0 bg-warning bg-opacity-10">
                           <Card.Body className="text-center">
                             <h3 className="fw-bold text-warning mb-0">{leaveSettings.maxCarryoverDays}</h3>
-                            <p className="text-muted small mb-0">Max Carryover Days</p>
+                            <p className="text-muted small mb-0">Max Carry Forward Paid Leaves</p>
                           </Card.Body>
                         </Card>
                       </Col>
@@ -929,6 +917,17 @@ const SettingsPage = () => {
                               </Col>
                               <Col md={6}>
                                 <Form.Group>
+                                  <Form.Label className="fw-semibold">Study Leave</Form.Label>
+                                  <Form.Control
+                                    type="number"
+                                    value={leaveSettings.studyLeaveDays}
+                                    onChange={(e) => setLeaveSettings({ ...leaveSettings, studyLeaveDays: parseInt(e.target.value) })}
+                                  />
+                                  <Form.Text>Professional development</Form.Text>
+                                </Form.Group>
+                              </Col>
+                              <Col md={6}>
+                                <Form.Group>
                                   <Form.Label className="fw-semibold">Bereavement Leave</Form.Label>
                                   <Form.Control
                                     type="number"
@@ -947,17 +946,6 @@ const SettingsPage = () => {
                                     onChange={(e) => setLeaveSettings({ ...leaveSettings, marriageLeaveDays: parseInt(e.target.value) })}
                                   />
                                   <Form.Text>Wedding celebrations</Form.Text>
-                                </Form.Group>
-                              </Col>
-                              <Col md={6}>
-                                <Form.Group>
-                                  <Form.Label className="fw-semibold">Study Leave</Form.Label>
-                                  <Form.Control
-                                    type="number"
-                                    value={leaveSettings.studyLeaveDays}
-                                    onChange={(e) => setLeaveSettings({ ...leaveSettings, studyLeaveDays: parseInt(e.target.value) })}
-                                  />
-                                  <Form.Text>Professional development</Form.Text>
                                 </Form.Group>
                               </Col>
                             </Row>
@@ -1002,40 +990,6 @@ const SettingsPage = () => {
 
                       {/* Right Column - Policies & Workflow */}
                       <Col md={6}>
-                        {/* Holiday Settings */}
-                        <Card className="border-0 shadow-sm mb-4">
-                          <Card.Body>
-                            <h5 className="fw-bold mb-4 d-flex align-items-center gap-2">
-                              <IconCalendar size={20} />
-                              Holiday Configuration
-                            </h5>
-                            <Row className="g-3">
-                              <Col md={6}>
-                                <Form.Group>
-                                  <Form.Label className="fw-semibold">National Holidays</Form.Label>
-                                  <Form.Control
-                                    type="number"
-                                    value={leaveSettings.nationalHolidaysCount}
-                                    onChange={(e) => setLeaveSettings({ ...leaveSettings, nationalHolidaysCount: parseInt(e.target.value) })}
-                                  />
-                                  <Form.Text>Government declared holidays</Form.Text>
-                                </Form.Group>
-                              </Col>
-                              <Col md={6}>
-                                <Form.Group>
-                                  <Form.Label className="fw-semibold">Festival Holidays</Form.Label>
-                                  <Form.Control
-                                    type="number"
-                                    value={leaveSettings.festivalHolidaysCount}
-                                    onChange={(e) => setLeaveSettings({ ...leaveSettings, festivalHolidaysCount: parseInt(e.target.value) })}
-                                  />
-                                  <Form.Text>Cultural/religious holidays</Form.Text>
-                                </Form.Group>
-                              </Col>
-                            </Row>
-                          </Card.Body>
-                        </Card>
-
                         {/* Leave Policies */}
                         <Card className="border-0 shadow-sm mb-4">
                           <Card.Body>
@@ -1049,11 +1003,14 @@ const SettingsPage = () => {
                               <Form.Group>
                                 <div className="d-flex justify-content-between align-items-center">
                                   <div>
-                                    <Form.Label className="fw-semibold mb-0">Enable Leave Carryover</Form.Label>
-                                    <Form.Text className="small mb-0">Allow employees to carry unused leaves to next year</Form.Text>
+                                    <Form.Label className="fw-semibold mb-0">Allow Carry Forward Paid Leaves</Form.Label>
+                                    <Form.Text className="small mb-0">
+                                      Unused monthly paid leaves are added to later months in the same year.
+                                    </Form.Text>
                                   </div>
                                   <Form.Check
                                     type="switch"
+                                    id="allow-carry-forward-paid-leaves"
                                     checked={leaveSettings.leaveCarryoverEnabled}
                                     onChange={(e) => setLeaveSettings({ ...leaveSettings, leaveCarryoverEnabled: e.target.checked })}
                                   />
@@ -1062,12 +1019,15 @@ const SettingsPage = () => {
 
                               {leaveSettings.leaveCarryoverEnabled && (
                                 <Form.Group>
-                                  <Form.Label className="fw-semibold">Max Carryover Days</Form.Label>
+                                  <Form.Label className="fw-semibold">Max Carry Forward Paid Leaves</Form.Label>
                                   <Form.Control
                                     type="number"
+                                    min={0}
+                                    max={365}
                                     value={leaveSettings.maxCarryoverDays}
-                                    onChange={(e) => setLeaveSettings({ ...leaveSettings, maxCarryoverDays: parseInt(e.target.value) })}
+                                    onChange={(e) => setLeaveSettings({ ...leaveSettings, maxCarryoverDays: parseInt(e.target.value) || 0 })}
                                   />
+                                  <Form.Text>Maximum unused paid leaves that can be carried forward.</Form.Text>
                                 </Form.Group>
                               )}
 

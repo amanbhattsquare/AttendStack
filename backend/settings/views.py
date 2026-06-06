@@ -52,6 +52,15 @@ class SystemSettingsView(generics.RetrieveUpdateAPIView):
                             )
                         )
             
+            paid_leave_policy_fields = {
+                "monthly_paid_leave_days",
+                "leave_carryover_enabled",
+                "max_carryover_days",
+            }
+            should_rebalance_paid_leaves = any(
+                change.field_name in paid_leave_policy_fields for change in changes
+            )
+
             # Bulk create change logs
             if changes:
                 SettingsChangeLog.objects.bulk_create(changes)
@@ -59,6 +68,11 @@ class SystemSettingsView(generics.RetrieveUpdateAPIView):
             # Update the instance
             instance.updated_by = request.user.employee if hasattr(request.user, 'employee') else None
             serializer.save()
+
+            if should_rebalance_paid_leaves:
+                from attendance.services import rebalance_paid_leave_attendance
+
+                rebalance_paid_leave_attendance()
             
         return Response(serializer.data)
 

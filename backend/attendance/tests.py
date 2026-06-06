@@ -48,6 +48,8 @@ class LeaveAttendanceSyncTests(TestCase):
         self.employee = create_employee()
         settings = SystemSettings.get_settings()
         settings.monthly_paid_leave_days = 1
+        settings.leave_carryover_enabled = False
+        settings.max_carryover_days = 5
         settings.save()
 
     def test_approved_leave_marks_each_date_and_respects_monthly_paid_quota(self):
@@ -111,6 +113,63 @@ class LeaveAttendanceSyncTests(TestCase):
 
         self.assertEqual(result["deleted"], 1)
         self.assertFalse(AttendanceRecord.objects.filter(employee=self.employee).exists())
+
+    def test_unused_monthly_paid_leave_carries_forward_to_next_month(self):
+        settings = SystemSettings.get_settings()
+        settings.leave_carryover_enabled = True
+        settings.max_carryover_days = 5
+        settings.save()
+
+        leave_request = LeaveRequest.objects.create(
+            employee=self.employee,
+            start_date=date(2026, 2, 2),
+            end_date=date(2026, 2, 3),
+            reason="Family work",
+            status=LeaveStatus.APPROVED,
+        )
+
+        sync_leave_request_attendance(leave_request)
+        records = list(
+            AttendanceRecord.objects.filter(employee=self.employee).order_by("date").values_list("date", "status", "is_paid")
+        )
+
+        self.assertEqual(
+            records,
+            [
+                (date(2026, 2, 2), AttendanceStatus.PAID_LEAVE, True),
+                (date(2026, 2, 3), AttendanceStatus.PAID_LEAVE, True),
+            ],
+        )
+
+    def test_carry_forward_respects_max_carryover_days(self):
+        settings = SystemSettings.get_settings()
+        settings.monthly_paid_leave_days = 2
+        settings.leave_carryover_enabled = True
+        settings.max_carryover_days = 1
+        settings.save()
+
+        leave_request = LeaveRequest.objects.create(
+            employee=self.employee,
+            start_date=date(2026, 2, 2),
+            end_date=date(2026, 2, 5),
+            reason="Family work",
+            status=LeaveStatus.APPROVED,
+        )
+
+        sync_leave_request_attendance(leave_request)
+        records = list(
+            AttendanceRecord.objects.filter(employee=self.employee).order_by("date").values_list("date", "status", "is_paid")
+        )
+
+        self.assertEqual(
+            records,
+            [
+                (date(2026, 2, 2), AttendanceStatus.PAID_LEAVE, True),
+                (date(2026, 2, 3), AttendanceStatus.PAID_LEAVE, True),
+                (date(2026, 2, 4), AttendanceStatus.PAID_LEAVE, True),
+                (date(2026, 2, 5), AttendanceStatus.LEAVE, False),
+            ],
+        )
 
 
 from rest_framework.test import APITestCase

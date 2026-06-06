@@ -21,11 +21,8 @@ def _month_key(value: date) -> tuple[int, int]:
     return value.year, value.month
 
 
-def _rebalance_monthly_paid_leaves(employee: Employee, year: int, month: int) -> None:
-    settings = SystemSettings.get_settings()
-    paid_quota = max(settings.monthly_paid_leave_days or 0, 0)
-
-    leave_records = (
+def _paid_leave_records_for_month(employee: Employee, year: int, month: int):
+    return (
         AttendanceRecord.objects.select_related("leave_request")
         .filter(
             employee=employee,
@@ -36,6 +33,17 @@ def _rebalance_monthly_paid_leaves(employee: Employee, year: int, month: int) ->
         .exclude(leave_request__leave_type=LeaveType.OTHER)
         .order_by("date", "leave_request_id", "id")
     )
+
+
+def _rebalance_monthly_paid_leaves(
+    employee: Employee,
+    year: int,
+    month: int,
+    paid_quota: int | None = None,
+) -> int:
+    settings = SystemSettings.get_settings()
+    paid_quota = max(settings.monthly_paid_leave_days or 0, 0) if paid_quota is None else max(paid_quota, 0)
+    leave_records = list(_paid_leave_records_for_month(employee, year, month))
 
     for index, record in enumerate(leave_records):
         should_be_paid = index < paid_quota
@@ -52,6 +60,47 @@ def _rebalance_monthly_paid_leaves(employee: Employee, year: int, month: int) ->
         )
         record.save(auto_refresh_status=False, update_fields=["status", "is_paid", "notes", "updated_at"])
 
+    return min(len(leave_records), paid_quota)
+
+
+def _rebalance_yearly_paid_leaves(employee: Employee, year: int) -> None:
+    settings = SystemSettings.get_settings()
+    monthly_quota = max(settings.monthly_paid_leave_days or 0, 0)
+    carryover_enabled = bool(settings.leave_carryover_enabled)
+    max_carryover = max(settings.max_carryover_days or 0, 0)
+    carried_balance = 0
+
+    for month in range(1, 13):
+        paid_quota = monthly_quota + carried_balance
+        paid_count = _rebalance_monthly_paid_leaves(employee, year, month, paid_quota)
+        unused_balance = max(paid_quota - paid_count, 0)
+        carried_balance = min(unused_balance, max_carryover) if carryover_enabled else 0
+
+
+def rebalance_paid_leave_attendance() -> dict[str, int]:
+    """Recalculate paid/unpaid leave records after paid leave policy changes."""
+    employee_years = set()
+    leave_records = (
+        AttendanceRecord.objects.filter(leave_request__status=LeaveStatus.APPROVED)
+        .exclude(leave_request__leave_type=LeaveType.OTHER)
+        .values_list("employee_id", "date")
+    )
+
+    for employee_id, leave_date in leave_records:
+        employee_years.add((employee_id, leave_date.year))
+
+    employees = Employee.objects.in_bulk({employee_id for employee_id, _ in employee_years})
+    rebalanced_count = 0
+
+    for employee_id, year in sorted(employee_years, key=lambda item: (str(item[0]), item[1])):
+        employee = employees.get(employee_id)
+        if not employee:
+            continue
+        _rebalance_yearly_paid_leaves(employee, year)
+        rebalanced_count += 1
+
+    return {"employee_years_rebalanced": rebalanced_count}
+
 
 @transaction.atomic
 def sync_leave_request_attendance(leave_request) -> dict[str, int]:
@@ -63,8 +112,8 @@ def sync_leave_request_attendance(leave_request) -> dict[str, int]:
 
     if leave_request.status != LeaveStatus.APPROVED:
         deleted_count, _ = existing_records.delete()
-        for year, month in affected_months:
-            _rebalance_monthly_paid_leaves(leave_request.employee, year, month)
+        for year in {year for year, _ in affected_months}:
+            _rebalance_yearly_paid_leaves(leave_request.employee, year)
         return {"created": 0, "updated": 0, "deleted": deleted_count}
 
     stale_records = existing_records.exclude(date__in=requested_dates)
@@ -89,8 +138,8 @@ def sync_leave_request_attendance(leave_request) -> dict[str, int]:
         created_count += int(created)
         updated_count += int(not created)
 
-    for year, month in affected_months:
-        _rebalance_monthly_paid_leaves(leave_request.employee, year, month)
+    for year in {year for year, _ in affected_months}:
+        _rebalance_yearly_paid_leaves(leave_request.employee, year)
 
     return {"created": created_count, "updated": updated_count, "deleted": deleted_count}
 

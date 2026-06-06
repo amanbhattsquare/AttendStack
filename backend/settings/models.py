@@ -80,6 +80,15 @@ class SystemSettings(models.Model):
         validators=[MinValueValidator(0), MaxValueValidator(31)],
         help_text="Number of approved leave days per employee that are paid each month",
     )
+    leave_carryover_enabled = models.BooleanField(
+        default=True,
+        help_text="Carry unused monthly paid leave balance into later months in the same calendar year",
+    )
+    max_carryover_days = models.IntegerField(
+        default=5,
+        validators=[MinValueValidator(0), MaxValueValidator(365)],
+        help_text="Maximum unused paid leave days that can be carried forward",
+    )
     annual_paid_leave_days = models.IntegerField(default=21, help_text="Default number of annual paid leave days per employee")
     sick_leave_days = models.IntegerField(default=12, help_text="Default number of annual sick leave days per employee")
     casual_leave_days = models.IntegerField(default=6, help_text="Default number of annual casual leave days per employee")

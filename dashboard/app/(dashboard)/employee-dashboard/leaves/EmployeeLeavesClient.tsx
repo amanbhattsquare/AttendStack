@@ -22,6 +22,8 @@ interface LeaveSettings {
   annual_paid_leave_days: number;
   sick_leave_days: number;
   casual_leave_days: number;
+  monthly_paid_leave_days: number;
+  carry_forward_leave_days: number;
 }
 
 const DEFAULT_LEAVE_TYPES = [
@@ -334,6 +336,24 @@ const EmployeeLeavesClient = () => {
                     <p className="text-info mb-0"><strong>{leaveSettings.casual_leave_days - usedCasual}</strong> / {leaveSettings.casual_leave_days} days left</p>
                   </div>
                   <IconUser size={24} className="text-info" />
+                </div>
+              </Col>
+              <Col md={4}>
+                <div className="d-flex align-items-center justify-content-between p-3 bg-success-subtle rounded-3">
+                  <div>
+                    <p className="text-success small fw-semibold mb-1">Monthly Paid Leave</p>
+                    <p className="text-success mb-0"><strong>{leaveSettings.monthly_paid_leave_days}</strong> days</p>
+                  </div>
+                  <IconBook size={24} className="text-success" />
+                </div>
+              </Col>
+              <Col md={4}>
+                <div className="d-flex align-items-center justify-content-between p-3 bg-warning-subtle rounded-3">
+                  <div>
+                    <p className="text-warning small fw-semibold mb-1">Carry Forward Leave</p>
+                    <p className="text-warning mb-0"><strong>{leaveSettings.carry_forward_leave_days}</strong> days</p>
+                  </div>
+                  <IconClock size={24} className="text-warning" />
                 </div>
               </Col>
             </Row>

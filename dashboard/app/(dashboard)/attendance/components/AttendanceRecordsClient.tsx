@@ -62,7 +62,7 @@ type EmployeeSummary = {
   payableSalary: number | string | null;
 };
 
-const API_URL = `${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/attendance`;
+const API_URL = `${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/attendance/`;
 const PAYROLL_SUMMARY_URL = `${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/payroll/summary/`;
 const recordsPerPage = 31;
 
@@ -130,6 +130,34 @@ const monthOptions = [
   { value: 12, name: "December" },
 ];
 
+const parseResponseBody = async (response: Response) => {
+  if (response.status === 204) return null;
+
+  const text = await response.text();
+  if (!text) return null;
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+};
+
+const getErrorMessage = (body: unknown, fallback: string) => {
+  if (!body) return fallback;
+  if (typeof body === "string") return body || fallback;
+  if (typeof body !== "object") return fallback;
+
+  const errorBody = body as Record<string, unknown>;
+  if (typeof errorBody.detail === "string") return errorBody.detail;
+
+  const messages = Object.values(errorBody)
+    .flatMap((value) => (Array.isArray(value) ? value : [value]))
+    .filter((value): value is string => typeof value === "string" && value.length > 0);
+
+  return messages.join(" ") || fallback;
+};
+
 const AttendanceRecordsClient = () => {
   const today = new Date();
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
@@ -189,19 +217,12 @@ const AttendanceRecordsClient = () => {
   const handleApiCall = async (url: string, options: RequestInit, successMessage: string, errorMessage: string) => {
     try {
       const response = await fetch(url, options);
+      const data = await parseResponseBody(response);
+
       if (!response.ok) {
-        let errData;
-        try {
-          errData = await response.json();
-        } catch (e) {
-          errData = { detail: await response.text() };
-        }
-        const errMsg = errData.detail || Object.values(errData).flat().join(" ") || errorMessage;
+        const errMsg = getErrorMessage(data, errorMessage);
         throw new Error(errMsg);
       }
-      
-      const isJson = response.headers.get('content-type')?.includes('application/json');
-      const data = response.status !== 204 && isJson ? await response.json() : null;
 
       return { success: true, data: data };
     } catch (error) {
@@ -242,7 +263,7 @@ const AttendanceRecordsClient = () => {
 
   const handleUpdateRecord = async (updatedRecord: AttendanceRecord) => {
     const result = await handleApiCall(
-      `${API_URL}/${updatedRecord.id}/`,
+      `${API_URL}${updatedRecord.id}/`,
       {
         method: "PATCH",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
@@ -269,7 +290,7 @@ const AttendanceRecordsClient = () => {
     if (!deletingRecord) return;
 
     const result = await handleApiCall(
-      `${API_URL}/${deletingRecord.id}/`,
+      `${API_URL}${deletingRecord.id}/`,
       {
         method: "DELETE",
         headers: authHeaders(),

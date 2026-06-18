@@ -10,6 +10,8 @@ User = get_user_model()
 
 
 class EmployeeProfileSerializer(serializers.ModelSerializer):
+    profile_photo_url = serializers.SerializerMethodField()
+
     class Meta:
         model = Employee
         fields = [
@@ -18,16 +20,25 @@ class EmployeeProfileSerializer(serializers.ModelSerializer):
             "date_of_birth",
             "address",
             "profile_photo",
+            "profile_photo_url",
             "emergency_contact_name",
             "emergency_contact_relationship",
             "emergency_contact_phone",
         ]
+        read_only_fields = ["profile_photo_url"]
 
     def validate_full_name(self, value):
         value = value.strip()
         if not value:
             raise serializers.ValidationError("Enter a valid name.")
         return value
+
+    def get_profile_photo_url(self, obj):
+        if not obj.profile_photo:
+            return None
+        request = self.context.get("request")
+        url = obj.profile_photo.url
+        return request.build_absolute_uri(url) if request else url
 
 
 class EmployeeListSerializer(serializers.ModelSerializer):

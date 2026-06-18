@@ -99,26 +99,28 @@ class EmployeeViewSet(viewsets.ModelViewSet):
             return EmployeeProfileSerializer
         return super().get_serializer_class()
 
+    def get_current_employee(self):
+        user = self.request.user
+        employee = Employee.objects.filter(email__iexact=user.email).first()
+
+        if employee is None and user.employee_id:
+            employee = Employee.objects.filter(employee_id=user.employee_id).first()
+
+        return employee
+
     @action(detail=False, methods=["get", "put", "patch"], url_path="me")
     def me(self, request):
-        employee = (
-            self.get_queryset()
-            .filter(email__iexact=request.user.email)
-            .first()
-        )
-
-        if employee is None and request.user.employee_id:
-            employee = (
-                self.get_queryset()
-                .filter(employee_id=request.user.employee_id)
-                .first()
-            )
-
+        employee = self.get_current_employee()
         if employee is None:
             raise NotFound("No employee profile is linked to this login account.")
 
         if request.method in ["PUT", "PATCH"]:
-            serializer = self.get_serializer(employee, data=request.data, partial=request.method == "PATCH")
+            serializer = self.get_serializer(
+                employee,
+                data=request.data,
+                partial=request.method == "PATCH",
+                context={"request": request},
+            )
             serializer.is_valid(raise_exception=True)
             serializer.save()
             return Response(serializer.data)

@@ -12,6 +12,7 @@ export type EmployeeFormData = {
   profilePhoto: File | null;
   profilePhotoUrl?: string | null;
   aadhaarDocument: File | null;
+  aadhaarDocumentUrl?: string | null;
   fullName: string;
   email: string;
   phone: string;
@@ -219,8 +220,8 @@ const EmployeeFormWizard = ({ mode = "add", initialData, employeeId, onSave, onC
     Object.entries(fields).forEach(([key, value]) => {
       if (value) body.append(key, value);
     });
-    if (formData.profilePhoto) body.append("profile_photo", formData.profilePhoto);
-    if (formData.aadhaarDocument) body.append("aadhaar_document", formData.aadhaarDocument);
+    if (formData.profilePhoto instanceof File) body.append("profile_photo", formData.profilePhoto);
+    if (formData.aadhaarDocument instanceof File) body.append("aadhaar_document", formData.aadhaarDocument);
     return body;
   }, [formData]);
 

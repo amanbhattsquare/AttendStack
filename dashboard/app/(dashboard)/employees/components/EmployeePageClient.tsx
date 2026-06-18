@@ -195,12 +195,24 @@ const EmployeePageClient = () => {
     const data = await response.json();
     const camelCaseData: Partial<EmployeeFormData> = {};
     for (const key in data) {
-      const camelKey = toCamelCase(key);
-      if (camelKey === 'profilePhoto') {
-        camelCaseData['profilePhotoUrl'] = data[key];
-      } else {
-        (camelCaseData as any)[camelKey] = data[key];
+      if (key === "profile_photo") {
+        camelCaseData.profilePhoto = null;
+        continue;
       }
+      if (key === "profile_photo_url") {
+        camelCaseData.profilePhotoUrl = data[key];
+        continue;
+      }
+      if (key === "aadhaar_document") {
+        camelCaseData.aadhaarDocument = null;
+        continue;
+      }
+      if (key === "aadhaar_document_url") {
+        camelCaseData.aadhaarDocumentUrl = data[key];
+        continue;
+      }
+      const camelKey = toCamelCase(key);
+      (camelCaseData as any)[camelKey] = data[key];
     }
     return camelCaseData;
   };

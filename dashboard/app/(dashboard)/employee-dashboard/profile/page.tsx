@@ -12,11 +12,34 @@ import {
   IconUser,
   IconWallet,
   IconDownload,
+  IconEdit,
+  IconUpload,
 } from "@tabler/icons-react";
 import { useCurrentEmployee } from "../useCurrentEmployee";
-import { Spinner, Alert, Badge, Row, Col } from "react-bootstrap";
+import { Spinner, Alert, Badge, Row, Col, Button, Modal, Form } from "react-bootstrap";
 import { useEffect, useState } from "react";
 
+type PersonalInfoForm = {
+  fullName: string;
+  phone: string;
+  dateOfBirth: string;
+  address: string;
+  emergencyContactName: string;
+  emergencyContactRelationship: string;
+  emergencyContactPhone: string;
+};
+
+const emptyPersonalInfoForm: PersonalInfoForm = {
+  fullName: "",
+  phone: "",
+  dateOfBirth: "",
+  address: "",
+  emergencyContactName: "",
+  emergencyContactRelationship: "",
+  emergencyContactPhone: "",
+};
+
+const EMPLOYEE_PROFILE_API = `${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/employees/me/`;
 
 const formatDate = (value?: string | null) => {
   if (!value) return "Not provided";
@@ -67,6 +90,12 @@ const ProfileItem = ({ label, value, icon, linkUrl }: { label: string; value?: s
 const ProfilePage = () => {
   const { employee, isLoading, error, refetch } = useCurrentEmployee();
   const [settings, setSettings] = useState<any>(null);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [personalForm, setPersonalForm] = useState<PersonalInfoForm>(emptyPersonalInfoForm);
+  const [profilePhotoFile, setProfilePhotoFile] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [profileSaveError, setProfileSaveError] = useState("");
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -89,7 +118,112 @@ const ProfilePage = () => {
     loadSettings();
   }, []);
 
+  useEffect(() => {
+    if (!profilePhotoFile) {
+      setPhotoPreview(null);
+      return;
+    }
+
+    const objectUrl = URL.createObjectURL(profilePhotoFile);
+    setPhotoPreview(objectUrl);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [profilePhotoFile]);
+
   const logoUrl = settings?.company_logo || null;
+
+  const openEditModal = () => {
+    if (!employee) return;
+    setPersonalForm({
+      fullName: employee.full_name || "",
+      phone: employee.phone || "",
+      dateOfBirth: employee.date_of_birth || "",
+      address: employee.address || "",
+      emergencyContactName: employee.emergency_contact_name || "",
+      emergencyContactRelationship: employee.emergency_contact_relationship || "",
+      emergencyContactPhone: employee.emergency_contact_phone || "",
+    });
+    setProfilePhotoFile(null);
+    setProfileSaveError("");
+    setIsEditOpen(true);
+  };
+
+  const closeEditModal = () => {
+    if (isSavingProfile) return;
+    setIsEditOpen(false);
+    setProfilePhotoFile(null);
+    setPhotoPreview(null);
+    setProfileSaveError("");
+  };
+
+  const updatePersonalField = <TKey extends keyof PersonalInfoForm>(field: TKey, value: PersonalInfoForm[TKey]) => {
+    setPersonalForm((current) => ({ ...current, [field]: value }));
+    setProfileSaveError("");
+  };
+
+  const parseProfileError = async (response: Response) => {
+    const body = await response.json().catch(() => null);
+    if (!body) return "Unable to update your personal information.";
+    if (typeof body.detail === "string") return body.detail;
+    return Object.values(body).flat().join(" ");
+  };
+
+  const handlePersonalInfoSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setProfileSaveError("");
+
+    if (!personalForm.fullName.trim()) {
+      setProfileSaveError("Full name is required.");
+      return;
+    }
+
+    if (personalForm.phone && !/^\+?[0-9]{10,15}$/.test(personalForm.phone.trim())) {
+      setProfileSaveError("Enter a valid phone number.");
+      return;
+    }
+
+    if (
+      personalForm.emergencyContactPhone &&
+      !/^\+?[0-9]{10,15}$/.test(personalForm.emergencyContactPhone.trim())
+    ) {
+      setProfileSaveError("Enter a valid emergency contact phone number.");
+      return;
+    }
+
+    setIsSavingProfile(true);
+    try {
+      const token = localStorage.getItem("authToken");
+      if (!token) throw new Error("Please sign in again to update your profile.");
+
+      const body = new FormData();
+      body.append("full_name", personalForm.fullName.trim());
+      body.append("phone", personalForm.phone.trim());
+      body.append("date_of_birth", personalForm.dateOfBirth);
+      body.append("address", personalForm.address.trim());
+      body.append("emergency_contact_name", personalForm.emergencyContactName.trim());
+      body.append("emergency_contact_relationship", personalForm.emergencyContactRelationship.trim());
+      body.append("emergency_contact_phone", personalForm.emergencyContactPhone.trim());
+      if (profilePhotoFile instanceof File) {
+        body.append("profile_photo", profilePhotoFile);
+      }
+
+      const response = await fetch(EMPLOYEE_PROFILE_API, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}` },
+        body,
+      });
+
+      if (!response.ok) {
+        throw new Error(await parseProfileError(response));
+      }
+
+      await refetch();
+      closeEditModal();
+    } catch (saveError) {
+      setProfileSaveError(saveError instanceof Error ? saveError.message : "Unable to update your personal information.");
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
 
 
 
@@ -176,9 +310,17 @@ const ProfilePage = () => {
                 </Badge>
               </div>
               <p className="text-secondary fw-semibold mb-0 fs-5">
-                {employee.designation} <span className="mx-1 text-muted">•</span> {employee.department}
+                {employee.designation} <span className="mx-1 text-muted">-</span> {employee.department}
               </p>
               <span className="small text-muted d-block mt-2">Corporate Portal Account Active</span>
+              <Button
+                variant="primary"
+                size="sm"
+                className="d-inline-flex align-items-center gap-2 mt-3"
+                onClick={openEditModal}
+              >
+                <IconEdit size={16} /> Edit Personal Info
+              </Button>
             </div>
             <div className="ms-sm-auto text-sm-end">
               {settings ? (
@@ -225,6 +367,129 @@ const ProfilePage = () => {
         </div>
       ))}
 
+      <Modal show={isEditOpen} onHide={closeEditModal} centered size="lg">
+        <Modal.Header closeButton>
+          <Modal.Title>Edit Personal Information</Modal.Title>
+        </Modal.Header>
+        <Form onSubmit={handlePersonalInfoSubmit}>
+          <Modal.Body>
+            {profileSaveError && <Alert variant="danger" className="border-0">{profileSaveError}</Alert>}
+
+            <div className="employee-edit-photo-panel mb-4">
+              <img
+                src={photoPreview || employee.profile_photo_url || "/images/avatar/avatar-fallback.jpg"}
+                alt={employee.full_name}
+                className="employee-edit-avatar"
+              />
+              <div>
+                <Form.Label htmlFor="employeeProfilePhoto" className="btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-2 mb-2">
+                  <IconUpload size={16} /> Upload Photo
+                </Form.Label>
+                <Form.Control
+                  id="employeeProfilePhoto"
+                  type="file"
+                  accept="image/*"
+                  className="d-none"
+                  onChange={(event) => {
+                    const input = event.currentTarget as HTMLInputElement;
+                    setProfilePhotoFile(input.files?.[0] || null);
+                  }}
+                />
+                <div className="small text-secondary">JPG, PNG, or WebP image.</div>
+              </div>
+            </div>
+
+            <Row className="g-3">
+              <Col xs={12} md={6}>
+                <Form.Group controlId="employeeFullName">
+                  <Form.Label className="fw-semibold">Full Name</Form.Label>
+                  <Form.Control
+                    value={personalForm.fullName}
+                    onChange={(event) => updatePersonalField("fullName", event.target.value)}
+                    maxLength={150}
+                    required
+                  />
+                </Form.Group>
+              </Col>
+              <Col xs={12} md={6}>
+                <Form.Group controlId="employeePhone">
+                  <Form.Label className="fw-semibold">Phone Number</Form.Label>
+                  <Form.Control
+                    type="tel"
+                    value={personalForm.phone}
+                    onChange={(event) => updatePersonalField("phone", event.target.value)}
+                    maxLength={15}
+                    required
+                  />
+                </Form.Group>
+              </Col>
+              <Col xs={12} md={6}>
+                <Form.Group controlId="employeeDateOfBirth">
+                  <Form.Label className="fw-semibold">Date of Birth</Form.Label>
+                  <Form.Control
+                    type="date"
+                    value={personalForm.dateOfBirth}
+                    onChange={(event) => updatePersonalField("dateOfBirth", event.target.value)}
+                  />
+                </Form.Group>
+              </Col>
+              <Col xs={12}>
+                <Form.Group controlId="employeeAddress">
+                  <Form.Label className="fw-semibold">Address</Form.Label>
+                  <Form.Control
+                    as="textarea"
+                    rows={3}
+                    value={personalForm.address}
+                    onChange={(event) => updatePersonalField("address", event.target.value)}
+                  />
+                </Form.Group>
+              </Col>
+              <Col xs={12}>
+                <hr className="my-2" />
+                <h6 className="fw-bold mb-0">Emergency Contact</h6>
+              </Col>
+              <Col xs={12} md={6}>
+                <Form.Group controlId="employeeEmergencyContactName">
+                  <Form.Label className="fw-semibold">Contact Name</Form.Label>
+                  <Form.Control
+                    value={personalForm.emergencyContactName}
+                    onChange={(event) => updatePersonalField("emergencyContactName", event.target.value)}
+                    maxLength={150}
+                  />
+                </Form.Group>
+              </Col>
+              <Col xs={12} md={6}>
+                <Form.Group controlId="employeeEmergencyRelationship">
+                  <Form.Label className="fw-semibold">Relationship</Form.Label>
+                  <Form.Control
+                    value={personalForm.emergencyContactRelationship}
+                    onChange={(event) => updatePersonalField("emergencyContactRelationship", event.target.value)}
+                    maxLength={80}
+                  />
+                </Form.Group>
+              </Col>
+              <Col xs={12} md={6}>
+                <Form.Group controlId="employeeEmergencyPhone">
+                  <Form.Label className="fw-semibold">Contact Phone</Form.Label>
+                  <Form.Control
+                    type="tel"
+                    value={personalForm.emergencyContactPhone}
+                    onChange={(event) => updatePersonalField("emergencyContactPhone", event.target.value)}
+                    maxLength={15}
+                  />
+                </Form.Group>
+              </Col>
+            </Row>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button variant="outline-secondary" onClick={closeEditModal} disabled={isSavingProfile}>Cancel</Button>
+            <Button variant="primary" type="submit" disabled={isSavingProfile}>
+              {isSavingProfile ? <><Spinner size="sm" animation="border" className="me-2" />Saving...</> : "Save Changes"}
+            </Button>
+          </Modal.Footer>
+        </Form>
+      </Modal>
+
       <style jsx global>{`
         .employee-profile-container {
           font-family: 'Inter', sans-serif;
@@ -250,6 +515,26 @@ const ProfilePage = () => {
           width: 104px;
           height: 104px;
           object-fit: cover;
+        }
+
+        .employee-edit-photo-panel {
+          display: flex;
+          align-items: center;
+          gap: 16px;
+          padding: 14px;
+          border: 1px solid #e5eaf0;
+          border-radius: 8px;
+          background: #f8fafc;
+        }
+
+        .employee-edit-avatar {
+          width: 76px;
+          height: 76px;
+          border-radius: 50%;
+          object-fit: cover;
+          border: 3px solid #fff;
+          box-shadow: 0 2px 8px rgba(16, 24, 40, 0.08);
+          background: #fff;
         }
 
         .my-profile-icon {

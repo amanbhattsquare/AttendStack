@@ -3,12 +3,15 @@
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { Alert, Badge, Card, Col, Row, Spinner } from "react-bootstrap";
 import {
   IconAlertTriangle,
   IconCalendarTime,
   IconCircleCheck,
   IconClock,
+  IconFlag,
+  IconListDetails,
   IconListCheck,
   IconUsers,
 } from "@tabler/icons-react";
@@ -53,6 +56,21 @@ type PayrollRecord = {
   paid_on?: string | null;
 };
 
+type TaskRecord = {
+  id: string;
+  title: string;
+  assignee_name?: string;
+  assignee_department?: string;
+  priority: "LOW" | "MEDIUM" | "HIGH" | "URGENT";
+  priority_label?: string;
+  status: "PENDING" | "TODO" | "IN_PROGRESS" | "ON_HOLD" | "COMPLETED" | "CLOSED" | "CANCELLED";
+  status_label?: string;
+  due_date?: string | null;
+  is_overdue?: boolean;
+  updated_at?: string;
+  created_at?: string;
+};
+
 type ActivityItem = {
   description: string;
   timestamp: string;
@@ -81,6 +99,28 @@ const formatDateTime = (value?: string | null) => {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(value));
+};
+
+const formatDate = (value?: string | null) => {
+  if (!value) return "No due date";
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(value));
+};
+
+const daysUntil = (value?: string | null) => {
+  if (!value) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const date = new Date(value);
+  date.setHours(0, 0, 0, 0);
+  return Math.ceil((date.getTime() - today.getTime()) / 86400000);
+};
+
+const taskStatusClass = (status: TaskRecord["status"]) => {
+  return `task-status-badge task-status-${status.toLowerCase().replace("_", "-")}`;
 };
 
 const getAttendanceDescription = (record: AttendanceRecord) => {
@@ -117,6 +157,7 @@ const AdminDashboard = () => {
   const [recentAttendance, setRecentAttendance] = useState<AttendanceRecord[]>([]);
   const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
   const [payrolls, setPayrolls] = useState<PayrollRecord[]>([]);
+  const [tasks, setTasks] = useState<TaskRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -131,12 +172,13 @@ const AdminDashboard = () => {
       const month = today.getMonth() + 1;
       const year = today.getFullYear();
 
-      const [employeesRes, todayRes, recentRes, leavesRes, payrollRes] = await Promise.all([
+      const [employeesRes, todayRes, recentRes, leavesRes, payrollRes, tasksRes] = await Promise.all([
         axios.get(`${API_URL}/api/v1/employees/`, authConfig()),
         axios.get(`${API_URL}/api/v1/attendance/today/`, authConfig()),
         axios.get(`${API_URL}/api/v1/attendance/?date_from=${weekStart.toISOString().slice(0, 10)}`, authConfig()),
         axios.get(`${API_URL}/api/v1/attendance/leaves/`, authConfig()),
         axios.get(`${API_URL}/api/v1/payroll/?month=${month}&year=${year}`, authConfig()),
+        axios.get(`${API_URL}/api/v1/tasks/?page_size=100`, authConfig()),
       ]);
 
       setEmployees(toArray(employeesRes.data));
@@ -144,6 +186,7 @@ const AdminDashboard = () => {
       setRecentAttendance(toArray(recentRes.data));
       setLeaves(toArray(leavesRes.data));
       setPayrolls(toArray(payrollRes.data));
+      setTasks(toArray(tasksRes.data));
     } catch (loadError) {
       console.error("Failed to load admin dashboard.", loadError);
       setError("Unable to load live dashboard data. Please refresh or sign in again.");
@@ -173,6 +216,32 @@ const AdminDashboard = () => {
     : 0;
   const pendingLeaves = leaves.filter((leave) => leave.status === "PENDING").length;
   const pendingPayroll = payrolls.filter((payroll) => payroll.status === "PENDING").length;
+  const activeTasks = tasks.filter((task) => ["PENDING", "TODO", "IN_PROGRESS", "ON_HOLD"].includes(task.status)).length;
+  const overdueTasks = tasks.filter((task) => task.is_overdue).length;
+  const dueSoonTasks = tasks.filter((task) => {
+    const days = daysUntil(task.due_date);
+    return days !== null && days >= 0 && days <= 3 && !["COMPLETED", "CLOSED", "CANCELLED"].includes(task.status);
+  }).length;
+  const onHoldTasks = tasks.filter((task) => task.status === "ON_HOLD").length;
+  const urgentTasks = tasks.filter((task) => ["URGENT", "HIGH"].includes(task.priority) && !["COMPLETED", "CLOSED", "CANCELLED"].includes(task.status)).length;
+  const completedTasks = tasks.filter((task) => ["COMPLETED", "CLOSED"].includes(task.status)).length;
+  const taskCompletionRate = tasks.length ? Math.round((completedTasks / tasks.length) * 100) : 0;
+  const recentTasks = useMemo(() => {
+    return [...tasks]
+      .filter((task) => !["CANCELLED", "CLOSED"].includes(task.status))
+      .sort((a, b) => {
+        if (Boolean(a.is_overdue) !== Boolean(b.is_overdue)) return a.is_overdue ? -1 : 1;
+        if (a.status === "ON_HOLD" && b.status !== "ON_HOLD") return -1;
+        if (b.status === "ON_HOLD" && a.status !== "ON_HOLD") return 1;
+        const aDue = daysUntil(a.due_date);
+        const bDue = daysUntil(b.due_date);
+        if (aDue !== null && bDue !== null) return aDue - bDue;
+        if (aDue !== null) return -1;
+        if (bDue !== null) return 1;
+        return new Date(b.updated_at || b.created_at || 0).getTime() - new Date(a.updated_at || a.created_at || 0).getTime();
+      })
+      .slice(0, 6);
+  }, [tasks]);
 
   const stats: DashboardStatType[] = [
     {
@@ -299,6 +368,109 @@ const AdminDashboard = () => {
             <DashboardStats stats={stats} />
           </Row>
 
+          <Card className="border-0 shadow-sm mb-4 admin-task-panel">
+            <Card.Header className="bg-white border-0 py-4 d-flex flex-column flex-xl-row align-items-xl-center justify-content-between gap-3">
+              <div className="d-flex align-items-center gap-3">
+                <div className="rounded bg-primary-subtle text-primary d-flex align-items-center justify-content-center" style={{ width: 44, height: 44 }}>
+                  <IconListDetails size={22} />
+                </div>
+                <div>
+                  <h5 className="mb-1 fw-bold text-dark">Task Operations</h5>
+                  <p className="text-secondary small mb-0">Live assignment workload, overdue follow-up, and employee execution progress.</p>
+                </div>
+              </div>
+              <div className="d-flex flex-column flex-sm-row align-items-stretch align-items-sm-center gap-2">
+                <div className="task-completion-pill">
+                  <span>Completion</span>
+                  <strong>{taskCompletionRate}%</strong>
+                  <div className="task-completion-track">
+                    <div style={{ width: `${taskCompletionRate}%` }} />
+                  </div>
+                </div>
+                <Link href="/tasks" className="btn btn-outline-primary btn-sm px-3">
+                  Manage Tasks
+                </Link>
+              </div>
+            </Card.Header>
+            <Card.Body className="pt-0">
+              <Row className="g-3 mb-4">
+                <Col xs={6} lg={3} xl={2}>
+                  <div className="task-dashboard-metric is-neutral">
+                    <span>Total Tasks</span>
+                    <strong>{tasks.length}</strong>
+                  </div>
+                </Col>
+                <Col xs={6} lg={3} xl={2}>
+                  <div className="task-dashboard-metric is-primary">
+                    <span>Active</span>
+                    <strong>{activeTasks}</strong>
+                  </div>
+                </Col>
+                <Col xs={6} lg={3} xl={2}>
+                  <div className="task-dashboard-metric is-danger">
+                    <span>Overdue</span>
+                    <strong>{overdueTasks}</strong>
+                  </div>
+                </Col>
+                <Col xs={6} lg={3} xl={2}>
+                  <div className="task-dashboard-metric is-warning">
+                    <span>Due Soon</span>
+                    <strong>{dueSoonTasks}</strong>
+                  </div>
+                </Col>
+                <Col xs={6} lg={3} xl={2}>
+                  <div className="task-dashboard-metric is-warning">
+                    <span>On Hold</span>
+                    <strong>{onHoldTasks}</strong>
+                  </div>
+                </Col>
+                <Col xs={6} lg={3} xl={2}>
+                  <div className="task-dashboard-metric is-danger">
+                    <span>High Priority</span>
+                    <strong>{urgentTasks}</strong>
+                  </div>
+                </Col>
+              </Row>
+
+              {recentTasks.length === 0 ? (
+                <div className="task-empty-state">
+                  <IconFlag size={28} className="text-primary" />
+                  <div>
+                    <div className="fw-bold text-dark">No task workload yet</div>
+                    <div className="text-secondary small">Assign tasks to employees to start tracking ownership, due dates, and execution health.</div>
+                  </div>
+                </div>
+              ) : (
+                <div className="task-dashboard-list">
+                  {recentTasks.map((task) => (
+                    <div key={task.id} className="task-dashboard-row">
+                      <div className="min-w-0">
+                        <div className="d-flex align-items-center gap-2 min-w-0">
+                          <div className="fw-semibold text-dark text-truncate">{task.title}</div>
+                          {task.due_date && (
+                            <span className="task-due-chip">{formatDate(task.due_date)}</span>
+                          )}
+                        </div>
+                        <div className="small text-secondary text-truncate mt-1">
+                          {task.assignee_name || "Unassigned"} {task.assignee_department ? `- ${task.assignee_department}` : ""}
+                        </div>
+                      </div>
+                      <div className="d-flex align-items-center gap-2 flex-wrap justify-content-end">
+                        {task.is_overdue && <Badge bg="danger-subtle" className="text-danger border border-danger-subtle">Overdue</Badge>}
+                        <Badge bg={task.priority === "URGENT" || task.priority === "HIGH" ? "warning-subtle" : "info-subtle"} className={task.priority === "URGENT" || task.priority === "HIGH" ? "text-warning" : "text-info"}>
+                          {task.priority_label || task.priority}
+                        </Badge>
+                        <Badge className={taskStatusClass(task.status)}>
+                          {task.status_label || task.status}
+                        </Badge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card.Body>
+          </Card>
+
           <Row className="g-4 mb-4">
             <Col xs={12} xl={8}>
               <EmployeesByOrgChart data={attendanceChartData} />
@@ -329,6 +501,202 @@ const AdminDashboard = () => {
           transform: translateY(-2px);
           transition: transform 0.18s ease, box-shadow 0.18s ease;
           box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+        }
+
+        .task-dashboard-metric {
+          background: #ffffff;
+          border: 1px solid #eef2f6;
+          border-radius: 10px;
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+          min-height: 92px;
+          padding: 14px 16px;
+          position: relative;
+          overflow: hidden;
+        }
+
+        .task-status-badge {
+          border: 1px solid transparent;
+          border-radius: 999px;
+          font-weight: 700;
+          padding: 5px 9px;
+        }
+
+        .task-status-pending {
+          background: #e0f2fe !important;
+          border-color: #bae6fd !important;
+          color: #0369a1 !important;
+        }
+
+        .task-status-todo {
+          background: #f1f5f9 !important;
+          border-color: #cbd5e1 !important;
+          color: #334155 !important;
+        }
+
+        .task-status-in-progress {
+          background: #dbeafe !important;
+          border-color: #bfdbfe !important;
+          color: #1d4ed8 !important;
+        }
+
+        .task-status-on-hold {
+          background: #fef3c7 !important;
+          border-color: #fde68a !important;
+          color: #b45309 !important;
+        }
+
+        .task-status-completed {
+          background: #dcfce7 !important;
+          border-color: #bbf7d0 !important;
+          color: #15803d !important;
+        }
+
+        .task-status-closed {
+          background: #ede9fe !important;
+          border-color: #ddd6fe !important;
+          color: #6d28d9 !important;
+        }
+
+        .task-status-cancelled {
+          background: #fee2e2 !important;
+          border-color: #fecaca !important;
+          color: #b91c1c !important;
+        }
+
+        .task-dashboard-metric::before {
+          content: "";
+          position: absolute;
+          inset: 0 auto 0 0;
+          width: 4px;
+        }
+
+        .task-dashboard-metric.is-neutral::before {
+          background: #64748b;
+        }
+
+        .task-dashboard-metric.is-primary::before {
+          background: #2563eb;
+        }
+
+        .task-dashboard-metric.is-warning::before {
+          background: #f59e0b;
+        }
+
+        .task-dashboard-metric.is-danger::before {
+          background: #dc2626;
+        }
+
+        .task-dashboard-metric span {
+          color: #64748b;
+          font-size: 11px;
+          font-weight: 800;
+          letter-spacing: 0;
+          text-transform: uppercase;
+        }
+
+        .task-dashboard-metric strong {
+          color: #0f172a;
+          font-size: 28px;
+          line-height: 1;
+        }
+
+        .task-completion-pill {
+          border: 1px solid #e2e8f0;
+          border-radius: 10px;
+          min-width: 180px;
+          padding: 9px 12px;
+        }
+
+        .task-completion-pill span {
+          color: #64748b;
+          display: block;
+          font-size: 11px;
+          font-weight: 800;
+          letter-spacing: 0;
+          line-height: 1;
+          margin-bottom: 6px;
+          text-transform: uppercase;
+        }
+
+        .task-completion-pill strong {
+          color: #0f172a;
+          display: block;
+          font-size: 18px;
+          line-height: 1;
+          margin-bottom: 8px;
+        }
+
+        .task-completion-track {
+          background: #e2e8f0;
+          border-radius: 999px;
+          height: 6px;
+          overflow: hidden;
+        }
+
+        .task-completion-track > div {
+          background: #2563eb;
+          border-radius: inherit;
+          height: 100%;
+          transition: width 0.25s ease;
+        }
+
+        .task-dashboard-list {
+          display: grid;
+          gap: 10px;
+        }
+
+        .task-dashboard-row {
+          align-items: center;
+          border: 1px solid #eef2f6;
+          border-radius: 10px;
+          display: grid;
+          gap: 14px;
+          grid-template-columns: minmax(0, 1fr) auto;
+          padding: 14px;
+          transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+        }
+
+        .task-dashboard-row:hover {
+          border-color: #cbd5e1;
+          box-shadow: 0 8px 20px rgba(15, 23, 42, 0.05);
+          transform: translateY(-1px);
+        }
+
+        .task-due-chip {
+          background: #f1f5f9;
+          border: 1px solid #e2e8f0;
+          border-radius: 999px;
+          color: #475569;
+          flex: 0 0 auto;
+          font-size: 11px;
+          font-weight: 700;
+          padding: 3px 8px;
+        }
+
+        .task-empty-state {
+          align-items: center;
+          background: #f8fafc;
+          border: 1px dashed #cbd5e1;
+          border-radius: 12px;
+          display: flex;
+          gap: 14px;
+          padding: 24px;
+        }
+
+        @media (max-width: 575.98px) {
+          .task-completion-pill {
+            width: 100%;
+          }
+
+          .task-dashboard-row {
+            grid-template-columns: 1fr;
+          }
+
+          .task-empty-state {
+            align-items: flex-start;
+          }
         }
       `}</style>
     </div>

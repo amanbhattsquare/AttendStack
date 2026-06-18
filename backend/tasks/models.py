@@ -15,10 +15,12 @@ class TaskPriority(models.TextChoices):
 
 
 class TaskStatus(models.TextChoices):
+    PENDING = "PENDING", "Pending"
     TODO = "TODO", "To Do"
     IN_PROGRESS = "IN_PROGRESS", "In Progress"
-    BLOCKED = "BLOCKED", "Blocked"
+    ON_HOLD = "ON_HOLD", "On Hold"
     COMPLETED = "COMPLETED", "Completed"
+    CLOSED = "CLOSED", "Closed"
     CANCELLED = "CANCELLED", "Cancelled"
 
 
@@ -47,7 +49,7 @@ class Task(models.Model):
     status = models.CharField(
         max_length=20,
         choices=TaskStatus.choices,
-        default=TaskStatus.TODO,
+        default=TaskStatus.PENDING,
         db_index=True,
     )
     due_date = models.DateField(blank=True, null=True, db_index=True)
@@ -81,13 +83,13 @@ class Task(models.Model):
     def is_overdue(self):
         return (
             self.due_date is not None
-            and self.status not in (TaskStatus.COMPLETED, TaskStatus.CANCELLED)
+            and self.status not in (TaskStatus.COMPLETED, TaskStatus.CLOSED, TaskStatus.CANCELLED)
             and self.due_date < timezone.localdate()
         )
 
     def save(self, *args, **kwargs):
-        if self.status == TaskStatus.COMPLETED and self.completed_at is None:
+        if self.status in (TaskStatus.COMPLETED, TaskStatus.CLOSED) and self.completed_at is None:
             self.completed_at = timezone.now()
-        elif self.status != TaskStatus.COMPLETED:
+        elif self.status not in (TaskStatus.COMPLETED, TaskStatus.CLOSED):
             self.completed_at = None
         super().save(*args, **kwargs)

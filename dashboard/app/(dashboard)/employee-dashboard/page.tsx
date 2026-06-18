@@ -7,6 +7,7 @@ import {
   IconCalendarCheck,
   IconChartBar,
   IconFingerprint,
+  IconFlag,
   IconMail,
   IconPhone,
   IconUser,
@@ -16,6 +17,7 @@ import {
   IconClock,
   IconShield,
   IconLogin2,
+  IconListDetails,
   IconLogout2,
   IconCircleCheck,
   IconNotes,
@@ -40,6 +42,19 @@ const formatCurrency = (value?: string | number | null) => {
     currency: "INR",
     maximumFractionDigits: 0,
   }).format(Number(value));
+};
+
+const daysUntil = (value?: string | null) => {
+  if (!value) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const date = new Date(value);
+  date.setHours(0, 0, 0, 0);
+  return Math.ceil((date.getTime() - today.getTime()) / 86400000);
+};
+
+const taskStatusClass = (status: TaskDashboardItem["status"]) => {
+  return `task-status-badge task-status-${status.toLowerCase().replace("_", "-")}`;
 };
 
 const quickActions = [
@@ -83,6 +98,14 @@ const quickActions = [
     color: "#ec4899", // Pink
     bgColor: "#fdf2f8",
   },
+  {
+    title: "My Tasks",
+    text: "Assigned work, due dates, files, and progress updates.",
+    href: "/employee-dashboard/tasks",
+    icon: <IconListDetails size={24} />,
+    color: "#2563eb",
+    bgColor: "#dbeafe",
+  },
 ];
 
 type EmployeeActivity = {
@@ -92,6 +115,19 @@ type EmployeeActivity = {
   timeLabel: string;
   color: string;
   createdAt: string;
+};
+
+type TaskDashboardItem = {
+  id: string;
+  title: string;
+  priority: "LOW" | "MEDIUM" | "HIGH" | "URGENT";
+  priority_label?: string;
+  status: "PENDING" | "TODO" | "IN_PROGRESS" | "ON_HOLD" | "COMPLETED" | "CLOSED" | "CANCELLED";
+  status_label?: string;
+  due_date?: string | null;
+  is_overdue?: boolean;
+  updated_at?: string;
+  created_at?: string;
 };
 
 const toArray = (payload: any) => Array.isArray(payload) ? payload : payload?.results || [];
@@ -141,6 +177,7 @@ const EmployeeDashboard = () => {
   const [punchError, setPunchError] = useState("");
   const [punchSuccess, setPunchSuccess] = useState("");
   const [activityFeed, setActivityFeed] = useState<EmployeeActivity[]>([]);
+  const [tasks, setTasks] = useState<TaskDashboardItem[]>([]);
   const DEFAULT_RULES = `1. Core Working Hours: 10:00 AM to 6:00 PM.
 2. Late Entry: Arriving after 10:15 AM will be marked as Late.
 3. Half Day: Working less than 4 hours will be considered a Half Day.
@@ -251,6 +288,23 @@ const EmployeeDashboard = () => {
     }
   };
 
+  const loadTaskSummary = async () => {
+    const token = localStorage.getItem("authToken");
+    if (!token) return;
+
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/tasks/?page_size=100`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setTasks(toArray(data));
+      }
+    } catch (err) {
+      console.error("Error loading employee task summary:", err);
+    }
+  };
+
   const loadTodayAttendance = async () => {
     const token = localStorage.getItem("authToken");
     if (!token) return;
@@ -271,14 +325,17 @@ const EmployeeDashboard = () => {
     setMounted(true);
     loadTodayAttendance();
     loadActivityFeed();
+    loadTaskSummary();
     loadSettings();
     const rules = localStorage.getItem("attendance_rules");
     setAttendanceRules(rules || settings?.attendance_rules || DEFAULT_RULES);
     const timer = window.setInterval(() => setCurrentTime(new Date()), 1000);
     const activityTimer = window.setInterval(loadActivityFeed, 60000);
+    const taskTimer = window.setInterval(loadTaskSummary, 60000);
     return () => {
       window.clearInterval(timer);
       window.clearInterval(activityTimer);
+      window.clearInterval(taskTimer);
     };
   }, []);
 
@@ -411,6 +468,27 @@ const EmployeeDashboard = () => {
   }
 
   const monthlySalary = Number(employee.annual_salary) / 12;
+  const taskStats = {
+    total: tasks.length,
+    active: tasks.filter((task) => ["PENDING", "TODO", "IN_PROGRESS", "ON_HOLD"].includes(task.status)).length,
+    overdue: tasks.filter((task) => task.is_overdue).length,
+    completed: tasks.filter((task) => ["COMPLETED", "CLOSED"].includes(task.status)).length,
+    onHold: tasks.filter((task) => task.status === "ON_HOLD").length,
+    dueSoon: tasks.filter((task) => {
+      const days = daysUntil(task.due_date);
+      return days !== null && days >= 0 && days <= 3 && !["COMPLETED", "CLOSED", "CANCELLED"].includes(task.status);
+    }).length,
+  };
+  const taskCompletionRate = taskStats.total ? Math.round((taskStats.completed / taskStats.total) * 100) : 0;
+  const taskHealthLabel = taskStats.overdue > 0 ? "Needs Attention" : taskStats.onHold > 0 ? "On Hold" : taskStats.active > 0 ? "In Progress" : "Clear";
+  const taskHealthVariant = taskStats.overdue > 0 ? "danger" : taskStats.onHold > 0 ? "warning" : "success";
+  const nextTasks = [...tasks]
+    .filter((task) => !["COMPLETED", "CLOSED", "CANCELLED"].includes(task.status))
+    .sort((a, b) => {
+      if (a.is_overdue !== b.is_overdue) return a.is_overdue ? -1 : 1;
+      return new Date(a.due_date || a.updated_at || a.created_at || 0).getTime() - new Date(b.due_date || b.updated_at || b.created_at || 0).getTime();
+    })
+    .slice(0, 4);
 
   return (
     <div className="employee-dashboard-container py-3">
@@ -585,6 +663,110 @@ const EmployeeDashboard = () => {
           </Card.Body>
         </Card>
       )}
+
+      <Card className="dashboard-panel border-0 shadow-sm mb-4 employee-task-focus-card">
+        <Card.Header className="bg-white border-0 py-3 d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
+          <div className="d-flex align-items-center gap-3">
+            <div className="metric-icon-box bg-primary-subtle text-primary">
+              <IconListDetails size={24} />
+            </div>
+            <div>
+              <div className="d-flex align-items-center gap-2 flex-wrap mb-1">
+                <h5 className="fw-bold text-dark mb-0">My Task Focus</h5>
+                <Badge bg={`${taskHealthVariant}-subtle`} className={`text-${taskHealthVariant} border border-${taskHealthVariant}-subtle rounded-pill`}>
+                  {taskHealthLabel}
+                </Badge>
+              </div>
+              <p className="text-secondary small mb-0">Assigned work, due dates, and status updates that need your attention.</p>
+            </div>
+          </div>
+          <div className="employee-task-header-actions">
+            <div className="employee-task-progress">
+              <span>Completion</span>
+              <strong>{taskCompletionRate}%</strong>
+              <div><i style={{ width: `${taskCompletionRate}%` }} /></div>
+            </div>
+            <Link href="/employee-dashboard/tasks" className="btn btn-outline-primary btn-sm px-3">
+              Open Tasks
+            </Link>
+          </div>
+        </Card.Header>
+        <Card.Body className="pt-0">
+          <Row className="g-3 mb-4">
+            <Col xs={6} lg={2}>
+              <div className="employee-task-metric is-neutral">
+                <span>Total</span>
+                <strong>{taskStats.total}</strong>
+              </div>
+            </Col>
+            <Col xs={6} lg={2}>
+              <div className="employee-task-metric is-primary">
+                <span>Active</span>
+                <strong>{taskStats.active}</strong>
+              </div>
+            </Col>
+            <Col xs={6} lg={2}>
+              <div className="employee-task-metric is-danger">
+                <span>Overdue</span>
+                <strong>{taskStats.overdue}</strong>
+              </div>
+            </Col>
+            <Col xs={6} lg={2}>
+              <div className="employee-task-metric is-warning">
+                <span>Due Soon</span>
+                <strong>{taskStats.dueSoon}</strong>
+              </div>
+            </Col>
+            <Col xs={6} lg={2}>
+              <div className="employee-task-metric is-warning">
+                <span>On Hold</span>
+                <strong>{taskStats.onHold}</strong>
+              </div>
+            </Col>
+            <Col xs={6} lg={2}>
+              <div className="employee-task-metric is-success">
+                <span>Completed</span>
+                <strong>{taskStats.completed}</strong>
+              </div>
+            </Col>
+          </Row>
+
+          {nextTasks.length === 0 ? (
+            <div className="employee-task-empty">
+              <IconFlag size={28} className="text-primary" />
+              <div>
+                <div className="fw-bold text-dark">No active tasks assigned</div>
+                <div className="text-secondary small">You are clear right now. New assignments will appear here automatically.</div>
+              </div>
+            </div>
+          ) : (
+            <div className="employee-task-list">
+              {nextTasks.map((task) => (
+                <div key={task.id} className="employee-task-row">
+                  <div className="min-w-0">
+                    <div className="d-flex align-items-center gap-2 min-w-0">
+                      <div className="fw-semibold text-dark text-truncate">{task.title}</div>
+                      {task.due_date && <span className="employee-task-due-chip">{formatDate(task.due_date)}</span>}
+                    </div>
+                    <div className="small text-secondary mt-1">
+                      {task.due_date ? `Due in ${daysUntil(task.due_date) ?? "--"} day${daysUntil(task.due_date) === 1 ? "" : "s"}` : "No due date"}
+                    </div>
+                  </div>
+                  <div className="d-flex gap-2 flex-wrap justify-content-end">
+                    {task.is_overdue && <Badge bg="danger-subtle" className="text-danger border border-danger-subtle">Overdue</Badge>}
+                    <Badge bg={task.priority === "URGENT" || task.priority === "HIGH" ? "warning-subtle" : "info-subtle"} className={task.priority === "URGENT" || task.priority === "HIGH" ? "text-warning" : "text-info"}>
+                      {task.priority_label || task.priority}
+                    </Badge>
+                    <Badge className={taskStatusClass(task.status)}>
+                      {task.status_label || task.status}
+                    </Badge>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card.Body>
+      </Card>
 
       <Row className="g-4 mb-4">
         <Col xs={12} xl={7}>
@@ -933,6 +1115,197 @@ const EmployeeDashboard = () => {
           box-shadow: 0 10px 20px rgba(79, 70, 229, 0.05) !important;
         }
 
+        .employee-task-metric {
+          background: #ffffff;
+          border: 1px solid #eef2f6;
+          border-radius: 8px;
+          display: flex;
+          flex-direction: column;
+          gap: 5px;
+          min-height: 88px;
+          padding: 14px;
+          position: relative;
+          overflow: hidden;
+        }
+
+        .task-status-badge {
+          border: 1px solid transparent;
+          border-radius: 999px;
+          font-weight: 700;
+          padding: 5px 9px;
+        }
+
+        .task-status-pending {
+          background: #e0f2fe !important;
+          border-color: #bae6fd !important;
+          color: #0369a1 !important;
+        }
+
+        .task-status-todo {
+          background: #f1f5f9 !important;
+          border-color: #cbd5e1 !important;
+          color: #334155 !important;
+        }
+
+        .task-status-in-progress {
+          background: #dbeafe !important;
+          border-color: #bfdbfe !important;
+          color: #1d4ed8 !important;
+        }
+
+        .task-status-on-hold {
+          background: #fef3c7 !important;
+          border-color: #fde68a !important;
+          color: #b45309 !important;
+        }
+
+        .task-status-completed {
+          background: #dcfce7 !important;
+          border-color: #bbf7d0 !important;
+          color: #15803d !important;
+        }
+
+        .task-status-closed {
+          background: #ede9fe !important;
+          border-color: #ddd6fe !important;
+          color: #6d28d9 !important;
+        }
+
+        .task-status-cancelled {
+          background: #fee2e2 !important;
+          border-color: #fecaca !important;
+          color: #b91c1c !important;
+        }
+
+        .employee-task-metric::before {
+          content: "";
+          position: absolute;
+          inset: 0 auto 0 0;
+          width: 4px;
+        }
+
+        .employee-task-metric.is-neutral::before {
+          background: #64748b;
+        }
+
+        .employee-task-metric.is-primary::before {
+          background: #2563eb;
+        }
+
+        .employee-task-metric.is-danger::before {
+          background: #dc2626;
+        }
+
+        .employee-task-metric.is-warning::before {
+          background: #f59e0b;
+        }
+
+        .employee-task-metric.is-success::before {
+          background: #16a34a;
+        }
+
+        .employee-task-metric span {
+          color: #64748b;
+          font-size: 12px;
+          font-weight: 700;
+          text-transform: uppercase;
+        }
+
+        .employee-task-metric strong {
+          color: #0f172a;
+          font-size: 24px;
+          line-height: 1;
+        }
+
+        .employee-task-list {
+          display: grid;
+          gap: 10px;
+        }
+
+        .employee-task-header-actions {
+          align-items: center;
+          display: flex;
+          gap: 10px;
+        }
+
+        .employee-task-progress {
+          border: 1px solid #e2e8f0;
+          border-radius: 8px;
+          min-width: 170px;
+          padding: 8px 10px;
+        }
+
+        .employee-task-progress span {
+          color: #64748b;
+          display: block;
+          font-size: 10px;
+          font-weight: 800;
+          line-height: 1;
+          margin-bottom: 6px;
+          text-transform: uppercase;
+        }
+
+        .employee-task-progress strong {
+          color: #0f172a;
+          display: block;
+          font-size: 17px;
+          line-height: 1;
+          margin-bottom: 8px;
+        }
+
+        .employee-task-progress div {
+          background: #e2e8f0;
+          border-radius: 999px;
+          height: 6px;
+          overflow: hidden;
+        }
+
+        .employee-task-progress i {
+          background: #2563eb;
+          border-radius: inherit;
+          display: block;
+          height: 100%;
+          transition: width 0.25s ease;
+        }
+
+        .employee-task-row {
+          align-items: center;
+          border: 1px solid #eef2f6;
+          border-radius: 8px;
+          display: grid;
+          gap: 12px;
+          grid-template-columns: minmax(0, 1fr) auto;
+          padding: 12px 14px;
+          transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+        }
+
+        .employee-task-row:hover {
+          border-color: #cbd5e1;
+          box-shadow: 0 8px 20px rgba(15, 23, 42, 0.05);
+          transform: translateY(-1px);
+        }
+
+        .employee-task-due-chip {
+          background: #f1f5f9;
+          border: 1px solid #e2e8f0;
+          border-radius: 999px;
+          color: #475569;
+          flex: 0 0 auto;
+          font-size: 11px;
+          font-weight: 700;
+          padding: 3px 8px;
+        }
+
+        .employee-task-empty {
+          align-items: center;
+          background: #f8fafc;
+          border: 1px dashed #cbd5e1;
+          border-radius: 8px;
+          display: flex;
+          gap: 14px;
+          padding: 22px;
+        }
+
         .action-icon-wrapper {
           width: 46px;
           height: 46px;
@@ -1077,6 +1450,25 @@ const EmployeeDashboard = () => {
 
           .section-heading {
             font-size: 16px;
+          }
+
+          .employee-task-header-actions {
+            align-items: stretch;
+            flex-direction: column;
+            width: 100%;
+          }
+
+          .employee-task-header-actions .btn,
+          .employee-task-progress {
+            width: 100%;
+          }
+
+          .employee-task-row {
+            grid-template-columns: 1fr;
+          }
+
+          .employee-task-empty {
+            align-items: flex-start;
           }
         }
       `}</style>

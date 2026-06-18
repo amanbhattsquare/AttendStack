@@ -174,15 +174,17 @@ class TaskViewSet(viewsets.ModelViewSet):
         overdue = queryset.filter(
             due_date__isnull=False,
             due_date__lt=timezone.localdate(),
-        ).exclude(status__in=[TaskStatus.COMPLETED, TaskStatus.CANCELLED])
+        ).exclude(status__in=[TaskStatus.COMPLETED, TaskStatus.CLOSED, TaskStatus.CANCELLED])
 
         return Response(
             {
                 "total": queryset.count(),
+                "pending": by_status.get(TaskStatus.PENDING, 0),
                 "todo": by_status.get(TaskStatus.TODO, 0),
                 "in_progress": by_status.get(TaskStatus.IN_PROGRESS, 0),
-                "blocked": by_status.get(TaskStatus.BLOCKED, 0),
+                "on_hold": by_status.get(TaskStatus.ON_HOLD, 0),
                 "completed": by_status.get(TaskStatus.COMPLETED, 0),
+                "closed": by_status.get(TaskStatus.CLOSED, 0),
                 "cancelled": by_status.get(TaskStatus.CANCELLED, 0),
                 "overdue": overdue.count(),
             },

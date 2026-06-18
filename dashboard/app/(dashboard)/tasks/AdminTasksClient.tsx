@@ -18,7 +18,7 @@ import { Alert, Badge, Button, Card, Col, Form, InputGroup, Modal, Row, Spinner,
 import { Avatar } from "components/common/Avatar";
 import { getAssetPath } from "helper/assetPath";
 
-type TaskStatus = "TODO" | "IN_PROGRESS" | "BLOCKED" | "COMPLETED" | "CANCELLED";
+type TaskStatus = "PENDING" | "TODO" | "IN_PROGRESS" | "ON_HOLD" | "COMPLETED" | "CLOSED" | "CANCELLED";
 type TaskPriority = "LOW" | "MEDIUM" | "HIGH" | "URGENT";
 
 type Task = {
@@ -52,6 +52,7 @@ type Task = {
   completed_at: string | null;
   is_overdue: boolean;
   created_at: string;
+  updated_at: string;
 };
 
 type Employee = {
@@ -87,7 +88,7 @@ const emptyForm: TaskFormState = {
   description: "",
   assignee: "",
   priority: "MEDIUM",
-  status: "TODO",
+  status: "PENDING",
   due_date: "",
   department: "",
   project_category: "",
@@ -97,10 +98,12 @@ const emptyForm: TaskFormState = {
 
 const statusOptions: Array<{ value: TaskStatus | "ALL"; label: string }> = [
   { value: "ALL", label: "All" },
+  { value: "PENDING", label: "Pending" },
   { value: "TODO", label: "To Do" },
   { value: "IN_PROGRESS", label: "In Progress" },
-  { value: "BLOCKED", label: "Blocked" },
+  { value: "ON_HOLD", label: "On Hold" },
   { value: "COMPLETED", label: "Completed" },
+  { value: "CLOSED", label: "Closed" },
   { value: "CANCELLED", label: "Cancelled" },
 ];
 
@@ -135,22 +138,10 @@ const getApiError = async (response: Response) => {
 
 const getStatusBadge = (status: TaskStatus, label: string, overdue = false) => {
   if (overdue) {
-    return <Badge bg="danger-subtle" className="text-danger border border-danger-subtle rounded-pill px-2 py-1">Overdue</Badge>;
+    return <Badge className="task-status-badge task-status-overdue">Overdue</Badge>;
   }
 
-  const className = "border rounded-pill px-2 py-1 fw-semibold";
-  switch (status) {
-    case "COMPLETED":
-      return <Badge bg="success-subtle" className={`text-success border-success-subtle ${className}`}>{label}</Badge>;
-    case "IN_PROGRESS":
-      return <Badge bg="primary-subtle" className={`text-primary border-primary-subtle ${className}`}>{label}</Badge>;
-    case "BLOCKED":
-      return <Badge bg="warning-subtle" className={`text-warning border-warning-subtle ${className}`}>{label}</Badge>;
-    case "CANCELLED":
-      return <Badge bg="secondary-subtle" className={`text-secondary border-secondary-subtle ${className}`}>{label}</Badge>;
-    default:
-      return <Badge bg="light" className={`text-dark border-secondary-subtle ${className}`}>{label}</Badge>;
-  }
+  return <Badge className={`task-status-badge task-status-${status.toLowerCase().replace("_", "-")}`}>{label}</Badge>;
 };
 
 const getPriorityBadge = (priority: TaskPriority, label: string) => {
@@ -179,6 +170,7 @@ const AdminTasksClient = () => {
   const [priorityFilter, setPriorityFilter] = useState<TaskPriority | "ALL">("ALL");
   const [showModal, setShowModal] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [detailTask, setDetailTask] = useState<Task | null>(null);
   const [form, setForm] = useState<TaskFormState>(emptyForm);
 
   const parseList = <T,>(data: T[] | { results?: T[] }) => Array.isArray(data) ? data : data.results || [];
@@ -211,9 +203,9 @@ const AdminTasksClient = () => {
   const metrics = useMemo(() => {
     return {
       total: tasks.length,
-      active: tasks.filter((task) => ["TODO", "IN_PROGRESS", "BLOCKED"].includes(task.status)).length,
+      active: tasks.filter((task) => ["PENDING", "TODO", "IN_PROGRESS", "ON_HOLD"].includes(task.status)).length,
       overdue: tasks.filter((task) => task.is_overdue).length,
-      completed: tasks.filter((task) => task.status === "COMPLETED").length,
+      completed: tasks.filter((task) => ["COMPLETED", "CLOSED"].includes(task.status)).length,
     };
   }, [tasks]);
 
@@ -439,19 +431,32 @@ const AdminTasksClient = () => {
               <Table hover className="align-middle mb-0 admin-tasks-table">
                 <thead className="table-light">
                   <tr className="small text-secondary text-uppercase">
+                    <th className="px-4 py-3">SR. NO.</th>
                     <th className="px-4 py-3">Task</th>
                     <th className="py-3">Assigned To</th>
-                    <th className="py-3">Context</th>
                     <th className="py-3">Due Date</th>
                     <th className="py-3">Priority</th>
                     <th className="py-3">Status</th>
-                    <th className="py-3">Attachments</th>
                     <th className="px-4 py-3 text-end">Action</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredTasks.map((task) => (
-                    <tr key={task.id}>
+                  {filteredTasks.map((task, index) => (
+                    <tr
+                      key={task.id}
+                      className="task-click-row"
+                      onClick={() => setDetailTask(task)}
+                      tabIndex={0}
+                      onKeyDown={(event) => {
+                        if (event.target !== event.currentTarget) return;
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          setDetailTask(task);
+                        }
+                      }}
+                      aria-label={`View details for ${task.title}`}
+                    >
+                      <td className="px-4 py-3 fw-bold text-secondary" data-label="SR. NO.">{index + 1}</td>
                       <td className="px-4 py-3 admin-task-title-cell" data-label="Task">
                         <div className="fw-bold text-dark">{task.title}</div>
                         <div className="text-secondary small text-truncate" style={{ maxWidth: 420 }}>
@@ -472,36 +477,31 @@ const AdminTasksClient = () => {
                           </div>
                         </div>
                       </td>
-                      <td className="py-3 small" data-label="Context">
-                        <div className="fw-semibold text-dark">{task.department || task.assignee_department || "No department"}</div>
-                        <div className="text-secondary">{task.project_category || "No project/category"}</div>
-                      </td>
                       <td className="py-3 small fw-medium" data-label="Due Date">{formatDate(task.due_date)}</td>
                       <td className="py-3" data-label="Priority">{getPriorityBadge(task.priority, task.priority_label)}</td>
                       <td className="py-3" data-label="Status">{getStatusBadge(task.status, task.status_label, task.is_overdue)}</td>
-                      <td className="py-3 small" data-label="Attachments">
-                        <div className="d-flex flex-column gap-1">
-                          {task.attachment_url && (
-                            <a href={task.attachment_url} target="_blank" rel="noopener noreferrer" className="d-inline-flex align-items-center gap-1 text-decoration-none">
-                              <IconPaperclip size={15} /> Task: {task.attachment_name || "Attachment"}
-                            </a>
-                          )}
-                          {task.employee_attachment_url && (
-                            <a href={task.employee_attachment_url} target="_blank" rel="noopener noreferrer" className="d-inline-flex align-items-center gap-1 text-decoration-none">
-                              <IconPaperclip size={15} /> Employee: {task.employee_attachment_name || "Attachment"}
-                            </a>
-                          )}
-                          {!task.attachment_url && !task.employee_attachment_url && (
-                            <span className="text-muted">None</span>
-                          )}
-                        </div>
-                      </td>
                       <td className="px-4 py-3 text-end" data-label="Action">
                         <div className="d-flex justify-content-end gap-2">
-                          <Button variant="outline-secondary" size="sm" onClick={() => openEditModal(task)} aria-label={`Edit ${task.title}`}>
+                          <Button
+                            variant="outline-secondary"
+                            size="sm"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              openEditModal(task);
+                            }}
+                            aria-label={`Edit ${task.title}`}
+                          >
                             <IconEdit size={16} />
                           </Button>
-                          <Button variant="outline-danger" size="sm" onClick={() => handleDelete(task)} aria-label={`Delete ${task.title}`}>
+                          <Button
+                            variant="outline-danger"
+                            size="sm"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handleDelete(task);
+                            }}
+                            aria-label={`Delete ${task.title}`}
+                          >
                             <IconTrash size={16} />
                           </Button>
                         </div>
@@ -514,6 +514,130 @@ const AdminTasksClient = () => {
           )}
         </Card.Body>
       </Card>
+
+      <Modal show={Boolean(detailTask)} onHide={() => setDetailTask(null)} centered size="lg">
+        <Modal.Header closeButton>
+          <Modal.Title>Task Details</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {detailTask && (
+            <>
+              <div className="task-detail-hero mb-4">
+                <div>
+                  <h5 className="fw-bold mb-1">{detailTask.title}</h5>
+                  <p className="text-secondary mb-0">{detailTask.description || "No description provided."}</p>
+                </div>
+                <div className="d-flex flex-wrap gap-2">
+                  {getPriorityBadge(detailTask.priority, detailTask.priority_label)}
+                  {getStatusBadge(detailTask.status, detailTask.status_label, false)}
+                  {detailTask.is_overdue && getStatusBadge(detailTask.status, detailTask.status_label, true)}
+                </div>
+              </div>
+
+              <div className="task-detail-grid mb-4">
+                <div className="task-detail-field">
+                  <span>Assigned To</span>
+                  <div className="d-flex align-items-center gap-2 mt-1">
+                    <Avatar
+                      type="image"
+                      src={detailTask.assignee_avatar_url || getAssetPath("/images/avatar/avatar-fallback.jpg")}
+                      size="md"
+                      className="rounded-circle border"
+                    />
+                    <div>
+                      <strong>{detailTask.assignee_name}</strong>
+                      <div className="text-secondary small">{detailTask.assignee_id || "No employee ID"} - {detailTask.assignee_email || "No email"}</div>
+                    </div>
+                  </div>
+                </div>
+                <div className="task-detail-field">
+                  <span>Designation</span>
+                  <strong>{detailTask.assignee_designation || "Not assigned"}</strong>
+                  <div className="text-secondary small">{detailTask.assignee_department || "No employee department"}</div>
+                </div>
+                <div className="task-detail-field">
+                  <span>Department</span>
+                  <strong>{detailTask.department || detailTask.assignee_department || "No department"}</strong>
+                </div>
+                <div className="task-detail-field">
+                  <span>Project / Category</span>
+                  <strong>{detailTask.project_category || "No project/category"}</strong>
+                </div>
+                <div className="task-detail-field">
+                  <span>Due Date</span>
+                  <strong>{formatDate(detailTask.due_date)}</strong>
+                </div>
+                <div className="task-detail-field">
+                  <span>Assigned By</span>
+                  <strong>{detailTask.assigned_by_name || "Admin"}</strong>
+                </div>
+                <div className="task-detail-field">
+                  <span>Created</span>
+                  <strong>{formatDate(detailTask.created_at)}</strong>
+                </div>
+                <div className="task-detail-field">
+                  <span>Last Updated</span>
+                  <strong>{formatDate(detailTask.updated_at)}</strong>
+                </div>
+                <div className="task-detail-field">
+                  <span>Completed</span>
+                  <strong>{detailTask.completed_at ? formatDate(detailTask.completed_at) : "Not completed"}</strong>
+                </div>
+              </div>
+
+              <Row className="g-3">
+                <Col xs={12} md={6}>
+                  <div className="task-detail-section">
+                    <span>Admin Notes</span>
+                    <p>{detailTask.admin_notes || "No admin notes."}</p>
+                  </div>
+                </Col>
+                <Col xs={12} md={6}>
+                  <div className="task-detail-section">
+                    <span>Employee Notes</span>
+                    <p>{detailTask.employee_notes || "No employee notes."}</p>
+                  </div>
+                </Col>
+                <Col xs={12}>
+                  <div className="task-detail-section">
+                    <span>Attachments</span>
+                    <div className="d-flex flex-column gap-2 mt-2">
+                      {detailTask.attachment_url && (
+                        <a href={detailTask.attachment_url} target="_blank" rel="noopener noreferrer" className="d-inline-flex align-items-center gap-2 text-decoration-none">
+                          <IconPaperclip size={16} /> Task: {detailTask.attachment_name || "Attachment"}
+                        </a>
+                      )}
+                      {detailTask.employee_attachment_url && (
+                        <a href={detailTask.employee_attachment_url} target="_blank" rel="noopener noreferrer" className="d-inline-flex align-items-center gap-2 text-decoration-none">
+                          <IconPaperclip size={16} /> Employee: {detailTask.employee_attachment_name || "Attachment"}
+                        </a>
+                      )}
+                      {!detailTask.attachment_url && !detailTask.employee_attachment_url && (
+                        <span className="text-secondary">No attachments uploaded.</span>
+                      )}
+                    </div>
+                  </div>
+                </Col>
+              </Row>
+            </>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="outline-secondary" onClick={() => setDetailTask(null)}>Close</Button>
+          {detailTask && (
+            <Button
+              variant="primary"
+              onClick={() => {
+                const taskToEdit = detailTask;
+                setDetailTask(null);
+                openEditModal(taskToEdit);
+              }}
+            >
+              Edit Task
+            </Button>
+          )}
+        </Modal.Footer>
+      </Modal>
 
       <Modal show={showModal} onHide={closeModal} centered size="lg">
         <Modal.Header closeButton>
@@ -684,23 +808,91 @@ const AdminTasksClient = () => {
           flex: 0 0 44px;
         }
 
+        .task-status-badge {
+          border: 1px solid transparent;
+          border-radius: 999px;
+          font-weight: 700;
+          padding: 5px 9px;
+        }
+
+        .task-status-pending {
+          background: #e0f2fe !important;
+          border-color: #bae6fd !important;
+          color: #0369a1 !important;
+        }
+
+        .task-status-todo {
+          background: #f1f5f9 !important;
+          border-color: #cbd5e1 !important;
+          color: #334155 !important;
+        }
+
+        .task-status-in-progress {
+          background: #dbeafe !important;
+          border-color: #bfdbfe !important;
+          color: #1d4ed8 !important;
+        }
+
+        .task-status-on-hold {
+          background: #fef3c7 !important;
+          border-color: #fde68a !important;
+          color: #b45309 !important;
+        }
+
+        .task-status-completed {
+          background: #dcfce7 !important;
+          border-color: #bbf7d0 !important;
+          color: #15803d !important;
+        }
+
+        .task-status-closed {
+          background: #ede9fe !important;
+          border-color: #ddd6fe !important;
+          color: #6d28d9 !important;
+        }
+
+        .task-status-cancelled {
+          background: #fee2e2 !important;
+          border-color: #fecaca !important;
+          color: #b91c1c !important;
+        }
+
+        .task-status-overdue {
+          background: #fff1f2 !important;
+          border-color: #fecdd3 !important;
+          color: #be123c !important;
+        }
+
         .admin-tasks-table {
           table-layout: fixed;
         }
 
+        .task-click-row {
+          cursor: pointer;
+        }
+
+        .task-click-row:hover {
+          background: #f8fafc;
+        }
+
+        .task-click-row:focus {
+          outline: 2px solid #93c5fd;
+          outline-offset: -2px;
+        }
+
         .admin-task-title-cell {
-          width: 24%;
+          width: 28%;
           min-width: 240px;
         }
 
         .admin-tasks-table th:nth-child(2),
         .admin-tasks-table td:nth-child(2) {
-          width: 19%;
+          width: 28%;
         }
 
         .admin-tasks-table th:nth-child(3),
         .admin-tasks-table td:nth-child(3) {
-          width: 15%;
+          width: 24%;
         }
 
         .admin-tasks-table th:nth-child(4),
@@ -714,17 +906,71 @@ const AdminTasksClient = () => {
 
         .admin-tasks-table th:nth-child(7),
         .admin-tasks-table td:nth-child(7) {
-          width: 16%;
+          width: 10%;
         }
 
-        .admin-tasks-table th:nth-child(8),
-        .admin-tasks-table td:nth-child(8) {
-          width: 11%;
+        .admin-tasks-table th:nth-child(1),
+        .admin-tasks-table td:nth-child(1) {
+          width: 8%;
+        }
+
+        .task-detail-hero {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 16px;
+          padding: 16px;
+          border: 1px solid #e5eaf0;
+          border-radius: 8px;
+          background: #f8fafc;
+        }
+
+        .task-detail-grid {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 12px;
+        }
+
+        .task-detail-field,
+        .task-detail-section {
+          border: 1px solid #e5eaf0;
+          border-radius: 8px;
+          padding: 12px;
+          background: #fff;
+          min-width: 0;
+        }
+
+        .task-detail-field span,
+        .task-detail-section span {
+          display: block;
+          color: #64748b;
+          font-size: 0.72rem;
+          font-weight: 700;
+          letter-spacing: 0;
+          text-transform: uppercase;
+          margin-bottom: 4px;
+        }
+
+        .task-detail-field strong {
+          display: block;
+          color: #0f172a;
+          overflow-wrap: anywhere;
+        }
+
+        .task-detail-section p {
+          margin: 0;
+          color: #334155;
+          white-space: pre-wrap;
+          overflow-wrap: anywhere;
         }
 
         @media (max-width: 1199.98px) {
           .admin-tasks-table {
             table-layout: auto;
+          }
+
+          .task-detail-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
           }
         }
 
@@ -753,6 +999,10 @@ const AdminTasksClient = () => {
             background: #fff;
             box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
             overflow: hidden;
+          }
+
+          .task-click-row:hover {
+            background: #fff;
           }
 
           .admin-tasks-table td {
@@ -798,6 +1048,14 @@ const AdminTasksClient = () => {
         }
 
         @media (max-width: 575.98px) {
+          .task-detail-hero {
+            flex-direction: column;
+          }
+
+          .task-detail-grid {
+            grid-template-columns: 1fr;
+          }
+
           .admin-tasks-table tbody {
             padding: 8px;
           }

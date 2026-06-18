@@ -141,10 +141,12 @@ class TaskSerializer(serializers.ModelSerializer):
 class EmployeeTaskStatusSerializer(serializers.Serializer):
     status = serializers.ChoiceField(
         choices=[
+            TaskStatus.PENDING,
             TaskStatus.TODO,
             TaskStatus.IN_PROGRESS,
-            TaskStatus.BLOCKED,
+            TaskStatus.ON_HOLD,
             TaskStatus.COMPLETED,
+            TaskStatus.CLOSED,
         ]
     )
     employee_notes = serializers.CharField(required=False, allow_blank=True, max_length=2000)

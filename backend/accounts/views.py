@@ -3,12 +3,16 @@ accounts – views
 Login, profile, and user management views
 """
 
+from datetime import timedelta
+
 from django.contrib.auth import get_user_model
+from django.utils import timezone
 from rest_framework import generics, status, permissions
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView
 
+from .models import UserRole
 from .permissions import IsSuperAdmin
 from .serializers import (
     ChangePasswordSerializer,
@@ -102,6 +106,65 @@ class ChangePasswordView(generics.UpdateAPIView):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response({"detail": "Password updated successfully."}, status=status.HTTP_200_OK)
+
+
+class AdminLiveStatusView(APIView):
+    """
+    Returns the most recently active admin/HR account for employee dashboards.
+    Admin/HR requests also refresh their activity heartbeat.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+    online_window = timedelta(minutes=5)
+
+    def get(self, request, *args, **kwargs):
+        now = timezone.now()
+
+        if request.user.role in (UserRole.SUPER_ADMIN, UserRole.HR):
+            request.user.last_login = now
+            request.user.save(update_fields=["last_login"])
+
+        admin_user = (
+            User.objects.filter(
+                role__in=(UserRole.SUPER_ADMIN, UserRole.HR),
+                is_active=True,
+                last_login__isnull=False,
+            )
+            .order_by("-last_login")
+            .first()
+        )
+
+        if admin_user is None:
+            admin_user = (
+                User.objects.filter(
+                    role__in=(UserRole.SUPER_ADMIN, UserRole.HR),
+                    is_active=True,
+                )
+                .order_by("date_joined")
+                .first()
+            )
+
+        if admin_user is None:
+            return Response(
+                {
+                    "is_online": False,
+                    "last_seen_at": None,
+                    "name": "Admin",
+                    "role": "Admin",
+                }
+            )
+
+        last_seen = admin_user.last_login
+        is_online = bool(last_seen and now - last_seen <= self.online_window)
+
+        return Response(
+            {
+                "is_online": is_online,
+                "last_seen_at": last_seen,
+                "name": admin_user.get_full_name() or admin_user.email,
+                "role": admin_user.get_role_display(),
+            }
+        )
 
 
 # ──────────────────────────────────────────────────────────────────────────────

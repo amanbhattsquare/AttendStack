@@ -5,6 +5,7 @@ from django.urls import path
 from rest_framework_simplejwt.views import TokenRefreshView
 
 from .views import (
+    AdminLiveStatusView,
     ChangePasswordView,
     CreateHRView,
     HealthCheckView,
@@ -34,6 +35,7 @@ urlpatterns = [
     # Profile
     path("profile/", UserProfileView.as_view(), name="profile"),
     path("profile/change-password/", ChangePasswordView.as_view(), name="change_password"),
+    path("admin-live-status/", AdminLiveStatusView.as_view(), name="admin_live_status"),
 
     # Admin
     path("admin/create-hr/", CreateHRView.as_view(), name="create_hr"),

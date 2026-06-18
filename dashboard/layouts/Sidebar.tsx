@@ -9,6 +9,8 @@ import {
   ListGroup,
   Nav,
   NavItem,
+  OverlayTrigger,
+  Tooltip,
 } from "react-bootstrap";
 
 //import custom types
@@ -31,10 +33,32 @@ interface SidebarProps {
   currentPath: string;
   onNavigate?: () => void;
 }
+
+type AdminLiveStatus = {
+  is_online: boolean;
+  last_seen_at: string | null;
+  name: string;
+  role: string;
+};
+
+const ADMIN_STATUS_API = `${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/accounts/admin-live-status/`;
+
+const formatLastLiveTime = (value?: string | null) => {
+  if (!value) return "No live activity recorded yet";
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
+};
+
 const Sidebar: React.FC<SidebarProps> = ({ hideLogo = false, containerId, currentPath, isEmployee, onNavigate }) => {
   const { companyLogo, companyName } = useBranding();
   const menuItems = isEmployee ? EmployeeDashboardMenu : DashboardMenu;
   const [user, setUser] = useState<{ full_name: string; designation: string } | null>(null);
+  const [adminStatus, setAdminStatus] = useState<AdminLiveStatus | null>(null);
 
   useEffect(() => {
     const userData = localStorage.getItem("user");
@@ -44,6 +68,38 @@ const Sidebar: React.FC<SidebarProps> = ({ hideLogo = false, containerId, curren
     }
   }, []);
 
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadAdminStatus = async () => {
+      const token = localStorage.getItem("authToken");
+      if (!token) return;
+
+      try {
+        const response = await fetch(ADMIN_STATUS_API, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!response.ok) return;
+        const data = (await response.json()) as AdminLiveStatus;
+        if (isMounted) setAdminStatus(data);
+      } catch {
+        if (isMounted) setAdminStatus(null);
+      }
+    };
+
+    loadAdminStatus();
+    const intervalId = window.setInterval(loadAdminStatus, 60000);
+
+    return () => {
+      isMounted = false;
+      window.clearInterval(intervalId);
+    };
+  }, []);
+
+  const adminLastSeen = formatLastLiveTime(adminStatus?.last_seen_at);
+  const adminStatusTooltip = adminStatus
+    ? `${adminStatus.role || "Admin"} - ${adminStatus.is_online ? "Online now" : "Offline"}. Last live: ${adminLastSeen}`
+    : "Admin offline. Last live: No live activity recorded yet";
 
   //Generate Link
   const generateLink = (item: MenuItemType) => {
@@ -275,12 +331,25 @@ const Sidebar: React.FC<SidebarProps> = ({ hideLogo = false, containerId, curren
           <NavItem as='li' bsPrefix=''>
             <div className='text-center py-5 upgrade-ui'>
               <div>
-                <Avatar
-                  type='image'
-                  src={companyLogo || getAssetPath("/images/brand/logo/logo.png")}
-                  size='md'
-                  className='rounded-circle'
-                />
+                <div className='sidebar-company-avatar-wrap'>
+                  <Avatar
+                    type='image'
+                    src={companyLogo || getAssetPath("/images/brand/logo/logo.png")}
+                    size='md'
+                    className='rounded-circle'
+                  />
+                  {isEmployee && (
+                    <OverlayTrigger
+                      placement='top'
+                      overlay={<Tooltip id='admin-live-status-tooltip'>{adminStatusTooltip}</Tooltip>}>
+                      <span
+                        className={`admin-live-dot ${adminStatus?.is_online ? "is-online" : "is-offline"}`}
+                        tabIndex={0}
+                        aria-label={adminStatusTooltip}
+                      />
+                    </OverlayTrigger>
+                  )}
+                </div>
                 <div className='my-3'>
                   <h5 className='mb-1 fs-6'>{companyName || 'AttendStack'}</h5>
                   <span className='d-block text-secondary'>{user ? user.full_name : 'Jitu Chauhan'}</span>
@@ -291,6 +360,45 @@ const Sidebar: React.FC<SidebarProps> = ({ hideLogo = false, containerId, curren
           </NavItem>
         </Accordion>
       </div>
+      <style jsx global>{`
+        .sidebar-company-avatar-wrap {
+          position: relative;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .admin-live-dot {
+          width: 12px;
+          height: 12px;
+          border-radius: 999px;
+          display: inline-flex;
+          flex: 0 0 12px;
+          border: 2px solid #fff;
+          box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.08), 0 2px 6px rgba(15, 23, 42, 0.16);
+          cursor: help;
+        }
+
+        .sidebar-company-avatar-wrap > .admin-live-dot {
+          position: absolute;
+          right: -2px;
+          bottom: 1px;
+        }
+
+        .admin-live-dot.is-online {
+          background: #16a34a;
+        }
+
+        .admin-live-dot.is-offline {
+          background: #94a3b8;
+        }
+
+        .admin-live-dot:focus {
+          outline: 2px solid #93c5fd;
+          outline-offset: 2px;
+        }
+
+      `}</style>
     </div>
   );
 };

@@ -79,6 +79,12 @@ export const DashboardMenu: MenuItemType[] = [
   },
   {
     id: uuid(),
+    title: "Tasks",
+    link: "/tasks",
+    icon: <IconListDetails size={20} strokeWidth={1.5} />,
+  },
+  {
+    id: uuid(),
     title: "SYSTEM",
     grouptitle: true,
   },

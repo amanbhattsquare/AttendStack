@@ -44,6 +44,7 @@ LOCAL_APPS = [
     "holidays",
     "payroll",
     "settings",
+    "tasks",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -257,6 +258,7 @@ SPECTACULAR_SETTINGS = {
         {"name": "Attendance", "description": "Attendance tracking"},
         {"name": "Holidays", "description": "Holiday management"},
         {"name": "Payroll", "description": "Salary & payroll operations"},
+        {"name": "Tasks", "description": "Employee task assignment and tracking"},
     ],
 }
 

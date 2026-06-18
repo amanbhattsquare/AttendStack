@@ -113,13 +113,13 @@ const UserMenu = () => {
         {
           id: "admin-home",
           title: "Admin Dashboard",
-          link: "/",
+          link: "/admin/dashboard/",
           icon: <IconHome2 size={18} strokeWidth={1.5} className="text-secondary" />,
         },
         {
           id: "admin-employees",
           title: "Manage Employees",
-          link: "/employees",
+          link: "/admin/manager/employees/",
           icon: <IconSettings size={18} strokeWidth={1.5} className="text-secondary" />,
         },
         {

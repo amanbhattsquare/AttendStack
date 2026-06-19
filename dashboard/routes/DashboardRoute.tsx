@@ -79,7 +79,7 @@ export const DashboardMenu: MenuItemType[] = [
   },
   {
     id: uuid(),
-    title: "Tasks",
+    title: "Projects & Tasks",
     link: "/tasks",
     icon: <IconListDetails size={20} strokeWidth={1.5} />,
   },

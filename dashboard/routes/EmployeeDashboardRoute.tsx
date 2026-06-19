@@ -60,7 +60,7 @@ export const EmployeeDashboardMenu: MenuItemType[] = [
   },
   {
     id: uuid(),
-    title: "My Tasks",
+    title: "My Projects & Tasks",
     link: "/employee-dashboard/tasks",
     icon: <IconListDetails size={18} strokeWidth={1.5} />,
   },

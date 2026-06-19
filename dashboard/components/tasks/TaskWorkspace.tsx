@@ -110,6 +110,12 @@ export default function TaskWorkspace({ employeeMode = false }: { employeeMode?:
   }, [progressModal]);
 
   useEffect(() => {
+    if (!employeeMode) return;
+    document.body.classList.add("employee-task-workspace");
+    return () => document.body.classList.remove("employee-task-workspace");
+  }, [employeeMode]);
+
+  useEffect(() => {
     if (!taskModal) return;
     const openPlanner = (event: MouseEvent) => {
       const input = event.target as HTMLInputElement;
@@ -299,7 +305,7 @@ const projectColorStyles = `
 `;
 
 const categoryRemovalStyles = `
-.modal-body .col-md-4:has(input[placeholder="Design"]),.modal-body .row > div:has(input[placeholder="Design"]),.task-detail-grid .task-detail-field:nth-child(5){display:none!important}.modal-body .row:has(input[placeholder="Describe the work clearly"]) > .col-md-4{flex:0 0 auto;width:50%}@media(max-width:767.98px){.modal-body .row:has(input[placeholder="Describe the work clearly"]) > .col-md-4{width:100%}}
+.modal-body .col-md-4:has(input[placeholder="Design"]),.modal-body .row > div:has(input[placeholder="Design"]),.task-detail-grid .task-detail-field:nth-child(5){display:none!important}.modal-body .row:has(input[placeholder="Describe the work clearly"]) > .col-md-4{flex:0 0 auto;width:50%}body.employee-task-workspace .modal-body .row:has(input[placeholder="Describe the work clearly"]) > .col-md-6:has(select),body.employee-task-workspace .modal-body .row:has(input[placeholder="Describe the work clearly"]) > .col-md-4:has(select){flex:0 0 auto;width:33.333333%}@media(max-width:767.98px){.modal-body .row:has(input[placeholder="Describe the work clearly"]) > .col-md-4,body.employee-task-workspace .modal-body .row:has(input[placeholder="Describe the work clearly"]) > .col-md-6:has(select),body.employee-task-workspace .modal-body .row:has(input[placeholder="Describe the work clearly"]) > .col-md-4:has(select){width:100%}}
 `;
 
 const datePlannerStyles = `

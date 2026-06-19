@@ -64,6 +64,7 @@ class TaskSerializer(serializers.ModelSerializer):
     assigned_by_name = serializers.SerializerMethodField()
     project_name = serializers.CharField(source="project.name", read_only=True, default=None)
     project_key = serializers.CharField(source="project.key", read_only=True, default=None)
+    project_color = serializers.CharField(source="project.color", read_only=True, default=None)
     parent_title = serializers.CharField(source="parent.title", read_only=True, default=None)
     subtask_count = serializers.IntegerField(read_only=True, default=0)
     priority_label = serializers.CharField(source="get_priority_display", read_only=True)
@@ -83,6 +84,7 @@ class TaskSerializer(serializers.ModelSerializer):
             "project",
             "project_name",
             "project_key",
+            "project_color",
             "parent",
             "parent_title",
             "subtask_count",
@@ -129,6 +131,7 @@ class TaskSerializer(serializers.ModelSerializer):
             "assigned_by_name",
             "project_name",
             "project_key",
+            "project_color",
             "parent_title",
             "subtask_count",
             "priority_label",

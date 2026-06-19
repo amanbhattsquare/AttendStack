@@ -120,6 +120,10 @@ type EmployeeActivity = {
 type TaskDashboardItem = {
   id: string;
   title: string;
+  project_key?: string | null;
+  project_name?: string | null;
+  project_color?: string | null;
+  subtask_count?: number;
   priority: "LOW" | "MEDIUM" | "HIGH" | "URGENT";
   priority_label?: string;
   status: "PENDING" | "TODO" | "IN_PROGRESS" | "ON_HOLD" | "COMPLETED" | "CLOSED" | "CANCELLED";
@@ -488,7 +492,7 @@ const EmployeeDashboard = () => {
       if (a.is_overdue !== b.is_overdue) return a.is_overdue ? -1 : 1;
       return new Date(a.due_date || a.updated_at || a.created_at || 0).getTime() - new Date(b.due_date || b.updated_at || b.created_at || 0).getTime();
     })
-    .slice(0, 4);
+    .slice(0, 5);
 
   return (
     <div className="employee-dashboard-container py-3">
@@ -672,12 +676,12 @@ const EmployeeDashboard = () => {
             </div>
             <div>
               <div className="d-flex align-items-center gap-2 flex-wrap mb-1">
-                <h5 className="fw-bold text-dark mb-0">My Task Focus</h5>
+                <h5 className="fw-bold text-dark mb-0">My Project Focus</h5>
                 <Badge bg={`${taskHealthVariant}-subtle`} className={`text-${taskHealthVariant} border border-${taskHealthVariant}-subtle rounded-pill`}>
                   {taskHealthLabel}
                 </Badge>
               </div>
-              <p className="text-secondary small mb-0">Assigned work, due dates, and status updates that need your attention.</p>
+              <p className="text-secondary small mb-0">Your project work, due dates, priorities, and updates that need attention.</p>
             </div>
           </div>
           <div className="employee-task-header-actions">
@@ -740,16 +744,17 @@ const EmployeeDashboard = () => {
               </div>
             </div>
           ) : (
-            <div className="employee-task-list">
+            <><div className="employee-task-list">
               {nextTasks.map((task) => (
                 <div key={task.id} className="employee-task-row">
                   <div className="min-w-0">
                     <div className="d-flex align-items-center gap-2 min-w-0">
                       <div className="fw-semibold text-dark text-truncate">{task.title}</div>
+                      {task.project_key && <span className="dashboard-project-chip" style={{ color: task.project_color || "#4f46e5", borderColor: task.project_color || "#4f46e5" }}>{task.project_key}</span>}
                       {task.due_date && <span className="employee-task-due-chip">{formatDate(task.due_date)}</span>}
                     </div>
                     <div className="small text-secondary mt-1">
-                      {task.due_date ? `Due in ${daysUntil(task.due_date) ?? "--"} day${daysUntil(task.due_date) === 1 ? "" : "s"}` : "No due date"}
+                      {task.due_date ? `Due in ${daysUntil(task.due_date) ?? "--"} day${daysUntil(task.due_date) === 1 ? "" : "s"}` : "No due date"}{task.subtask_count ? ` · ${task.subtask_count} subtask${task.subtask_count === 1 ? "" : "s"}` : ""}
                     </div>
                   </div>
                   <div className="d-flex gap-2 flex-wrap justify-content-end">
@@ -763,7 +768,7 @@ const EmployeeDashboard = () => {
                   </div>
                 </div>
               ))}
-            </div>
+            </div><div className="text-center mt-3"><Link href="/employee-dashboard/tasks" className="btn btn-outline-primary btn-sm px-4">Show all tasks</Link></div></>
           )}
         </Card.Body>
       </Card>
@@ -1283,6 +1288,19 @@ const EmployeeDashboard = () => {
           border-color: #cbd5e1;
           box-shadow: 0 8px 20px rgba(15, 23, 42, 0.05);
           transform: translateY(-1px);
+        }
+
+        .dashboard-project-chip {
+          display: inline-flex;
+          align-items: center;
+          border: 1px solid currentColor;
+          border-radius: 5px;
+          background: color-mix(in srgb, currentColor 10%, white);
+          font-size: 0.64rem;
+          font-weight: 800;
+          letter-spacing: 0.04em;
+          line-height: 1;
+          padding: 3px 6px;
         }
 
         .employee-task-due-chip {

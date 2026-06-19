@@ -59,6 +59,10 @@ type PayrollRecord = {
 type TaskRecord = {
   id: string;
   title: string;
+  project_key?: string | null;
+  project_name?: string | null;
+  project_color?: string | null;
+  subtask_count?: number;
   assignee_name?: string;
   assignee_department?: string;
   priority: "LOW" | "MEDIUM" | "HIGH" | "URGENT";
@@ -240,7 +244,7 @@ const AdminDashboard = () => {
         if (bDue !== null) return 1;
         return new Date(b.updated_at || b.created_at || 0).getTime() - new Date(a.updated_at || a.created_at || 0).getTime();
       })
-      .slice(0, 6);
+      .slice(0, 5);
   }, [tasks]);
 
   const stats: DashboardStatType[] = [
@@ -375,8 +379,8 @@ const AdminDashboard = () => {
                   <IconListDetails size={22} />
                 </div>
                 <div>
-                  <h5 className="mb-1 fw-bold text-dark">Task Operations</h5>
-                  <p className="text-secondary small mb-0">Live assignment workload, overdue follow-up, and employee execution progress.</p>
+                  <h5 className="mb-1 fw-bold text-dark">Project Delivery Overview</h5>
+                  <p className="text-secondary small mb-0">Live project workload, ownership, deadlines, and delivery risk across your team.</p>
                 </div>
               </div>
               <div className="d-flex flex-column flex-sm-row align-items-stretch align-items-sm-center gap-2">
@@ -388,7 +392,7 @@ const AdminDashboard = () => {
                   </div>
                 </div>
                 <Link href="/tasks" className="btn btn-outline-primary btn-sm px-3">
-                  Manage Tasks
+                  Open Workspace
                 </Link>
               </div>
             </Card.Header>
@@ -441,18 +445,19 @@ const AdminDashboard = () => {
                   </div>
                 </div>
               ) : (
-                <div className="task-dashboard-list">
+                <><div className="task-dashboard-list">
                   {recentTasks.map((task) => (
                     <div key={task.id} className="task-dashboard-row">
                       <div className="min-w-0">
                         <div className="d-flex align-items-center gap-2 min-w-0">
                           <div className="fw-semibold text-dark text-truncate">{task.title}</div>
+                          {task.project_key && <span className="dashboard-project-chip" style={{ color: task.project_color || "#4f46e5", borderColor: task.project_color || "#4f46e5" }}>{task.project_key}</span>}
                           {task.due_date && (
                             <span className="task-due-chip">{formatDate(task.due_date)}</span>
                           )}
                         </div>
                         <div className="small text-secondary text-truncate mt-1">
-                          {task.assignee_name || "Unassigned"} {task.assignee_department ? `- ${task.assignee_department}` : ""}
+                          {task.assignee_name || "Unassigned"} {task.assignee_department ? `- ${task.assignee_department}` : ""}{task.subtask_count ? ` · ${task.subtask_count} subtask${task.subtask_count === 1 ? "" : "s"}` : ""}
                         </div>
                       </div>
                       <div className="d-flex align-items-center gap-2 flex-wrap justify-content-end">
@@ -466,7 +471,7 @@ const AdminDashboard = () => {
                       </div>
                     </div>
                   ))}
-                </div>
+                </div><div className="text-center mt-3"><Link href="/tasks" className="btn btn-outline-primary btn-sm px-4">Show all tasks</Link></div></>
               )}
             </Card.Body>
           </Card>
@@ -662,6 +667,19 @@ const AdminDashboard = () => {
           border-color: #cbd5e1;
           box-shadow: 0 8px 20px rgba(15, 23, 42, 0.05);
           transform: translateY(-1px);
+        }
+
+        .dashboard-project-chip {
+          display: inline-flex;
+          align-items: center;
+          border: 1px solid currentColor;
+          border-radius: 5px;
+          background: color-mix(in srgb, currentColor 10%, white);
+          font-size: 0.64rem;
+          font-weight: 800;
+          letter-spacing: 0.04em;
+          line-height: 1;
+          padding: 3px 6px;
         }
 
         .task-due-chip {

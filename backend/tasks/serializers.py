@@ -238,6 +238,7 @@ class EmployeeTaskStatusSerializer(serializers.Serializer):
     )
     employee_notes = serializers.CharField(required=False, allow_blank=True, max_length=2000)
     employee_attachment = serializers.FileField(required=False, allow_empty_file=False)
+    priority = serializers.ChoiceField(choices=TaskPriority.choices, required=False)
 
     def validate_employee_attachment(self, value):
         if value and value.size > 10 * 1024 * 1024:

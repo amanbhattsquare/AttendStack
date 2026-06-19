@@ -274,18 +274,20 @@ class TaskViewSet(WorkspaceAccessMixin, viewsets.ModelViewSet):
             if task.status == TaskStatus.CANCELLED:
                 raise ValidationError({"detail": "Cancelled tasks cannot be updated by employees."})
 
-        allowed_fields = {"status", "employee_notes", "employee_attachment"}
+        allowed_fields = {"status", "priority", "employee_notes", "employee_attachment"}
         unexpected = set(request.data.keys()) - allowed_fields
         if unexpected:
-            raise ValidationError({"detail": "Only status, employee notes, and employee attachment can be updated here."})
+            raise ValidationError({"detail": "Only status, priority, employee notes, and employee attachment can be updated here."})
         serializer = EmployeeTaskStatusSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         task.status = serializer.validated_data["status"]
+        if "priority" in serializer.validated_data:
+            task.priority = serializer.validated_data["priority"]
         if "employee_notes" in serializer.validated_data:
             task.employee_notes = serializer.validated_data["employee_notes"]
         if "employee_attachment" in serializer.validated_data:
             task.employee_attachment = serializer.validated_data["employee_attachment"]
-        task.save(update_fields=["status", "employee_notes", "employee_attachment", "completed_at", "updated_at"])
+        task.save(update_fields=["status", "priority", "employee_notes", "employee_attachment", "completed_at", "updated_at"])
         return Response(TaskSerializer(task, context={"request": request}).data)
 
     @action(detail=False, methods=["get"], url_path="choices")

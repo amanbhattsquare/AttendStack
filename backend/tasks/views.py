@@ -64,7 +64,7 @@ class WorkspaceAccessMixin:
             has_project_access = (
                 project.owner_id == employee.id
                 or Task.objects.filter(project=project).filter(
-                    Q(assignee=employee) | Q(assigned_by=self.request.user)
+                    Q(assignee=employee) | Q(assignees=employee) | Q(assigned_by=self.request.user)
                 ).exists()
             )
             if has_project_access:
@@ -99,7 +99,7 @@ class ProjectViewSet(WorkspaceAccessMixin, viewsets.ModelViewSet):
             # when a legacy employee profile has no organization relationship yet.
             employee = self._current_employee()
             queryset = queryset.filter(
-                Q(owner=employee) | Q(tasks__assignee=employee) | Q(tasks__assigned_by=user)
+                Q(owner=employee) | Q(tasks__assignee=employee) | Q(tasks__assignees=employee) | Q(tasks__assigned_by=user)
             ).distinct()
 
         project_status = self.request.query_params.get("status")
@@ -156,13 +156,13 @@ class TaskViewSet(WorkspaceAccessMixin, viewsets.ModelViewSet):
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = [
         "title", "description", "project__name", "project__key", "parent__title",
-        "assignee__full_name", "assignee__employee_id", "assignee__department", "department", "project_category",
+        "assignee__full_name", "assignee__employee_id", "assignee__department", "assignees__full_name", "assignees__employee_id", "assignees__department", "department", "project_category",
     ]
     ordering_fields = ["created_at", "updated_at", "due_date", "priority", "status", "position"]
     ordering = ["position", "status", "due_date", "-created_at"]
 
     def get_queryset(self):
-        queryset = Task.objects.select_related("assignee", "assigned_by", "project", "parent").annotate(
+        queryset = Task.objects.select_related("assignee", "assigned_by", "project", "parent").prefetch_related("assignees").annotate(
             subtask_count=Count("subtasks", distinct=True)
         )
         user = self.request.user
@@ -175,7 +175,7 @@ class TaskViewSet(WorkspaceAccessMixin, viewsets.ModelViewSet):
                 )
         else:
             employee = self._current_employee()
-            queryset = queryset.filter(Q(assignee=employee) | Q(assigned_by=user))
+            queryset = queryset.filter(Q(assignee=employee) | Q(assignees=employee) | Q(assigned_by=user))
 
         params = self.request.query_params
         status_filter = params.get("status")
@@ -192,7 +192,7 @@ class TaskViewSet(WorkspaceAccessMixin, viewsets.ModelViewSet):
         if priority:
             queryset = queryset.filter(priority=priority.upper())
         if assignee and self._is_admin_or_hr(user):
-            queryset = queryset.filter(assignee_id=assignee)
+            queryset = queryset.filter(Q(assignee_id=assignee) | Q(assignees__id=assignee))
         if department:
             queryset = queryset.filter(department__iexact=department)
         if project_category:
@@ -207,14 +207,14 @@ class TaskViewSet(WorkspaceAccessMixin, viewsets.ModelViewSet):
             queryset = queryset.filter(due_date__gte=due_from)
         if due_to:
             queryset = queryset.filter(due_date__lte=due_to)
-        return queryset
+        return queryset.distinct()
 
     def _validate_parent_access(self, parent, employee):
         if not parent:
             return
         if self._is_admin_or_hr(self.request.user):
             return
-        if parent.assignee_id != employee.id and parent.assigned_by_id != self.request.user.id:
+        if parent.assignee_id != employee.id and not parent.assignees.filter(id=employee.id).exists() and parent.assigned_by_id != self.request.user.id:
             raise PermissionDenied("You can add subtasks only to work you own or are assigned.")
 
     def perform_create(self, serializer):
@@ -223,16 +223,17 @@ class TaskViewSet(WorkspaceAccessMixin, viewsets.ModelViewSet):
         self._validate_project_scope(project)
 
         if self._is_admin_or_hr(self.request.user):
-            assignee = serializer.validated_data["assignee"]
-            self._validate_employee_scope(assignee)
-            employee = self._current_employee() if not self.request.user.is_superuser else assignee
+            assignees = serializer.validated_data.get("assignees") or [serializer.validated_data["assignee"]]
+            for assignee in assignees:
+                self._validate_employee_scope(assignee)
+            employee = self._current_employee() if not self.request.user.is_superuser else assignees[0]
             self._validate_parent_access(parent, employee)
         else:
             # Individual contributors can add work, but may only assign it to themselves.
             employee = self._current_employee()
             self._validate_parent_access(parent, employee)
-            requested_assignee = serializer.validated_data.get("assignee", employee)
-            if requested_assignee.id != employee.id:
+            requested_assignees = serializer.validated_data.get("assignees") or [serializer.validated_data.get("assignee", employee)]
+            if any(assignee.id != employee.id for assignee in requested_assignees):
                 raise PermissionDenied("Employees can create tasks for themselves only.")
         save_fields = {
             "assigned_by": self.request.user,
@@ -248,8 +249,8 @@ class TaskViewSet(WorkspaceAccessMixin, viewsets.ModelViewSet):
             if task.assigned_by_id != self.request.user.id:
                 raise PermissionDenied("You can edit only tasks you created. You can still update assigned task status.")
             employee = self._current_employee()
-            assignee = serializer.validated_data.get("assignee", task.assignee)
-            if assignee.id != employee.id:
+            assignees = serializer.validated_data.get("assignees") or [serializer.validated_data.get("assignee", task.assignee)]
+            if any(assignee.id != employee.id for assignee in assignees):
                 raise PermissionDenied("Employees can assign their created tasks only to themselves.")
             self._validate_parent_access(serializer.validated_data.get("parent", task.parent), employee)
         project = serializer.validated_data.get("project", task.project)
@@ -269,7 +270,7 @@ class TaskViewSet(WorkspaceAccessMixin, viewsets.ModelViewSet):
         user = request.user
         if not self._is_admin_or_hr(user):
             employee = self._current_employee()
-            if task.assignee_id != employee.id:
+            if task.assignee_id != employee.id and not task.assignees.filter(id=employee.id).exists():
                 raise PermissionDenied("You can update only your assigned tasks.")
             if task.status == TaskStatus.CANCELLED:
                 raise ValidationError({"detail": "Cancelled tasks cannot be updated by employees."})

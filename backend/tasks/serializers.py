@@ -61,9 +61,11 @@ class ProjectSerializer(serializers.ModelSerializer):
 
 class TaskSerializer(serializers.ModelSerializer):
     assignee = serializers.PrimaryKeyRelatedField(queryset=Employee.objects.all(), required=False)
+    assignees = serializers.PrimaryKeyRelatedField(queryset=Employee.objects.all(), many=True, required=False)
     assignee_uuid = serializers.UUIDField(source="assignee.id", read_only=True)
     assignee_id = serializers.CharField(source="assignee.employee_id", read_only=True)
     assignee_name = serializers.CharField(source="assignee.full_name", read_only=True)
+    assignee_names = serializers.SerializerMethodField()
     assignee_email = serializers.EmailField(source="assignee.email", read_only=True)
     assignee_department = serializers.CharField(source="assignee.department", read_only=True)
     assignee_designation = serializers.CharField(source="assignee.designation", read_only=True)
@@ -96,9 +98,11 @@ class TaskSerializer(serializers.ModelSerializer):
             "parent_title",
             "subtask_count",
             "assignee",
+            "assignees",
             "assignee_uuid",
             "assignee_id",
             "assignee_name",
+            "assignee_names",
             "assignee_email",
             "assignee_department",
             "assignee_designation",
@@ -131,6 +135,7 @@ class TaskSerializer(serializers.ModelSerializer):
             "assignee_uuid",
             "assignee_id",
             "assignee_name",
+            "assignee_names",
             "assignee_email",
             "assignee_department",
             "assignee_designation",
@@ -159,6 +164,24 @@ class TaskSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         url = obj.assignee.profile_photo.url
         return request.build_absolute_uri(url) if request else url
+
+    def get_assignee_names(self, obj):
+        return [employee.full_name for employee in obj.assignees.all()]
+
+    def create(self, validated_data):
+        assignees = validated_data.pop("assignees", [])
+        task = super().create(validated_data)
+        task.assignees.set(assignees or [task.assignee])
+        return task
+
+    def update(self, instance, validated_data):
+        assignees = validated_data.pop("assignees", None)
+        task = super().update(instance, validated_data)
+        if assignees is None:
+            task.assignees.add(task.assignee)
+        else:
+            task.assignees.set(assignees)
+        return task
 
     def get_assigned_by_name(self, obj):
         if obj.assigned_by is None:
@@ -206,6 +229,15 @@ class TaskSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
+        assignees = attrs.get("assignees")
+        assignee = attrs.get("assignee", getattr(self.instance, "assignee", None))
+        if assignees is not None:
+            if not assignees:
+                raise serializers.ValidationError({"assignees": "Assign at least one employee."})
+            if assignee not in assignees:
+                attrs["assignee"] = assignees[0]
+        elif self.instance is None and assignee is not None:
+            attrs["assignees"] = [assignee]
         project = attrs.get("project", getattr(self.instance, "project", None))
         parent = attrs.get("parent", getattr(self.instance, "parent", None))
         start_date = attrs.get("start_date", getattr(self.instance, "start_date", None))

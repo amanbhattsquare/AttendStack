@@ -75,6 +75,12 @@ class Task(models.Model):
         on_delete=models.CASCADE,
         related_name="assigned_tasks",
     )
+    assignees = models.ManyToManyField(
+        Employee,
+        related_name="collaborative_tasks",
+        blank=True,
+        help_text="All employees responsible for this task. The primary assignee is retained for legacy workflows.",
+    )
     assigned_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,

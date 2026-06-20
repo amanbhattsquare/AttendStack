@@ -231,9 +231,12 @@ const AdminDashboard = () => {
   const completedTasks = tasks.filter((task) => ["COMPLETED", "CLOSED"].includes(task.status)).length;
   const taskCompletionRate = tasks.length ? Math.round((completedTasks / tasks.length) * 100) : 0;
   const recentTasks = useMemo(() => {
+    const priorityRank = { URGENT: 0, HIGH: 1, MEDIUM: 2, LOW: 3 } as const;
     return [...tasks]
-      .filter((task) => !["CANCELLED", "CLOSED"].includes(task.status))
+      .filter((task) => !["COMPLETED", "CLOSED", "CANCELLED"].includes(task.status))
       .sort((a, b) => {
+        const priorityDifference = priorityRank[a.priority] - priorityRank[b.priority];
+        if (priorityDifference) return priorityDifference;
         if (Boolean(a.is_overdue) !== Boolean(b.is_overdue)) return a.is_overdue ? -1 : 1;
         if (a.status === "ON_HOLD" && b.status !== "ON_HOLD") return -1;
         if (b.status === "ON_HOLD" && a.status !== "ON_HOLD") return 1;
@@ -400,8 +403,8 @@ const AdminDashboard = () => {
               <Row className="g-3 mb-4">
                 <Col xs={6} lg={3} xl={2}>
                   <div className="task-dashboard-metric is-neutral">
-                    <span>Total Tasks</span>
-                    <strong>{tasks.length}</strong>
+                    <span>Open Tasks</span>
+                    <strong>{activeTasks}</strong>
                   </div>
                 </Col>
                 <Col xs={6} lg={3} xl={2}>

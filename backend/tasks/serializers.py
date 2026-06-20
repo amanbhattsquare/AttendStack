@@ -233,8 +233,13 @@ class TaskSerializer(serializers.ModelSerializer):
         assignee = attrs.get("assignee", getattr(self.instance, "assignee", None))
         if assignees is not None:
             if not assignees:
-                raise serializers.ValidationError({"assignees": "Assign at least one employee."})
-            if assignee not in assignees:
+                # Employee task creation supplies the logged-in employee in the view.
+                # HTML multipart forms may represent an omitted multi-value field as [].
+                if assignee is None:
+                    attrs.pop("assignees", None)
+                else:
+                    attrs["assignees"] = [assignee]
+            elif assignee not in assignees:
                 attrs["assignee"] = assignees[0]
         elif self.instance is None and assignee is not None:
             attrs["assignees"] = [assignee]

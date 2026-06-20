@@ -58,6 +58,7 @@ export default function TaskWorkspace({ employeeMode = false }: { employeeMode?:
   const [projects, setProjects] = useState<Project[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [currentEmployee, setCurrentEmployee] = useState<Employee | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -130,6 +131,21 @@ export default function TaskWorkspace({ employeeMode = false }: { employeeMode?:
   }, [employeeMode]);
 
   useEffect(() => {
+    if (!employeeMode) return;
+    const fetchCurrentEmployee = async () => {
+      try {
+        const response = await fetch(`${apiRoot}/employees/me/`, { headers: headers() });
+        if (!response.ok) return;
+        const employee = await response.json() as Employee;
+        setCurrentEmployee(employee);
+      } catch {
+        setCurrentEmployee(null);
+      }
+    };
+    void fetchCurrentEmployee();
+  }, [employeeMode]);
+
+  useEffect(() => {
     if (!taskModal) return;
     const openPlanner = (event: MouseEvent) => {
       const input = event.target as HTMLInputElement;
@@ -196,7 +212,7 @@ export default function TaskWorkspace({ employeeMode = false }: { employeeMode?:
   const openTask = (task?: Task, parent?: Task) => {
     setEditingTask(task || null);
     setAssigneePickerOpen(false);
-    setTaskForm(task ? { title: task.title, description: task.description || "", project: task.project || "", parent: task.parent || "", assignees: task.assignees?.length ? task.assignees : task.assignee ? [task.assignee] : [], priority: task.priority, status: task.status, start_date: task.start_date || "", due_date: task.due_date || "", department: task.department || "", project_category: task.project_category || "", admin_notes: task.admin_notes || "", attachment: null } : { ...emptyTask, project: parent?.project || (projectFilter === "ALL" ? "" : projectFilter), parent: parent?.id || "", department: parent?.department || "" });
+    setTaskForm(task ? { title: task.title, description: task.description || "", project: task.project || "", parent: task.parent || "", assignees: task.assignees?.length ? task.assignees : task.assignee ? [task.assignee] : [], priority: task.priority, status: task.status, start_date: task.start_date || "", due_date: task.due_date || "", department: task.department || "", project_category: task.project_category || "", admin_notes: task.admin_notes || "", attachment: null } : { ...emptyTask, project: parent?.project || (projectFilter === "ALL" ? "" : projectFilter), parent: parent?.id || "", assignees: employeeMode && currentEmployee ? [currentEmployee.id] : [], department: parent?.department || "" });
     setTaskModal(true);
   };
   const saveProject = async (event: React.FormEvent) => {

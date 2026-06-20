@@ -1,7 +1,10 @@
 import ipaddress
+import calendar
+from datetime import date, timedelta
+from decimal import Decimal, ROUND_HALF_UP
 
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Count, Q
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.pagination import PageNumberPagination
@@ -15,6 +18,7 @@ from geopy.distance import geodesic
 
 from accounts.permissions import IsAdminOrHR
 from employees.models import Employee, EmployeeStatus
+from settings.models import SystemSettings
 from .models import AttendanceRecord, AttendanceStatus, LeaveRequest, LeaveStatus, LeaveType
 from .permissions import IsAdminOrReadOnly
 from .serializers import AttendanceRecordSerializer, TodayAttendanceSerializer, LeaveRequestSerializer
@@ -508,6 +512,61 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
             {"value": choice[0], "label": choice[1]}
             for choice in LeaveType.choices
         ])
+
+    @action(detail=False, methods=["get"], url_path="preview")
+    def preview(self, request):
+        """Return a non-persisted paid-leave and payroll impact estimate for an employee."""
+        try:
+            start_date = date.fromisoformat(request.query_params["start_date"])
+            end_date = date.fromisoformat(request.query_params["end_date"])
+        except (KeyError, ValueError):
+            raise ValidationError({"detail": "Provide valid start_date and end_date values."})
+        if start_date > end_date:
+            raise ValidationError({"detail": "End date cannot be before start date."})
+        leave_type = request.query_params.get("leave_type", LeaveType.CASUAL)
+        if leave_type not in LeaveType.values:
+            raise ValidationError({"leave_type": "Choose a valid leave type."})
+
+        employee = self._current_employee()
+        settings = SystemSettings.get_settings()
+        monthly_quota = max(settings.monthly_paid_leave_days or 0, 0)
+        selected_dates = []
+        current = start_date
+        while current <= end_date:
+            selected_dates.append(current)
+            current += timedelta(days=1)
+
+        used_by_month = {
+            (row["date__year"], row["date__month"]): row["total"]
+            for row in AttendanceRecord.objects.filter(
+                employee=employee,
+                leave_request__status=LeaveStatus.APPROVED,
+            ).exclude(leave_request__leave_type=LeaveType.OTHER).values("date__year", "date__month").annotate(total=Count("id"))
+        }
+        paid_days = 0
+        unpaid_days = 0
+        deduction = Decimal("0")
+        available_before = 0
+        for leave_date in selected_dates:
+            month_key = (leave_date.year, leave_date.month)
+            used = used_by_month.get(month_key, 0)
+            available_before += max(monthly_quota - used, 0) if leave_date == min(day for day in selected_dates if (day.year, day.month) == month_key) else 0
+            if leave_type != LeaveType.OTHER and used < monthly_quota:
+                paid_days += 1
+            else:
+                unpaid_days += 1
+                monthly_salary = Decimal(str(employee.annual_salary or 0)) / Decimal("12")
+                deduction += monthly_salary / Decimal(str(calendar.monthrange(leave_date.year, leave_date.month)[1]))
+            used_by_month[month_key] = used + (0 if leave_type == LeaveType.OTHER else 1)
+        return Response({
+            "total_days": len(selected_dates),
+            "paid_leave_available": available_before,
+            "paid_leave_used": paid_days,
+            "unpaid_leave_days": unpaid_days,
+            "estimated_salary_deduction": str(deduction.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)),
+            "currency": "INR",
+            "note": "Estimate only. Paid leave is deducted and payroll is finalized after approval.",
+        })
 
     def get_queryset(self):
         queryset = super().get_queryset()

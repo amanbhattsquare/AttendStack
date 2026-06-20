@@ -26,6 +26,16 @@ interface LeaveSettings {
   carry_forward_leave_days: number;
 }
 
+interface LeavePreview {
+  total_days: number;
+  paid_leave_available: number;
+  paid_leave_used: number;
+  unpaid_leave_days: number;
+  estimated_salary_deduction: string;
+  currency: string;
+  note: string;
+}
+
 const DEFAULT_LEAVE_TYPES = [
   { value: "CASUAL", label: "Casual Leave" },
   { value: "SICK", label: "Sick Leave" },
@@ -53,6 +63,8 @@ const EmployeeLeavesClient = () => {
   const [reason, setReason] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [leaveTypes, setLeaveTypes] = useState<{ value: string; label: string }[]>(DEFAULT_LEAVE_TYPES);
+  const [leavePreview, setLeavePreview] = useState<LeavePreview | null>(null);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
 
   const fetchLeaves = async () => {
     setIsLoading(true);
@@ -102,6 +114,31 @@ const EmployeeLeavesClient = () => {
     fetchLeaveTypes();
   }, []);
 
+  useEffect(() => {
+    if (!showModal || !startDate || !endDate || startDate > endDate) {
+      setLeavePreview(null);
+      return;
+    }
+    const token = localStorage.getItem("authToken");
+    if (!token) return;
+    const controller = new AbortController();
+    const loadPreview = async () => {
+      setIsPreviewLoading(true);
+      try {
+        const params = new URLSearchParams({ start_date: startDate, end_date: endDate, leave_type: leaveType });
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/attendance/leaves/preview/?${params}`, { headers: { Authorization: `Bearer ${token}` }, signal: controller.signal });
+        if (!res.ok) throw new Error("Unable to calculate leave impact.");
+        setLeavePreview(await res.json());
+      } catch (err) {
+        if ((err as Error).name !== "AbortError") setLeavePreview(null);
+      } finally {
+        if (!controller.signal.aborted) setIsPreviewLoading(false);
+      }
+    };
+    void loadPreview();
+    return () => controller.abort();
+  }, [showModal, startDate, endDate, leaveType]);
+
   const resetFormAndCloseModal = () => {
     setShowModal(false);
     setEditingLeave(null);
@@ -109,6 +146,7 @@ const EmployeeLeavesClient = () => {
     setEndDate("");
     setLeaveType("CASUAL");
     setReason("");
+    setLeavePreview(null);
   };
 
   const handleEdit = (leave: LeaveRequest) => {
@@ -531,6 +569,7 @@ const EmployeeLeavesClient = () => {
                     <h4 className="fw-bold text-primary mb-0 mt-1">
                       {calculateDays(startDate, endDate)} {calculateDays(startDate, endDate) === 1 ? "Day" : "Days"}
                     </h4>
+                    {isPreviewLoading ? <small className="text-secondary mt-2">Calculating paid leave impact…</small> : leavePreview && <div className="leave-impact-preview mt-2 pt-2 border-top text-start"><div className="d-flex justify-content-between small"><span>Paid leave available</span><strong className="text-success">{leavePreview.paid_leave_available} days</strong></div><div className="d-flex justify-content-between small mt-1"><span>Paid leave used</span><strong>{leavePreview.paid_leave_used} days</strong></div><div className="d-flex justify-content-between small mt-1"><span>Unpaid leave</span><strong className={leavePreview.unpaid_leave_days ? "text-danger" : "text-success"}>{leavePreview.unpaid_leave_days} days</strong></div><div className="d-flex justify-content-between small mt-1"><span>Estimated salary deduction</span><strong className={leavePreview.unpaid_leave_days ? "text-danger" : "text-success"}>₹{Number(leavePreview.estimated_salary_deduction).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></div><small className="d-block text-secondary mt-2">{leavePreview.note}</small></div>}
                   </div>
                 )}
               </Col>

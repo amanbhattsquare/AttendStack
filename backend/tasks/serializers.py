@@ -7,6 +7,8 @@ from .models import Project, ProjectStatus, Task, TaskPriority, TaskStatus
 class ProjectSerializer(serializers.ModelSerializer):
     owner = serializers.PrimaryKeyRelatedField(queryset=Employee.objects.all(), required=False, allow_null=True)
     owner_name = serializers.CharField(source="owner.full_name", read_only=True, default=None)
+    created_by_name = serializers.SerializerMethodField(read_only=True)
+    created_by_role = serializers.CharField(source="created_by.get_role_display", read_only=True, default=None)
     status_label = serializers.CharField(source="get_status_display", read_only=True)
     task_count = serializers.IntegerField(read_only=True, default=0)
     completed_task_count = serializers.IntegerField(read_only=True, default=0)
@@ -15,11 +17,16 @@ class ProjectSerializer(serializers.ModelSerializer):
     class Meta:
         model = Project
         fields = [
-            "id", "name", "key", "description", "status", "status_label", "owner", "owner_name",
+            "id", "name", "key", "description", "status", "status_label", "owner", "owner_name", "created_by_name", "created_by_role",
             "department", "start_date", "due_date", "color", "task_count", "completed_task_count",
             "progress", "created_at", "updated_at",
         ]
         read_only_fields = ["id", "status_label", "owner_name", "task_count", "completed_task_count", "progress", "created_at", "updated_at"]
+
+    def get_created_by_name(self, obj):
+        if not obj.created_by:
+            return None
+        return obj.created_by.get_full_name() or obj.created_by.email
 
     def validate_name(self, value):
         value = value.strip()

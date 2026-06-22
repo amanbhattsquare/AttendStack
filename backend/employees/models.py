@@ -52,6 +52,8 @@ class Employee(models.Model):
     address = models.TextField(blank=True)
     profile_photo = models.ImageField(upload_to="employees/photos/", blank=True, null=True)
     aadhaar_document = models.FileField(upload_to="employees/aadhaar/", blank=True, null=True)
+    pan_card_document = models.FileField(upload_to="employees/pan/", blank=True, null=True)
+    cv_document = models.FileField(upload_to="employees/cv/", blank=True, null=True)
 
     emergency_contact_name = models.CharField(max_length=150, blank=True)
     emergency_contact_relationship = models.CharField(max_length=80, blank=True)

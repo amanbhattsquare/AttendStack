@@ -55,6 +55,9 @@ export default function EmployeeRegistrationPage() {
   const [profilePhoto, setProfilePhoto] = useState<File | null>(null);
   const [profilePhotoPreview, setProfilePhotoPreview] = useState<string | null>(null);
   const [profilePhotoError, setProfilePhotoError] = useState("");
+  const [aadhaarDocument, setAadhaarDocument] = useState<File | null>(null);
+  const [panCardDocument, setPanCardDocument] = useState<File | null>(null);
+  const [cvDocument, setCvDocument] = useState<File | null>(null);
 
   const update = (key: keyof FormData, value: string) => setForm((current) => ({ ...current, [key]: value }));
 
@@ -129,6 +132,9 @@ export default function EmployeeRegistrationPage() {
       if (key !== "date_of_birth" || value) payload.append(key, value);
     });
     if (profilePhoto) payload.append("profile_photo", profilePhoto);
+    if (aadhaarDocument) payload.append("aadhaar_document", aadhaarDocument);
+    if (panCardDocument) payload.append("pan_card_document", panCardDocument);
+    if (cvDocument) payload.append("cv_document", cvDocument);
 
     try {
       await axios.post(`${apiRoot}/api/v1/accounts/register-employee/`, payload);
@@ -196,6 +202,14 @@ export default function EmployeeRegistrationPage() {
                     <Col md={6}><Form.Group controlId="bank-name"><Form.Label>Bank name</Form.Label><Form.Control value={form.bank_name} onChange={(e) => update("bank_name", e.target.value)} placeholder="e.g., HDFC Bank" autoComplete="off" /></Form.Group></Col>
                     <Col md={6}><Form.Group controlId="bank-account-number"><Form.Label>Bank account number</Form.Label><Form.Control value={form.bank_account_number} onChange={(e) => update("bank_account_number", e.target.value.replace(/\s/g, ""))} placeholder="Enter your account number" inputMode="numeric" autoComplete="off" /></Form.Group></Col>
                     <Col md={6}><Form.Group controlId="ifsc-code"><Form.Label>IFSC code</Form.Label><Form.Control value={form.ifsc_code} onChange={(e) => update("ifsc_code", e.target.value.toUpperCase().replace(/\s/g, ""))} placeholder="HDFC0001234" maxLength={11} autoCapitalize="characters" /></Form.Group></Col>
+                  </Row>
+
+                  <h2 className="h6 mt-4 mb-3">Employee documents</h2>
+                  <p className="small text-secondary mb-3">Upload clear copies for company verification. Each file can be up to 10 MB.</p>
+                  <Row className="g-3">
+                    <Col md={4}><Form.Group controlId="aadhaar-document"><Form.Label>Aadhaar document</Form.Label><Form.Control type="file" accept=".pdf,image/jpeg,image/png,image/webp" onChange={(e) => setAadhaarDocument((e.target as HTMLInputElement).files?.[0] || null)} /><Form.Text>{aadhaarDocument?.name || "PDF, JPG, PNG, or WebP"}</Form.Text></Form.Group></Col>
+                    <Col md={4}><Form.Group controlId="pan-card-document"><Form.Label>PAN card</Form.Label><Form.Control type="file" accept=".pdf,image/jpeg,image/png,image/webp" onChange={(e) => setPanCardDocument((e.target as HTMLInputElement).files?.[0] || null)} /><Form.Text>{panCardDocument?.name || "PDF, JPG, PNG, or WebP"}</Form.Text></Form.Group></Col>
+                    <Col md={4}><Form.Group controlId="cv-document"><Form.Label>CV / Resume</Form.Label><Form.Control type="file" accept=".pdf,.doc,.docx" onChange={(e) => setCvDocument((e.target as HTMLInputElement).files?.[0] || null)} /><Form.Text>{cvDocument?.name || "PDF, DOC, or DOCX"}</Form.Text></Form.Group></Col>
                   </Row>
 
                   <h2 className="h6 mt-4 mb-3">Secure your account</h2>

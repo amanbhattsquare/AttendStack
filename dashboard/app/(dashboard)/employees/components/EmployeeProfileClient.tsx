@@ -8,7 +8,7 @@ import {
   IconBriefcase,
   IconBuildingBank,
   IconCalendar,
-  IconDownload,
+  IconEye,
   IconFileText,
   IconId,
   IconMail,
@@ -31,6 +31,8 @@ type Employee = {
   address: string;
   profile_photo_url: string | null;
   aadhaar_document_url: string | null;
+  pan_card_document_url: string | null;
+  cv_document_url: string | null;
   account_exists: boolean;
   emergency_contact_name: string;
   emergency_contact_relationship: string;
@@ -316,7 +318,33 @@ const EmployeeProfileClient = ({ employeeId, employee: legacyEmployee }: Employe
               </div>
               {employee.profile_photo_url && (
                 <a href={employee.profile_photo_url} target="_blank" rel="noreferrer" className="btn btn-light btn-sm d-inline-flex align-items-center gap-2">
-                  <IconDownload size={16} /> Open
+                  <IconEye size={16} /> Preview
+                </a>
+              )}
+            </div>
+          </div>
+          <div className="col-md-6">
+            <div className="employee-document-tile">
+              <div>
+                <div className="employee-info-label">PAN Card</div>
+                <div className="employee-info-value">{employee.pan_card_document_url ? "Uploaded" : "Not uploaded"}</div>
+              </div>
+              {employee.pan_card_document_url && (
+                <a href={employee.pan_card_document_url} target="_blank" rel="noreferrer" className="btn btn-light btn-sm d-inline-flex align-items-center gap-2">
+                  <IconEye size={16} /> Preview
+                </a>
+              )}
+            </div>
+          </div>
+          <div className="col-md-6">
+            <div className="employee-document-tile">
+              <div>
+                <div className="employee-info-label">CV / Resume</div>
+                <div className="employee-info-value">{employee.cv_document_url ? "Uploaded" : "Not uploaded"}</div>
+              </div>
+              {employee.cv_document_url && (
+                <a href={employee.cv_document_url} target="_blank" rel="noreferrer" className="btn btn-light btn-sm d-inline-flex align-items-center gap-2">
+                  <IconEye size={16} /> Preview
                 </a>
               )}
             </div>
@@ -329,7 +357,7 @@ const EmployeeProfileClient = ({ employeeId, employee: legacyEmployee }: Employe
               </div>
               {employee.aadhaar_document_url && (
                 <a href={employee.aadhaar_document_url} target="_blank" rel="noreferrer" className="btn btn-light btn-sm d-inline-flex align-items-center gap-2">
-                  <IconDownload size={16} /> Open
+                  <IconEye size={16} /> Preview
                 </a>
               )}
             </div>

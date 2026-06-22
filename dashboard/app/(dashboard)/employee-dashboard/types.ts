@@ -9,6 +9,8 @@ export type CurrentEmployee = {
   address: string;
   profile_photo_url: string | null;
   aadhaar_document_url: string | null;
+  pan_card_document_url: string | null;
+  cv_document_url: string | null;
   account_exists: boolean;
   emergency_contact_name: string;
   emergency_contact_relationship: string;

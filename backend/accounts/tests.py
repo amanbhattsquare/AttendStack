@@ -247,6 +247,9 @@ class PublicOnboardingTests(APITestCase):
             photo_buffer.getvalue(),
             content_type="image/png",
         )
+        aadhaar_document = SimpleUploadedFile("aadhaar.pdf", b"Aadhaar document", content_type="application/pdf")
+        pan_card_document = SimpleUploadedFile("pan-card.pdf", b"PAN card document", content_type="application/pdf")
+        cv_document = SimpleUploadedFile("resume.pdf", b"CV document", content_type="application/pdf")
 
         response = self.client.post(
             reverse("accounts:register_employee"),
@@ -263,6 +266,9 @@ class PublicOnboardingTests(APITestCase):
                 "bank_account_number": "1234567890123456",
                 "ifsc_code": "HDFC0001234",
                 "tax_id": "AABCP1234C",
+                "aadhaar_document": aadhaar_document,
+                "pan_card_document": pan_card_document,
+                "cv_document": cv_document,
             },
             format="multipart",
         )
@@ -274,3 +280,6 @@ class PublicOnboardingTests(APITestCase):
         self.assertEqual(employee.bank_name, "Example Bank")
         self.assertEqual(employee.ifsc_code, "HDFC0001234")
         self.assertEqual(employee.tax_id, "AABCP1234C")
+        self.assertTrue(employee.aadhaar_document.name.startswith("employees/aadhaar/aadhaar"))
+        self.assertTrue(employee.pan_card_document.name.startswith("employees/pan/pan-card"))
+        self.assertTrue(employee.cv_document.name.startswith("employees/cv/resume"))

@@ -9,10 +9,22 @@ from .models import Employee, EmployeeStatus
 from .services import sync_employee_user_email
 
 User = get_user_model()
+MAX_DOCUMENT_SIZE_BYTES = 10 * 1024 * 1024
+
+
+def _validate_document(value, allowed_extensions, label):
+    if value and value.size > MAX_DOCUMENT_SIZE_BYTES:
+        raise serializers.ValidationError(f"{label} cannot exceed 10 MB.")
+    if value and not value.name.lower().endswith(allowed_extensions):
+        raise serializers.ValidationError(f"Upload a valid {label} file.")
+    return value
 
 
 class EmployeeProfileSerializer(serializers.ModelSerializer):
     profile_photo_url = serializers.SerializerMethodField()
+    aadhaar_document_url = serializers.SerializerMethodField()
+    pan_card_document_url = serializers.SerializerMethodField()
+    cv_document_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Employee
@@ -23,11 +35,17 @@ class EmployeeProfileSerializer(serializers.ModelSerializer):
             "address",
             "profile_photo",
             "profile_photo_url",
+            "aadhaar_document",
+            "aadhaar_document_url",
+            "pan_card_document",
+            "pan_card_document_url",
+            "cv_document",
+            "cv_document_url",
             "emergency_contact_name",
             "emergency_contact_relationship",
             "emergency_contact_phone",
         ]
-        read_only_fields = ["profile_photo_url"]
+        read_only_fields = ["profile_photo_url", "aadhaar_document_url", "pan_card_document_url", "cv_document_url"]
 
     def validate_full_name(self, value):
         value = value.strip()
@@ -36,11 +54,31 @@ class EmployeeProfileSerializer(serializers.ModelSerializer):
         return value
 
     def get_profile_photo_url(self, obj):
-        if not obj.profile_photo:
+        return self._absolute_file_url(obj.profile_photo)
+
+    def get_aadhaar_document_url(self, obj):
+        return self._absolute_file_url(obj.aadhaar_document)
+
+    def get_pan_card_document_url(self, obj):
+        return self._absolute_file_url(obj.pan_card_document)
+
+    def get_cv_document_url(self, obj):
+        return self._absolute_file_url(obj.cv_document)
+
+    def _absolute_file_url(self, file_field):
+        if not file_field:
             return None
         request = self.context.get("request")
-        url = obj.profile_photo.url
-        return request.build_absolute_uri(url) if request else url
+        return request.build_absolute_uri(file_field.url) if request else file_field.url
+
+    def validate_aadhaar_document(self, value):
+        return _validate_document(value, (".pdf", ".jpg", ".jpeg", ".png", ".webp"), "Aadhaar document")
+
+    def validate_pan_card_document(self, value):
+        return _validate_document(value, (".pdf", ".jpg", ".jpeg", ".png", ".webp"), "PAN card")
+
+    def validate_cv_document(self, value):
+        return _validate_document(value, (".pdf", ".doc", ".docx"), "CV")
 
 
 class EmployeeListSerializer(serializers.ModelSerializer):
@@ -85,6 +123,8 @@ class EmployeeStatusUpdateSerializer(serializers.Serializer):
 class EmployeeSerializer(serializers.ModelSerializer):
     profile_photo_url = serializers.SerializerMethodField()
     aadhaar_document_url = serializers.SerializerMethodField()
+    pan_card_document_url = serializers.SerializerMethodField()
+    cv_document_url = serializers.SerializerMethodField()
     account_exists = serializers.SerializerMethodField()
     status_label = serializers.CharField(source="get_status_display", read_only=True)
     employment_type_label = serializers.CharField(source="get_employment_type_display", read_only=True)
@@ -105,6 +145,10 @@ class EmployeeSerializer(serializers.ModelSerializer):
             "profile_photo_url",
             "aadhaar_document",
             "aadhaar_document_url",
+            "pan_card_document",
+            "pan_card_document_url",
+            "cv_document",
+            "cv_document_url",
             "account_exists",
             "emergency_contact_name",
             "emergency_contact_relationship",
@@ -149,6 +193,15 @@ class EmployeeSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Enter a valid 11-character IFSC code.")
         return value
 
+    def validate_aadhaar_document(self, value):
+        return _validate_document(value, (".pdf", ".jpg", ".jpeg", ".png", ".webp"), "Aadhaar document")
+
+    def validate_pan_card_document(self, value):
+        return _validate_document(value, (".pdf", ".jpg", ".jpeg", ".png", ".webp"), "PAN card")
+
+    def validate_cv_document(self, value):
+        return _validate_document(value, (".pdf", ".doc", ".docx"), "CV")
+
     def validate_annual_salary(self, value):
         if value is not None and value <= 0:
             raise serializers.ValidationError("Annual salary must be greater than zero.")
@@ -167,6 +220,12 @@ class EmployeeSerializer(serializers.ModelSerializer):
 
     def get_aadhaar_document_url(self, obj):
         return self._absolute_file_url(obj.aadhaar_document)
+
+    def get_pan_card_document_url(self, obj):
+        return self._absolute_file_url(obj.pan_card_document)
+
+    def get_cv_document_url(self, obj):
+        return self._absolute_file_url(obj.cv_document)
 
     def get_account_exists(self, obj):
         annotated_value = getattr(obj, "account_exists_annotation", None)

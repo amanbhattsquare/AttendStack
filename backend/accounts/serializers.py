@@ -245,6 +245,9 @@ class EmployeeSelfRegistrationSerializer(serializers.Serializer):
     aadhaar_number = serializers.RegexField(
         r"^[0-9]{12}$", required=False, allow_blank=True, allow_null=True
     )
+    aadhaar_document = serializers.FileField(required=False, write_only=True)
+    pan_card_document = serializers.FileField(required=False, write_only=True)
+    cv_document = serializers.FileField(required=False, write_only=True)
     bank_name = serializers.CharField(required=False, allow_blank=True, max_length=120)
     bank_account_number = serializers.CharField(required=False, allow_blank=True, max_length=40)
     ifsc_code = serializers.CharField(required=False, allow_blank=True, max_length=11)
@@ -293,6 +296,22 @@ class EmployeeSelfRegistrationSerializer(serializers.Serializer):
             raise serializers.ValidationError("Enter a valid PAN or tax ID.")
         return value
 
+    def _validate_document(self, value, allowed_extensions, label):
+        if value.size > 10 * 1024 * 1024:
+            raise serializers.ValidationError(f"{label} must be 10 MB or smaller.")
+        if not value.name.lower().endswith(allowed_extensions):
+            raise serializers.ValidationError(f"Upload a valid {label} file.")
+        return value
+
+    def validate_aadhaar_document(self, value):
+        return self._validate_document(value, (".pdf", ".jpg", ".jpeg", ".png", ".webp"), "Aadhaar document")
+
+    def validate_pan_card_document(self, value):
+        return self._validate_document(value, (".pdf", ".jpg", ".jpeg", ".png", ".webp"), "PAN card")
+
+    def validate_cv_document(self, value):
+        return self._validate_document(value, (".pdf", ".doc", ".docx"), "CV / resume")
+
     def validate_email(self, value):
         from employees.models import Employee
 
@@ -322,6 +341,9 @@ class EmployeeSelfRegistrationSerializer(serializers.Serializer):
                 address=validated_data.get("address", ""),
                 profile_photo=validated_data.get("profile_photo"),
                 aadhaar_number=aadhaar_number,
+                aadhaar_document=validated_data.get("aadhaar_document"),
+                pan_card_document=validated_data.get("pan_card_document"),
+                cv_document=validated_data.get("cv_document"),
                 bank_name=validated_data.get("bank_name", ""),
                 bank_account_number=validated_data.get("bank_account_number", ""),
                 ifsc_code=validated_data.get("ifsc_code", ""),

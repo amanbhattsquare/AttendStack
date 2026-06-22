@@ -11,9 +11,8 @@ import {
   IconShieldCheck,
   IconUser,
   IconWallet,
-  IconDownload,
+  IconEye,
   IconEdit,
-  IconUpload,
 } from "@tabler/icons-react";
 import { useCurrentEmployee } from "../useCurrentEmployee";
 import { Spinner, Alert, Badge, Row, Col, Button, Modal, Form } from "react-bootstrap";
@@ -80,7 +79,7 @@ const ProfileItem = ({ label, value, icon, linkUrl }: { label: string; value?: s
           rel="noopener noreferrer" 
           className="btn btn-link btn-sm text-primary p-0 d-inline-flex align-items-center gap-1 mt-2 fw-semibold text-decoration-none"
         >
-          <IconDownload size={14} /> Download Document
+          <IconEye size={14} /> Preview document
         </a>
       )}
     </div>
@@ -93,6 +92,9 @@ const ProfilePage = () => {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [personalForm, setPersonalForm] = useState<PersonalInfoForm>(emptyPersonalInfoForm);
   const [profilePhotoFile, setProfilePhotoFile] = useState<File | null>(null);
+  const [aadhaarDocumentFile, setAadhaarDocumentFile] = useState<File | null>(null);
+  const [panCardDocumentFile, setPanCardDocumentFile] = useState<File | null>(null);
+  const [cvDocumentFile, setCvDocumentFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [profileSaveError, setProfileSaveError] = useState("");
@@ -143,6 +145,9 @@ const ProfilePage = () => {
       emergencyContactPhone: employee.emergency_contact_phone || "",
     });
     setProfilePhotoFile(null);
+    setAadhaarDocumentFile(null);
+    setPanCardDocumentFile(null);
+    setCvDocumentFile(null);
     setProfileSaveError("");
     setIsEditOpen(true);
   };
@@ -151,6 +156,9 @@ const ProfilePage = () => {
     if (isSavingProfile) return;
     setIsEditOpen(false);
     setProfilePhotoFile(null);
+    setAadhaarDocumentFile(null);
+    setPanCardDocumentFile(null);
+    setCvDocumentFile(null);
     setPhotoPreview(null);
     setProfileSaveError("");
   };
@@ -205,6 +213,9 @@ const ProfilePage = () => {
       if (profilePhotoFile instanceof File) {
         body.append("profile_photo", profilePhotoFile);
       }
+      if (aadhaarDocumentFile instanceof File) body.append("aadhaar_document", aadhaarDocumentFile);
+      if (panCardDocumentFile instanceof File) body.append("pan_card_document", panCardDocumentFile);
+      if (cvDocumentFile instanceof File) body.append("cv_document", cvDocumentFile);
 
       const response = await fetch(EMPLOYEE_PROFILE_API, {
         method: "PATCH",
@@ -276,6 +287,14 @@ const ProfilePage = () => {
         { label: "Company", value: "Bhatt Square Pvt Ltd", icon: <IconUser size={18} /> },
         { label: "Employment Type", value: employee.employment_type_label, icon: <IconFileText size={18} /> },
         { label: "Reporting Manager", value: employee.reporting_manager || "Admin Desk", icon: <IconUser size={18} /> },
+      ],
+    },
+    {
+      title: "Employee Documents",
+      items: [
+        { label: "CV / Resume", value: employee.cv_document_url ? "Uploaded" : undefined, icon: <IconFileText size={18} />, linkUrl: employee.cv_document_url },
+        { label: "Aadhaar Document", value: employee.aadhaar_document_url ? "Uploaded" : undefined, icon: <IconId size={18} />, linkUrl: employee.aadhaar_document_url },
+        { label: "PAN Card", value: employee.pan_card_document_url ? "Uploaded" : undefined, icon: <IconId size={18} />, linkUrl: employee.pan_card_document_url },
       ],
     },
     {
@@ -376,14 +395,15 @@ const ProfilePage = () => {
             {profileSaveError && <Alert variant="danger" className="border-0">{profileSaveError}</Alert>}
 
             <div className="employee-edit-photo-panel mb-4">
-              <img
-                src={photoPreview || employee.profile_photo_url || "/images/avatar/avatar-fallback.jpg"}
-                alt={employee.full_name}
-                className="employee-edit-avatar"
-              />
-              <div>
-                <Form.Label htmlFor="employeeProfilePhoto" className="btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-2 mb-2">
-                  <IconUpload size={16} /> Upload Photo
+              <div className="employee-edit-avatar-wrap">
+                <img
+                  src={photoPreview || employee.profile_photo_url || "/images/avatar/avatar-fallback.jpg"}
+                  alt={employee.full_name}
+                  className="employee-edit-avatar"
+                />
+                <Form.Label htmlFor="employeeProfilePhoto" className="employee-edit-photo-action" title="Change profile photo">
+                  <IconEdit size={15} />
+                  <span className="visually-hidden">Change profile photo</span>
                 </Form.Label>
                 <Form.Control
                   id="employeeProfilePhoto"
@@ -395,8 +415,35 @@ const ProfilePage = () => {
                     setProfilePhotoFile(input.files?.[0] || null);
                   }}
                 />
-                <div className="small text-secondary">JPG, PNG, or WebP image.</div>
               </div>
+            </div>
+
+            <div className="mb-4">
+              <h6 className="fw-bold mb-1">Employee documents</h6>
+              <p className="small text-secondary mb-3">Upload or replace your CV, Aadhaar document, and PAN card. Files are stored securely.</p>
+              <Row className="g-3">
+                <Col xs={12} md={4}>
+                  <Form.Group controlId="employeeCvDocument">
+                    <Form.Label className="fw-semibold">CV / Resume</Form.Label>
+                    <Form.Control type="file" accept=".pdf,.doc,.docx" onChange={(event) => setCvDocumentFile((event.currentTarget as HTMLInputElement).files?.[0] || null)} />
+                    <Form.Text>{cvDocumentFile?.name || (employee.cv_document_url ? "Current CV uploaded" : "PDF, DOC, or DOCX; max 10 MB")}</Form.Text>
+                  </Form.Group>
+                </Col>
+                <Col xs={12} md={4}>
+                  <Form.Group controlId="employeeAadhaarDocument">
+                    <Form.Label className="fw-semibold">Aadhaar Document</Form.Label>
+                    <Form.Control type="file" accept=".pdf,image/jpeg,image/png,image/webp" onChange={(event) => setAadhaarDocumentFile((event.currentTarget as HTMLInputElement).files?.[0] || null)} />
+                    <Form.Text>{aadhaarDocumentFile?.name || (employee.aadhaar_document_url ? "Current Aadhaar uploaded" : "PDF or image; max 10 MB")}</Form.Text>
+                  </Form.Group>
+                </Col>
+                <Col xs={12} md={4}>
+                  <Form.Group controlId="employeePanCardDocument">
+                    <Form.Label className="fw-semibold">PAN Card</Form.Label>
+                    <Form.Control type="file" accept=".pdf,image/jpeg,image/png,image/webp" onChange={(event) => setPanCardDocumentFile((event.currentTarget as HTMLInputElement).files?.[0] || null)} />
+                    <Form.Text>{panCardDocumentFile?.name || (employee.pan_card_document_url ? "Current PAN card uploaded" : "PDF or image; max 10 MB")}</Form.Text>
+                  </Form.Group>
+                </Col>
+              </Row>
             </div>
 
             <Row className="g-3">
@@ -518,13 +565,13 @@ const ProfilePage = () => {
         }
 
         .employee-edit-photo-panel {
-          display: flex;
-          align-items: center;
-          gap: 16px;
-          padding: 14px;
-          border: 1px solid #e5eaf0;
-          border-radius: 8px;
-          background: #f8fafc;
+          display: inline-block;
+        }
+
+        .employee-edit-avatar-wrap {
+          position: relative;
+          width: 76px;
+          height: 76px;
         }
 
         .employee-edit-avatar {
@@ -535,6 +582,28 @@ const ProfilePage = () => {
           border: 3px solid #fff;
           box-shadow: 0 2px 8px rgba(16, 24, 40, 0.08);
           background: #fff;
+        }
+
+        .employee-edit-photo-action {
+          position: absolute;
+          right: -3px;
+          bottom: -3px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 28px;
+          height: 28px;
+          margin: 0;
+          border: 2px solid #fff;
+          border-radius: 50%;
+          background: #0d6efd;
+          color: #fff;
+          cursor: pointer;
+          box-shadow: 0 2px 6px rgba(15, 23, 42, 0.2);
+        }
+
+        .employee-edit-photo-action:hover {
+          background: #0b5ed7;
         }
 
         .my-profile-icon {

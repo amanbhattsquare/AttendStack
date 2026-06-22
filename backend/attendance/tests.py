@@ -3,26 +3,28 @@ from datetime import date
 from django.test import TestCase
 
 from employees.models import Employee
+from holidays.models import Holiday
 from settings.models import SystemSettings
 
 from .models import AttendanceRecord, AttendanceStatus, LeaveRequest, LeaveStatus
 from .serializers import AttendanceRecordSerializer
-from .services import sync_leave_request_attendance
+from .services import auto_mark_calendar_days, sync_leave_request_attendance
 
 
-def create_employee(email="employee@example.com", employee_id="EMP-TEST-001"):
+def create_employee(email="employee@example.com", employee_id="EMP-TEST-001", aadhaar_number="123456789012"):
     return Employee.objects.create(
         employee_id=employee_id,
         full_name="Test Employee",
         email=email,
         phone="9876543210",
-        aadhaar_number="123456789012",
+        aadhaar_number=aadhaar_number,
         department="Operations",
         designation="Associate",
         annual_salary=120000,
         bank_name="Test Bank",
         bank_account_number="1234567890",
         tax_id="ABCDE1234F",
+        joining_date=date(2026, 1, 1),
     )
 
 
@@ -140,6 +142,32 @@ class LeaveAttendanceSyncTests(TestCase):
                 (date(2026, 2, 3), AttendanceStatus.PAID_LEAVE, True),
             ],
         )
+
+
+class EmploymentStartAttendanceTests(TestCase):
+    def setUp(self):
+        self.employee = create_employee()
+        settings = SystemSettings.get_settings()
+        settings.monthly_paid_leave_days = 1
+        settings.leave_carryover_enabled = False
+        settings.max_carryover_days = 5
+        settings.save()
+
+    def test_calendar_records_start_on_the_employee_joining_date(self):
+        employee = create_employee(
+            email="new.joiner@example.com",
+            employee_id="EMP-NEW-001",
+            aadhaar_number="123456789013",
+        )
+        employee.joining_date = date(2026, 5, 16)
+        employee.save(update_fields=["joining_date"])
+        Holiday.objects.create(name="Early Month Holiday", date=date(2026, 5, 1))
+
+        auto_mark_calendar_days(5, 2026)
+
+        records = AttendanceRecord.objects.filter(employee=employee)
+        self.assertFalse(records.filter(date__lt=employee.joining_date).exists())
+        self.assertTrue(records.filter(date=date(2026, 5, 17), status=AttendanceStatus.SUNDAY_PAID).exists())
 
     def test_carry_forward_respects_max_carryover_days(self):
         settings = SystemSettings.get_settings()

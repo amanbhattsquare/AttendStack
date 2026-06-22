@@ -6,7 +6,7 @@ from attendance.permissions import IsAdminOrReadOnly
 from employees.models import Employee, EmployeeStatus
 from .models import Payroll, PayrollStatus
 from .serializers import PayrollSerializer
-from .services import build_employee_payroll_summary, calculate_attendance_payroll
+from .services import build_employee_payroll_summary, calculate_attendance_payroll, payroll_period_end
 
 class PayrollViewSet(viewsets.ModelViewSet):
     queryset = Payroll.objects.select_related("employee").all()
@@ -57,7 +57,10 @@ class PayrollViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        active_employees = Employee.objects.filter(status=EmployeeStatus.ACTIVE)
+        active_employees = Employee.objects.filter(
+            status=EmployeeStatus.ACTIVE,
+            joining_date__lte=payroll_period_end(month, year),
+        )
         generated_count = 0
         updated_count = 0
         skipped_count = 0
@@ -117,7 +120,10 @@ class PayrollViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        employees = Employee.objects.filter(status=EmployeeStatus.ACTIVE).order_by("full_name")
+        employees = Employee.objects.filter(
+            status=EmployeeStatus.ACTIVE,
+            joining_date__lte=payroll_period_end(month, year),
+        ).order_by("full_name")
         if search:
             employees = employees.filter(
                 Q(full_name__icontains=search)

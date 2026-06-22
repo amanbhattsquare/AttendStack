@@ -4,7 +4,7 @@ from datetime import date, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 
 from django.db import transaction
-from django.db.models import Count, Q
+from django.db.models import Count, F, Q
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.pagination import PageNumberPagination
@@ -96,7 +96,10 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
         if user.is_authenticated and user.role == "EMPLOYEE":
             queryset = queryset.filter(employee__email__iexact=user.email)
 
-        queryset = queryset.filter(date__lte=timezone.now().date())
+        queryset = queryset.filter(
+            date__lte=timezone.now().date(),
+            date__gte=F("employee__joining_date"),
+        )
 
         # if year and month:
         #     try:
@@ -139,6 +142,8 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
             raise NotFound("No employee profile is linked to this login account.")
         if employee.status != EmployeeStatus.ACTIVE:
             raise ValidationError({"detail": "Only active employees can mark attendance."})
+        if timezone.localdate() < employee.joining_date:
+            raise ValidationError({"detail": "Attendance is available from your joining date."})
         return employee
 
     def _today_record(self, employee):
@@ -178,7 +183,10 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
             record.employee.id: record
             for record in AttendanceRecord.objects.select_related("employee").filter(date=today)
         }
-        employees = Employee.objects.filter(status=EmployeeStatus.ACTIVE).order_by("full_name")
+        employees = Employee.objects.filter(
+            status=EmployeeStatus.ACTIVE,
+            joining_date__lte=today,
+        ).order_by("full_name")
         payload = [self._today_payload(employee, records.get(employee.id)) for employee in employees]
         serializer = TodayAttendanceSerializer(payload, many=True)
         return Response(serializer.data)
@@ -577,7 +585,7 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(
                 Q(employee__email__iexact=user.email) | Q(employee__employee_id=user.employee_id)
             )
-        return queryset
+        return queryset.filter(end_date__gte=F("employee__joining_date"))
 
     def _raise_if_leave_overlaps(self, employee, start_date, end_date, instance=None):
         overlapping_requests = LeaveRequest.objects.filter(

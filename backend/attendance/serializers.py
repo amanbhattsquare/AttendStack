@@ -244,6 +244,11 @@ class LeaveRequestSerializer(serializers.ModelSerializer):
         if start_date and end_date and start_date > end_date:
             raise serializers.ValidationError({"end_date": "End date cannot be before start date."})
 
+        if employee and start_date and start_date < employee.joining_date:
+            raise serializers.ValidationError({
+                "start_date": "Leave cannot start before the employee's joining date."
+            })
+
         if employee and start_date and end_date:
             overlapping_requests = LeaveRequest.objects.filter(
                 employee=employee,

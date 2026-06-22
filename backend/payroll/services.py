@@ -27,12 +27,16 @@ def payroll_period_end(month: int, year: int) -> date:
 def calculate_attendance_payroll(employee, month: int, year: int, allowances=0, manual_deductions=0) -> dict:
     auto_mark_calendar_days(month, year)
 
-    basic_salary = money(Decimal(str(employee.annual_salary or 0)) / Decimal("12"))
+    monthly_salary = money(Decimal(str(employee.annual_salary or 0)) / Decimal("12"))
     allowances = money(Decimal(str(allowances or 0)))
     manual_deductions = money(Decimal(str(manual_deductions or 0)))
     days_in_month = calendar.monthrange(year, month)[1]
     period_end = payroll_period_end(month, year)
-    per_day_salary = basic_salary / Decimal(str(days_in_month))
+    month_start = date(year, month, 1)
+    period_start = max(month_start, employee.joining_date)
+    eligible_days = max((period_end - period_start).days + 1, 0) if period_start <= period_end else 0
+    per_day_salary = monthly_salary / Decimal(str(days_in_month))
+    basic_salary = money(per_day_salary * Decimal(str(eligible_days)))
 
     summary = {
         "present": 0,
@@ -51,6 +55,7 @@ def calculate_attendance_payroll(employee, month: int, year: int, allowances=0, 
         employee=employee,
         date__year=year,
         date__month=month,
+        date__gte=period_start,
         date__lte=period_end,
     )
 
@@ -109,6 +114,8 @@ def calculate_attendance_payroll(employee, month: int, year: int, allowances=0, 
         "payable_salary": payable_salary,
         "unpaid_days": float(unpaid_days),
         "days_in_month": days_in_month,
+        "eligible_days": eligible_days,
+        "period_start": period_start,
         "period_end": period_end,
         "per_day_salary": money(per_day_salary),
         "attendance_summary": summary,
@@ -142,5 +149,7 @@ def build_employee_payroll_summary(employee, month: int, year: int, request=None
         "deductions": payroll["deductions"],
         "payableSalary": payroll["payable_salary"],
         "daysInMonth": payroll["days_in_month"],
+        "eligibleDays": payroll["eligible_days"],
+        "periodStart": payroll["period_start"],
         "periodEnd": payroll["period_end"],
     }

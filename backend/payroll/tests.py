@@ -17,7 +17,7 @@ def create_attendance(employee, day, status):
     return record
 
 
-def create_employee():
+def create_employee(joining_date=date(2026, 5, 1)):
     return Employee.objects.create(
         employee_id="EMP-PAY-001",
         full_name="Payroll Employee",
@@ -30,6 +30,7 @@ def create_employee():
         bank_name="Test Bank",
         bank_account_number="1234567891",
         tax_id="ABCDE1235F",
+        joining_date=joining_date,
     )
 
 
@@ -67,3 +68,16 @@ class PayrollCalculationTests(TestCase):
         self.assertEqual(payroll["attendance_summary"]["absent"], 0)
         self.assertEqual(payroll["unpaid_days"], 0.0)
         self.assertEqual(payroll["deductions"], Decimal("0.00"))
+
+    def test_first_month_salary_starts_on_the_joining_date(self):
+        employee = create_employee(joining_date=date(2026, 5, 16))
+        create_attendance(employee, 5, AttendanceStatus.ABSENT)
+        create_attendance(employee, 16, AttendanceStatus.PRESENT)
+
+        payroll = calculate_attendance_payroll(employee, 5, 2026)
+
+        self.assertEqual(payroll["period_start"], date(2026, 5, 16))
+        self.assertEqual(payroll["eligible_days"], 16)
+        self.assertEqual(payroll["attendance_summary"]["absent"], 0)
+        self.assertEqual(payroll["basic_salary"], Decimal("5161.29"))
+        self.assertEqual(payroll["payable_salary"], Decimal("5161.29"))

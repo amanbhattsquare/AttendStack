@@ -107,7 +107,12 @@ def sync_leave_request_attendance(leave_request) -> dict[str, int]:
     """Create or clear attendance records that are driven by a leave approval."""
     existing_records = AttendanceRecord.objects.filter(leave_request=leave_request)
     affected_months = {_month_key(record.date) for record in existing_records}
-    requested_dates = set(iter_dates(leave_request.start_date, leave_request.end_date))
+    # A leave request can never create attendance before employment begins.
+    requested_dates = {
+        leave_date
+        for leave_date in iter_dates(leave_request.start_date, leave_request.end_date)
+        if leave_date >= leave_request.employee.joining_date
+    }
     affected_months.update(_month_key(day) for day in requested_dates)
 
     if leave_request.status != LeaveStatus.APPROVED:
@@ -159,7 +164,10 @@ def auto_mark_calendar_days(month: int, year: int) -> dict[str, int]:
     active_employees = Employee.objects.filter(status=EmployeeStatus.ACTIVE)
 
     for employee in active_employees:
+        employment_start = max(employee.joining_date, date(year, month, 1))
         for holiday_date in holiday_dates:
+            if holiday_date < employment_start:
+                continue
             _, created = AttendanceRecord.objects.get_or_create(
                 employee=employee,
                 date=holiday_date,
@@ -172,6 +180,8 @@ def auto_mark_calendar_days(month: int, year: int) -> dict[str, int]:
             skipped_count += int(not created)
 
         for sunday_date in sunday_dates:
+            if sunday_date < employment_start:
+                continue
             record, created = AttendanceRecord.objects.get_or_create(
                 employee=employee,
                 date=sunday_date,
@@ -209,7 +219,10 @@ def auto_mark_absent_yesterday():
     if Holiday.objects.filter(date=yesterday).exists():
         return {"status": "skipped", "reason": "Holiday"}
 
-    active_employees = Employee.objects.filter(status=EmployeeStatus.ACTIVE)
+    active_employees = Employee.objects.filter(
+        status=EmployeeStatus.ACTIVE,
+        joining_date__lte=yesterday,
+    )
     marked_absent_count = 0
     
     for employee in active_employees:

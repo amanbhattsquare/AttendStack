@@ -14,6 +14,7 @@ import {
   IconCheck,
   IconX,
   IconDeviceFloppy,
+  IconCopy,
   IconRefresh,
   IconCalendar,
   IconHeart,
@@ -24,6 +25,8 @@ import {
   IconCurrentLocation,
   IconAlertTriangle,
 } from "@tabler/icons-react";
+
+const apiRoot = (process.env.NEXT_PUBLIC_API_ENDPOINT || "").replace(/\/$/, "");
 
 // API utility to get auth headers
 const authHeaders = () => {
@@ -68,10 +71,22 @@ interface CompanySettings {
   companyAddress: string;
   companyEmail: string;
   companyPhone: string;
+  companyWebsite: string;
+  industry: string;
+  companySize: string;
+  registrationNumber: string;
+  taxId: string;
   timezone: string;
   currency: string;
   dateFormat: string;
   workingDays: string[];
+}
+
+interface OrganizationAccess {
+  id: number;
+  name: string;
+  invite_code: string;
+  can_manage_invite_code: boolean;
 }
 
 const SettingsPage = () => {
@@ -84,6 +99,12 @@ const SettingsPage = () => {
   const [myIpInfo, setMyIpInfo] = useState<{ client_ip: string; is_currently_allowed: boolean | null } | null>(null);
   const [isFetchingIp, setIsFetchingIp] = useState(false);
   const [detectedAccuracy, setDetectedAccuracy] = useState<number | null>(null);
+  const [organizationAccess, setOrganizationAccess] = useState<OrganizationAccess | null>(null);
+  const [isLoadingOrganizationAccess, setIsLoadingOrganizationAccess] = useState(true);
+  const [isCreatingOrganizationAccess, setIsCreatingOrganizationAccess] = useState(false);
+  const [isUpdatingOrganizationCode, setIsUpdatingOrganizationCode] = useState(false);
+  const [organizationCodeNotice, setOrganizationCodeNotice] = useState("");
+  const [organizationCodeError, setOrganizationCodeError] = useState("");
 
   // Detect admin's current GPS location for easy office coord setup
   const detectMyLocation = () => {
@@ -212,6 +233,11 @@ const SettingsPage = () => {
               companyAddress: data.company_address,
               companyEmail: data.company_email,
               companyPhone: data.company_phone,
+              companyWebsite: data.company_website || "",
+              industry: data.industry || "",
+              companySize: data.company_size || "",
+              registrationNumber: data.registration_number || "",
+              taxId: data.tax_id || "",
               timezone: data.timezone,
               currency: data.currency,
               dateFormat: data.date_format,
@@ -226,6 +252,35 @@ const SettingsPage = () => {
     };
 
     loadSettings();
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadOrganizationAccess = async () => {
+      try {
+        const response = await fetch(`${apiRoot}/api/v1/organizations/`, { headers: authHeaders() });
+        if (!response.ok) {
+          throw new Error(response.status === 401
+            ? "Your session has expired. Please sign in again."
+            : "Your company workspace could not be loaded. Refresh the page and try again.");
+        }
+        const data = await response.json();
+        const organizations = Array.isArray(data) ? data : data.results || [];
+        if (!cancelled) setOrganizationAccess(organizations[0] || null);
+      } catch (error) {
+        if (!cancelled) {
+          setOrganizationCodeError(error instanceof TypeError
+            ? "Cannot reach the backend server. Start it, then refresh this page."
+            : error instanceof Error ? error.message : "Your company workspace could not be loaded.");
+        }
+      } finally {
+        if (!cancelled) setIsLoadingOrganizationAccess(false);
+      }
+    };
+
+    loadOrganizationAccess();
+    return () => { cancelled = true; };
   }, []);
 
   // Leave settings state - comprehensive for corporate startup
@@ -296,6 +351,11 @@ const SettingsPage = () => {
     companyAddress: "123 Business Park, Mumbai, Maharashtra 400001",
     companyEmail: "admin@bhattsquare.com",
     companyPhone: "+91 98765 43210",
+    companyWebsite: "",
+    industry: "",
+    companySize: "",
+    registrationNumber: "",
+    taxId: "",
     timezone: "Asia/Kolkata",
     currency: "INR",
     dateFormat: "DD/MM/YYYY",
@@ -320,6 +380,73 @@ const SettingsPage = () => {
         : [...prev.workingDays, day];
       return { ...prev, workingDays };
     });
+  };
+
+  const copyOrganizationCode = async () => {
+    if (!organizationAccess) return;
+    try {
+      await navigator.clipboard.writeText(organizationAccess.invite_code);
+      setOrganizationCodeError("");
+      setOrganizationCodeNotice("Employee onboarding code copied. Share it only with people who should join your company.");
+    } catch {
+      setOrganizationCodeNotice("");
+      setOrganizationCodeError("The code could not be copied. Please select and copy it manually.");
+    }
+  };
+
+  const createOrganizationAccess = async () => {
+    const organizationName = companySettings.companyName.trim();
+    if (!organizationName) {
+      setOrganizationCodeError("Save a company name before creating an employee onboarding code.");
+      return;
+    }
+
+    setIsCreatingOrganizationAccess(true);
+    setOrganizationCodeError("");
+    setOrganizationCodeNotice("");
+    try {
+      const response = await fetch(`${apiRoot}/api/v1/organizations/`, {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ name: organizationName }),
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => null);
+        throw new Error(typeof data?.detail === "string" ? data.detail : "Unable to create company workspace");
+      }
+      const organization = await response.json();
+      setOrganizationAccess(organization);
+      setOrganizationCodeNotice("Your employee onboarding code is ready. Share it only with people who should join your company.");
+    } catch (error) {
+      setOrganizationCodeError(error instanceof TypeError
+        ? "Cannot reach the backend server. Start it, then try again."
+        : error instanceof Error ? error.message : "The company workspace could not be created. Please try again.");
+    } finally {
+      setIsCreatingOrganizationAccess(false);
+    }
+  };
+
+  const regenerateOrganizationCode = async () => {
+    if (!organizationAccess || !organizationAccess.can_manage_invite_code) return;
+    if (!window.confirm("Generate a new employee onboarding code? The current code will stop working immediately.")) return;
+
+    setIsUpdatingOrganizationCode(true);
+    setOrganizationCodeError("");
+    setOrganizationCodeNotice("");
+    try {
+      const response = await fetch(`${apiRoot}/api/v1/organizations/${organizationAccess.id}/regenerate-invite-code/`, {
+        method: "POST",
+        headers: authHeaders(),
+      });
+      if (!response.ok) throw new Error("Unable to generate code");
+      const organization = await response.json();
+      setOrganizationAccess(organization);
+      setOrganizationCodeNotice("A new employee onboarding code is ready. The previous code no longer works.");
+    } catch {
+      setOrganizationCodeError("The code could not be generated. Please try again.");
+    } finally {
+      setIsUpdatingOrganizationCode(false);
+    }
   };
 
   const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -436,6 +563,11 @@ const SettingsPage = () => {
         company_address: companySettings.companyAddress,
         company_email: companySettings.companyEmail,
         company_phone: companySettings.companyPhone,
+        company_website: companySettings.companyWebsite,
+        industry: companySettings.industry,
+        company_size: companySettings.companySize,
+        registration_number: companySettings.registrationNumber,
+        tax_id: companySettings.taxId,
         timezone: companySettings.timezone,
         currency: companySettings.currency,
         date_format: companySettings.dateFormat,
@@ -1361,6 +1493,63 @@ const SettingsPage = () => {
                                   />
                                 </Form.Group>
                               </Col>
+                              <Col md={12}>
+                                <hr className="my-2" />
+                                <h5 className="h6 fw-semibold mb-1">Business profile</h5>
+                                <Form.Text className="text-secondary">These details help identify your company in employee-facing records and documents.</Form.Text>
+                              </Col>
+                              <Col md={6}>
+                                <Form.Group>
+                                  <Form.Label>Company Website <span className="text-secondary fw-normal">(optional)</span></Form.Label>
+                                  <Form.Control
+                                    type="url"
+                                    placeholder="https://example.com"
+                                    value={companySettings.companyWebsite}
+                                    onChange={(e) => setCompanySettings({ ...companySettings, companyWebsite: e.target.value })}
+                                  />
+                                </Form.Group>
+                              </Col>
+                              <Col md={6}>
+                                <Form.Group>
+                                  <Form.Label>Industry <span className="text-secondary fw-normal">(optional)</span></Form.Label>
+                                  <Form.Select value={companySettings.industry} onChange={(e) => setCompanySettings({ ...companySettings, industry: e.target.value })}>
+                                    <option value="">Select industry</option>
+                                    <option value="Technology">Technology</option>
+                                    <option value="Professional Services">Professional Services</option>
+                                    <option value="Manufacturing">Manufacturing</option>
+                                    <option value="Retail & Commerce">Retail & Commerce</option>
+                                    <option value="Healthcare">Healthcare</option>
+                                    <option value="Education">Education</option>
+                                    <option value="Construction & Real Estate">Construction & Real Estate</option>
+                                    <option value="Other">Other</option>
+                                  </Form.Select>
+                                </Form.Group>
+                              </Col>
+                              <Col md={4}>
+                                <Form.Group>
+                                  <Form.Label>Company Size <span className="text-secondary fw-normal">(optional)</span></Form.Label>
+                                  <Form.Select value={companySettings.companySize} onChange={(e) => setCompanySettings({ ...companySettings, companySize: e.target.value })}>
+                                    <option value="">Select size</option>
+                                    <option value="1-10">1–10 employees</option>
+                                    <option value="11-50">11–50 employees</option>
+                                    <option value="51-200">51–200 employees</option>
+                                    <option value="201-500">201–500 employees</option>
+                                    <option value="501+">501+ employees</option>
+                                  </Form.Select>
+                                </Form.Group>
+                              </Col>
+                              <Col md={4}>
+                                <Form.Group>
+                                  <Form.Label>Registration Number <span className="text-secondary fw-normal">(optional)</span></Form.Label>
+                                  <Form.Control value={companySettings.registrationNumber} onChange={(e) => setCompanySettings({ ...companySettings, registrationNumber: e.target.value })} />
+                                </Form.Group>
+                              </Col>
+                              <Col md={4}>
+                                <Form.Group>
+                                  <Form.Label>Tax ID / GSTIN <span className="text-secondary fw-normal">(optional)</span></Form.Label>
+                                  <Form.Control value={companySettings.taxId} onChange={(e) => setCompanySettings({ ...companySettings, taxId: e.target.value.toUpperCase() })} />
+                                </Form.Group>
+                              </Col>
                               <Col md={4}>
                                 <Form.Group>
                                   <Form.Label>Timezone</Form.Label>
@@ -1443,8 +1632,43 @@ const SettingsPage = () => {
                 >
                   <div className="p-4 border-top">
                     <h4 className="fw-bold mb-4">Security Settings</h4>
-                    <Row>
-                      <Col md={8}>
+                    <Row className="g-4">
+                      <Col md={6}>
+                        <Card className="border shadow-sm h-100">
+                          <Card.Body>
+                            <h5 className="fw-semibold mb-2">Employee onboarding code</h5>
+                            <p className="text-secondary small mb-4">Employees use this secure code to create an account in <strong>{organizationAccess?.name || "your company"}</strong>. Generate a new code whenever access needs to be reset.</p>
+                            {organizationCodeNotice && <Alert variant="success" className="py-2 small" dismissible onClose={() => setOrganizationCodeNotice("")}>{organizationCodeNotice}</Alert>}
+                            {organizationCodeError && <Alert variant="danger" className="py-2 small" dismissible onClose={() => setOrganizationCodeError("")}>{organizationCodeError}</Alert>}
+                            {isLoadingOrganizationAccess ? (
+                              <div className="d-flex align-items-center gap-2 text-secondary small"><Spinner size="sm" /> Loading employee access…</div>
+                            ) : organizationAccess ? (
+                              <>
+                                <Form.Group className="mb-3" controlId="employee-onboarding-code">
+                                  <Form.Label className="small fw-semibold">Current code</Form.Label>
+                                  <Form.Control value={organizationAccess.invite_code} readOnly className="font-monospace fw-semibold" />
+                                </Form.Group>
+                                <div className="d-flex flex-wrap gap-2 align-items-center">
+                                  <Button type="button" variant="outline-primary" size="sm" onClick={copyOrganizationCode}><IconCopy size={16} className="me-1" />Copy code</Button>
+                                  {organizationAccess.can_manage_invite_code ? (
+                                    <Button type="button" variant="outline-secondary" size="sm" onClick={regenerateOrganizationCode} disabled={isUpdatingOrganizationCode}>
+                                      {isUpdatingOrganizationCode ? <><Spinner size="sm" className="me-1" />Generating…</> : <><IconRefresh size={16} className="me-1" />Generate new code</>}
+                                    </Button>
+                                  ) : <small className="text-secondary">Only the company owner can generate a new code.</small>}
+                                </div>
+                              </>
+                            ) : (
+                              <div>
+                                <p className="text-secondary small mb-3">Create a company workspace to issue the first employee onboarding code.</p>
+                                <Button type="button" variant="primary" size="sm" onClick={createOrganizationAccess} disabled={isCreatingOrganizationAccess}>
+                                  {isCreatingOrganizationAccess ? <><Spinner size="sm" className="me-1" />Creating code…</> : "Create employee onboarding code"}
+                                </Button>
+                              </div>
+                            )}
+                          </Card.Body>
+                        </Card>
+                      </Col>
+                      <Col md={6}>
                         <Card className="border bg-light-subtle">
                           <Card.Body>
                             <h5 className="fw-semibold mb-3">Password Policy</h5>

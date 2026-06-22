@@ -1,14 +1,20 @@
 import re
+from io import BytesIO
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core import mail
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import override_settings
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
+from PIL import Image
 
 from .models import PasswordResetOTP
+from .models import UserRole
+from employees.models import Employee
+from organizations.models import Organization
 
 
 @override_settings(
@@ -128,3 +134,143 @@ class PasswordResetOTPTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("confirm_password", response.data)
+
+
+class PublicOnboardingTests(APITestCase):
+    def test_organization_owner_can_create_a_workspace_and_employee_can_join_with_its_code(self):
+        organization_response = self.client.post(
+            reverse("accounts:register_organization"),
+            {
+                "organization_name": "Northstar Labs",
+                "full_name": "Maya Singh",
+                "email": "maya@northstar.example",
+                "phone": "9876543210",
+                "password": "StrongPass123!",
+                "confirm_password": "StrongPass123!",
+            },
+            format="json",
+        )
+
+        self.assertEqual(organization_response.status_code, status.HTTP_201_CREATED, organization_response.data)
+        invite_code = organization_response.data["organization"]["invite_code"]
+        organization = Organization.objects.get(name="Northstar Labs")
+        self.assertTrue(invite_code.startswith("ORG-"))
+        self.assertEqual(organization.owner.role, UserRole.HR)
+        self.assertTrue(Employee.objects.filter(email="maya@northstar.example").exists())
+
+        employee_response = self.client.post(
+            reverse("accounts:register_employee"),
+            {
+                "organization_code": invite_code,
+                "full_name": "Arjun Patel",
+                "email": "arjun@northstar.example",
+                "phone": "9876543211",
+                "address": "Pune, Maharashtra",
+                "password": "StrongPass456!",
+                "confirm_password": "StrongPass456!",
+            },
+            format="json",
+        )
+
+        self.assertEqual(employee_response.status_code, status.HTTP_201_CREATED)
+        employee = Employee.objects.get(email="arjun@northstar.example")
+        self.assertEqual(employee.organization, organization)
+        self.assertIsNone(employee.annual_salary)
+        user = get_user_model().objects.get(email=employee.email)
+        self.assertEqual(user.role, UserRole.EMPLOYEE)
+        self.assertEqual(user.employee_id, employee.employee_id)
+
+    def test_employee_registration_rejects_an_invalid_organization_code(self):
+        response = self.client.post(
+            reverse("accounts:register_employee"),
+            {
+                "organization_code": "ORG-NOTVALID",
+                "full_name": "Arjun Patel",
+                "email": "arjun@example.com",
+                "phone": "9876543211",
+                "password": "StrongPass456!",
+                "confirm_password": "StrongPass456!",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("organization_code", response.data)
+
+    def test_organization_code_lookup_returns_the_active_company_name(self):
+        organization = Organization.objects.create(name="Northstar Labs")
+
+        response = self.client.get(
+            reverse("accounts:organization_code_lookup"),
+            {"code": organization.invite_code.lower()},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data, {"organization_name": "Northstar Labs"})
+
+    def test_organization_code_lookup_does_not_return_an_inactive_company(self):
+        organization = Organization.objects.create(name="Inactive Labs", is_active=False)
+
+        response = self.client.get(
+            reverse("accounts:organization_code_lookup"),
+            {"code": organization.invite_code},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_hr_can_create_a_company_workspace_and_receive_an_onboarding_code(self):
+        hr = get_user_model().objects.create_hr(
+            email="owner@example.com",
+            password="StrongPass123!",
+            first_name="Maya",
+            last_name="Singh",
+        )
+        self.client.force_authenticate(hr)
+
+        response = self.client.post(
+            "/api/v1/organizations/",
+            {"name": "Northstar Labs"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertEqual(response.data["name"], "Northstar Labs")
+        self.assertTrue(response.data["invite_code"].startswith("ORG-"))
+        self.assertTrue(response.data["can_manage_invite_code"])
+
+    def test_employee_registration_accepts_a_professional_profile_photo(self):
+        organization = Organization.objects.create(name="Northstar Labs")
+        photo_buffer = BytesIO()
+        Image.new("RGB", (16, 16), color="white").save(photo_buffer, format="PNG")
+        photo = SimpleUploadedFile(
+            "headshot.png",
+            photo_buffer.getvalue(),
+            content_type="image/png",
+        )
+
+        response = self.client.post(
+            reverse("accounts:register_employee"),
+            {
+                "organization_code": organization.invite_code,
+                "full_name": "Arjun Patel",
+                "email": "arjun.photo@example.com",
+                "phone": "9876543211",
+                "password": "StrongPass456!",
+                "confirm_password": "StrongPass456!",
+                "profile_photo": photo,
+                "aadhaar_number": "123456789012",
+                "bank_name": "Example Bank",
+                "bank_account_number": "1234567890123456",
+                "ifsc_code": "HDFC0001234",
+                "tax_id": "AABCP1234C",
+            },
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        employee = Employee.objects.get(email="arjun.photo@example.com")
+        self.assertTrue(employee.profile_photo.name.startswith("employees/photos/headshot"))
+        self.assertEqual(employee.aadhaar_number, "123456789012")
+        self.assertEqual(employee.bank_name, "Example Bank")
+        self.assertEqual(employee.ifsc_code, "HDFC0001234")
+        self.assertEqual(employee.tax_id, "AABCP1234C")

@@ -134,7 +134,7 @@ const SignInPage = () => {
                 </Button>
               </Form>
               <p className="text-muted text-center mt-3 mb-0">
-                Need an account? Contact your administrator.
+                New employee? <Link href="/register">Create your account .</Link>
               </p>
               <div className="border-top text-center mt-4 pt-3">
                 <small className="text-muted">

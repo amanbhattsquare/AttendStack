@@ -32,6 +32,7 @@ export type EmployeeFormData = {
   payFrequency: string;
   bankName: string;
   bankAccountNumber: string;
+  ifscCode: string;
   taxId: string;
 };
 
@@ -59,10 +60,12 @@ export const initialEmployeeFormData: EmployeeFormData = {
   payFrequency: "",
   bankName: "",
   bankAccountNumber: "",
+  ifscCode: "",
   taxId: "",
 };
 
 const API_URL = `${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/employees/`;
+const safeTrim = (value: unknown) => String(value ?? "").trim();
 
 const StepIndicator = ({ currentStep }: { currentStep: number }) => {
   const steps = ["Personal Info", "Employment Details", "Salary & Bank", "Review & Submit"];
@@ -173,9 +176,13 @@ const EmployeeFormWizard = ({ mode = "add", initialData, employeeId, onSave, onC
       required("payFrequency", "Pay frequency");
       required("bankName", "Bank name");
       required("bankAccountNumber", "Bank account number");
+      required("ifscCode", "IFSC code");
       required("taxId", "Tax ID / PAN");
       if (formData.annualSalary && Number(formData.annualSalary) <= 0) {
         nextErrors.annualSalary = "Annual salary must be greater than zero.";
+      }
+      if (formData.ifscCode && !/^[A-Z]{4}0[A-Z0-9]{6}$/.test(formData.ifscCode)) {
+        nextErrors.ifscCode = "Enter a valid 11-character IFSC code.";
       }
     }
 
@@ -195,26 +202,27 @@ const EmployeeFormWizard = ({ mode = "add", initialData, employeeId, onSave, onC
   const payload = useMemo(() => {
     const body = new FormData();
     const fields: Record<string, string> = {
-      employee_id: formData.employeeId.trim(),
-      full_name: formData.fullName.trim(),
-      email: formData.email.trim(),
-      phone: formData.phone.trim(),
-      date_of_birth: formData.dateOfBirth,
-      aadhaar_number: formData.aadhaarNumber.trim(),
-      address: formData.address.trim(),
-      emergency_contact_name: formData.emergencyContactName.trim(),
-      emergency_contact_relationship: formData.emergencyContactRelationship.trim(),
-      emergency_contact_phone: formData.emergencyContactPhone.trim(),
-      joining_date: formData.joiningDate,
-      department: formData.department,
-      designation: formData.designation.trim(),
-      employment_type: formData.employmentType,
-      reporting_manager: formData.reportingManager.trim(),
-      annual_salary: formData.annualSalary,
-      pay_frequency: formData.payFrequency,
-      bank_name: formData.bankName.trim(),
-      bank_account_number: formData.bankAccountNumber.trim(),
-      tax_id: formData.taxId.trim().toUpperCase(),
+      employee_id: safeTrim(formData.employeeId),
+      full_name: safeTrim(formData.fullName),
+      email: safeTrim(formData.email),
+      phone: safeTrim(formData.phone),
+      date_of_birth: safeTrim(formData.dateOfBirth),
+      aadhaar_number: safeTrim(formData.aadhaarNumber),
+      address: safeTrim(formData.address),
+      emergency_contact_name: safeTrim(formData.emergencyContactName),
+      emergency_contact_relationship: safeTrim(formData.emergencyContactRelationship),
+      emergency_contact_phone: safeTrim(formData.emergencyContactPhone),
+      joining_date: safeTrim(formData.joiningDate),
+      department: safeTrim(formData.department),
+      designation: safeTrim(formData.designation),
+      employment_type: safeTrim(formData.employmentType),
+      reporting_manager: safeTrim(formData.reportingManager),
+      annual_salary: safeTrim(formData.annualSalary),
+      pay_frequency: safeTrim(formData.payFrequency),
+      bank_name: safeTrim(formData.bankName),
+      bank_account_number: safeTrim(formData.bankAccountNumber),
+      ifsc_code: safeTrim(formData.ifscCode).toUpperCase(),
+      tax_id: safeTrim(formData.taxId).toUpperCase(),
     };
 
     Object.entries(fields).forEach(([key, value]) => {

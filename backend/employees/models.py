@@ -45,6 +45,8 @@ class Employee(models.Model):
     aadhaar_number = models.CharField(
         max_length=12,
         unique=True,
+        blank=True,
+        null=True,
         validators=[RegexValidator(r"^[0-9]{12}$", "Aadhaar number must be 12 digits.")],
     )
     address = models.TextField(blank=True)
@@ -56,8 +58,8 @@ class Employee(models.Model):
     emergency_contact_phone = models.CharField(max_length=15, blank=True)
 
     joining_date = models.DateField(default=timezone.localdate)
-    department = models.CharField(max_length=100)
-    designation = models.CharField(max_length=120)
+    department = models.CharField(max_length=100, blank=True)
+    designation = models.CharField(max_length=120, blank=True)
     employment_type = models.CharField(
         max_length=20,
         choices=EmploymentType.choices,
@@ -71,15 +73,20 @@ class Employee(models.Model):
         db_index=True,
     )
 
-    annual_salary = models.DecimalField(max_digits=12, decimal_places=2)
+    annual_salary = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
     pay_frequency = models.CharField(
         max_length=20,
         choices=PayFrequency.choices,
         default=PayFrequency.MONTHLY,
     )
-    bank_name = models.CharField(max_length=120)
-    bank_account_number = models.CharField(max_length=40)
-    tax_id = models.CharField(max_length=20)
+    bank_name = models.CharField(max_length=120, blank=True)
+    bank_account_number = models.CharField(max_length=40, blank=True)
+    ifsc_code = models.CharField(
+        max_length=11,
+        blank=True,
+        validators=[RegexValidator(r"^$|^[A-Z]{4}0[A-Z0-9]{6}$", "Enter a valid 11-character IFSC code.")],
+    )
+    tax_id = models.CharField(max_length=20, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

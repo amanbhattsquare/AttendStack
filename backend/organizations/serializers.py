@@ -3,37 +3,27 @@ from .models import Organization
 from employees.models import Employee
 
 class OrganizationSerializer(serializers.ModelSerializer):
-    admin_full_name = serializers.CharField(write_only=True)
-    admin_email = serializers.EmailField(write_only=True)
-    admin_password = serializers.CharField(write_only=True)
-    administrator = serializers.SerializerMethodField()
+    owner_name = serializers.CharField(source="owner.get_full_name", read_only=True)
+    can_manage_invite_code = serializers.SerializerMethodField()
 
     class Meta:
         model = Organization
         fields = [
             "id",
             "name",
+            "invite_code",
+            "owner_name",
             "created_at",
             "is_active",
-            "admin_full_name",
-            "admin_email",
-            "admin_password",
-            "administrator",
+            "can_manage_invite_code",
         ]
-        read_only_fields = ["id", "created_at", "is_active", "administrator"]
+        read_only_fields = ["id", "created_at", "owner_name", "invite_code"]
 
-    def get_administrator(self, obj):
-        try:
-            # Assuming the first employee created for an organization is the admin
-            admin_employee = Employee.objects.filter(organization=obj, designation="Administrator").first()
-            if admin_employee:
-                return {
-                    "full_name": admin_employee.full_name,
-                    "email": admin_employee.email,
-                }
-        except Employee.DoesNotExist:
-            return None
-        return None
+    def get_can_manage_invite_code(self, obj):
+        request = self.context.get("request")
+        if request is None or not request.user.is_authenticated:
+            return False
+        return request.user.is_superuser or obj.owner_id == request.user.id
 
 
 class AdministratorSerializer(serializers.ModelSerializer):

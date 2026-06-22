@@ -1,7 +1,30 @@
+import secrets
+
+from django.conf import settings
 from django.db import models
+
+
+def generate_invite_code():
+    """Generate a short, human-friendly code employees can use to join."""
+    alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+    return "ORG-" + "".join(secrets.choice(alphabet) for _ in range(8))
 
 class Organization(models.Model):
     name = models.CharField(max_length=255)
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="owned_organizations",
+        blank=True,
+        null=True,
+    )
+    invite_code = models.CharField(
+        max_length=12,
+        unique=True,
+        db_index=True,
+        default=generate_invite_code,
+        editable=False,
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     is_active = models.BooleanField(default=True)
 

@@ -38,6 +38,11 @@ const Step3_SalaryAndBank = ({ data, errors, onChange }: StepProps) => {
           {errors.bankAccountNumber && <div className="invalid-feedback">{errors.bankAccountNumber}</div>}
         </div>
         <div className="col-md-6">
+          <label htmlFor="ifscCode" className="form-label">IFSC Code</label>
+          <input type="text" className={`form-control text-uppercase ${errors.ifscCode ? "is-invalid" : ""}`} id="ifscCode" placeholder="e.g., HDFC0001234" maxLength={11} value={data.ifscCode || ""} onChange={(event) => onChange("ifscCode", event.target.value.toUpperCase().replace(/\s/g, ""))} />
+          {errors.ifscCode && <div className="invalid-feedback">{errors.ifscCode}</div>}
+        </div>
+        <div className="col-md-6">
           <label htmlFor="taxId" className="form-label">Tax ID / PAN Number</label>
           <input type="text" className={`form-control text-uppercase ${errors.taxId ? "is-invalid" : ""}`} id="taxId" placeholder="Enter Tax ID" value={data.taxId} onChange={(event) => onChange("taxId", event.target.value.toUpperCase())} />
           {errors.taxId && <div className="invalid-feedback">{errors.taxId}</div>}

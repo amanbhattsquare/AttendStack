@@ -1,140 +1,69 @@
 "use client";
-import { useState } from 'react';
-import { Container, Row, Col, Card, Button, Table, Modal } from 'react-bootstrap';
-import Link from 'next/link';
-import { Eye, PencilSquare, Trash } from 'react-bootstrap-icons';
 
-// Mock data for existing organizations
-const initialOrganizations = [
-  { id: 1, name: 'Bhatt Square', industry: 'Technology', adminEmail: 'admin@bhattsquare.com', active: true, createdAt: '2026-05-16' },
-  { id: 2, name: 'Another Org', industry: 'Healthcare', adminEmail: 'contact@another.org', active: false, createdAt: '2026-05-15' },
-  { id: 3, name: 'Edu Foundation', industry: 'Education', adminEmail: 'info@edu.org', active: true, createdAt: '2026-05-14' },
-];
+import { useCallback, useEffect, useState } from "react";
+import { Alert, Badge, Button, Card, Col, Container, Row, Spinner, Table } from "react-bootstrap";
+import { IconCopy, IconRefresh, IconUsersGroup } from "@tabler/icons-react";
+import apiClient from "app/services/api";
 
-const OrganizationsPage = () => {
-  const [organizations, setOrganizations] = useState(initialOrganizations);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [showViewModal, setShowViewModal] = useState(false);
-  const [selectedOrg, setSelectedOrg] = useState<any>(null);
+type Organization = {
+  id: number;
+  name: string;
+  invite_code: string;
+  owner_name: string | null;
+  is_active: boolean;
+  created_at: string;
+};
 
-  const handleDeleteClick = (org: any) => {
-    setSelectedOrg(org);
-    setShowDeleteModal(true);
+export default function OrganizationsPage() {
+  const [organizations, setOrganizations] = useState<Organization[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busyId, setBusyId] = useState<number | null>(null);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+
+  const loadOrganizations = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const response = await apiClient.get("/api/v1/organizations/");
+      setOrganizations(Array.isArray(response.data) ? response.data : response.data.results || []);
+    } catch {
+      setError("We could not load your organization workspace. Please refresh and try again.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadOrganizations(); }, [loadOrganizations]);
+
+  const copyCode = async (code: string) => {
+    await navigator.clipboard.writeText(code);
+    setNotice("Organization code copied. Share it only with employees who should join this workspace.");
   };
 
-  const confirmDelete = () => {
-    setOrganizations(organizations.filter(o => o.id !== selectedOrg.id));
-    setShowDeleteModal(false);
-    setSelectedOrg(null);
-  };
-
-  const handleViewClick = (org: any) => {
-    setSelectedOrg(org);
-    setShowViewModal(true);
+  const regenerateCode = async (organization: Organization) => {
+    if (!window.confirm(`Generate a new code for ${organization.name}? The previous code will stop working.`)) return;
+    setBusyId(organization.id);
+    setError("");
+    try {
+      const response = await apiClient.post(`/api/v1/organizations/${organization.id}/regenerate-invite-code/`);
+      setOrganizations((current) => current.map((item) => item.id === organization.id ? response.data : item));
+      setNotice("A new organization code has been generated. The old code is no longer valid.");
+    } catch {
+      setError("Only the organization owner can regenerate this code.");
+    } finally {
+      setBusyId(null);
+    }
   };
 
   return (
-    <>
-      <Container fluid>
-        <Row className="mb-4 align-items-center">
-          <Col>
-            <h1 className="mb-0">Organizations</h1>
-            <p className="mb-0">View and manage your organizations.</p>
-          </Col>
-          <Col xs="auto">
-            <Link href="/admin/organizations/add" passHref>
-              <Button variant="primary">Add New Organization</Button>
-            </Link>
-          </Col>
-        </Row>
-        <Row>
-          <Col xs={12}>
-            <Card>
-              <Card.Body>
-                <Card.Title>Existing Organizations</Card.Title>
-                <Table striped bordered hover responsive>
-                  <thead>
-                    <tr>
-                      <th>ID</th>
-                      <th>Name</th>
-                      <th>Active</th>
-                      <th>Created At</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {organizations.map((org) => (
-                      <tr key={org.id}>
-                        <td>{org.id}</td>
-                        <td>{org.name}</td>
-                        <td>{org.active ? 'Yes' : 'No'}</td>
-                        <td>{org.createdAt}</td>
-                        <td>
-                          <Button variant="outline-info" size="sm" className="me-2" onClick={() => handleViewClick(org)}>
-                            <Eye />
-                          </Button>
-                          <Link href={`/admin/organizations/edit/${org.id}`} passHref>
-                            <Button variant="outline-secondary" size="sm" className="me-2">
-                              <PencilSquare />
-                            </Button>
-                          </Link>
-                          <Button variant="outline-danger" size="sm" onClick={() => handleDeleteClick(org)}>
-                            <Trash />
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </Table>
-              </Card.Body>
-            </Card>
-          </Col>
-        </Row>
-      </Container>
-
-      {/* View Organization Modal */}
-      <Modal show={showViewModal} onHide={() => setShowViewModal(false)} centered>
-        <Modal.Header closeButton>
-          <Modal.Title>Organization Details</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          {selectedOrg && (
-            <div>
-              <p><strong>ID:</strong> {selectedOrg.id}</p>
-              <p><strong>Name:</strong> {selectedOrg.name}</p>
-              <p><strong>Industry:</strong> {selectedOrg.industry}</p>
-              <p><strong>Admin Email:</strong> {selectedOrg.adminEmail}</p>
-              <p><strong>Status:</strong> {selectedOrg.active ? 'Active' : 'Inactive'}</p>
-              <p><strong>Created At:</strong> {selectedOrg.createdAt}</p>
-            </div>
-          )}
-        </Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowViewModal(false)}>
-            Close
-          </Button>
-        </Modal.Footer>
-      </Modal>
-
-      {/* Delete Confirmation Modal */}
-      <Modal show={showDeleteModal} onHide={() => setShowDeleteModal(false)} centered>
-        <Modal.Header closeButton>
-          <Modal.Title>Confirm Deletion</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          Are you sure you want to delete the organization "<strong>{selectedOrg?.name}</strong>"? This action cannot be undone.
-        </Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowDeleteModal(false)}>
-            Cancel
-          </Button>
-          <Button variant="danger" onClick={confirmDelete}>
-            Delete
-          </Button>
-        </Modal.Footer>
-      </Modal>
-    </>
+    <Container fluid>
+      <Row className="mb-4 align-items-center"><Col><div className="d-flex align-items-center gap-2"><IconUsersGroup className="text-primary" size={28} /><div><h1 className="h3 mb-1">Organization access</h1><p className="text-secondary mb-0">Use the code below to invite employees into the correct workspace.</p></div></div></Col><Col xs="auto"><Button variant="outline-primary" onClick={loadOrganizations} disabled={loading}><IconRefresh size={17} className="me-1" />Refresh</Button></Col></Row>
+      {error && <Alert variant="danger">{error}</Alert>}
+      {notice && <Alert variant="success" dismissible onClose={() => setNotice("")}>{notice}</Alert>}
+      <Card className="border-0 shadow-sm"><Card.Body className="p-0">
+        {loading ? <div className="text-center py-5"><Spinner /><p className="text-secondary mb-0 mt-2">Loading organization access…</p></div> : organizations.length === 0 ? <div className="text-center py-5"><h2 className="h5">No organization workspace found</h2><p className="text-secondary mb-0">Create one from the public setup page to start inviting employees.</p></div> : <Table responsive hover className="align-middle mb-0"><thead><tr><th className="ps-4">Organization</th><th>Employee onboarding code</th><th>Status</th><th>Created</th><th className="text-end pe-4">Actions</th></tr></thead><tbody>{organizations.map((organization) => <tr key={organization.id}><td className="ps-4"><strong>{organization.name}</strong>{organization.owner_name && <small className="d-block text-secondary">Owner: {organization.owner_name}</small>}</td><td><code className="fw-bold text-primary">{organization.invite_code}</code></td><td><Badge bg={organization.is_active ? "success" : "secondary"}>{organization.is_active ? "Active" : "Inactive"}</Badge></td><td>{new Intl.DateTimeFormat("en-IN", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(organization.created_at))}</td><td className="text-end pe-4"><Button size="sm" variant="outline-primary" className="me-2" onClick={() => copyCode(organization.invite_code)}><IconCopy size={15} className="me-1" />Copy</Button><Button size="sm" variant="outline-secondary" disabled={busyId === organization.id} onClick={() => regenerateCode(organization)}>{busyId === organization.id ? <Spinner size="sm" /> : <><IconRefresh size={15} className="me-1" />New code</>}</Button></td></tr>)}</tbody></Table>}
+      </Card.Body></Card>
+    </Container>
   );
-};
-
-export default OrganizationsPage;
+}

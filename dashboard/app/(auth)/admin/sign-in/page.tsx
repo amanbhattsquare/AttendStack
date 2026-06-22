@@ -48,13 +48,13 @@ const AdminSignIn = () => {
 
       if (response.data && response.data.access) {
         const user = response.data.user;
-        if (user && user.role === "SUPER_ADMIN") {
+        if (user && (user.role === "SUPER_ADMIN" || user.role === "HR")) {
           localStorage.setItem("authToken", response.data.access);
           localStorage.setItem("refreshToken", response.data.refresh);
           localStorage.setItem("user", JSON.stringify(user));
           router.push("/admin/dashboard");
         } else {
-          setError("Access denied. Only administrators are allowed.");
+          setError("Access denied. Use an organization owner or HR account.");
         }
       } else {
         setError("Login failed. Please check your credentials.");
@@ -88,7 +88,7 @@ const AdminSignIn = () => {
                     style={{ height: "45px", width: "auto" }}
                   />
                 </Link>
-                <p className="text-muted">Administrator Access</p>
+                <p className="text-muted">Company workspace access</p>
               </div>
 
               {error && <Alert variant="danger">{error}</Alert>}
@@ -153,6 +153,9 @@ const AdminSignIn = () => {
                   )}
                 </Button>
               </Form>
+              <p className="text-muted text-center mt-3 mb-0">
+                Setting up a new company? <Link href="/register-organization">Create an organization workspace.</Link>
+              </p>
             </Card.Body>
           </Card>
         </Col>

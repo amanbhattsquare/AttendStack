@@ -60,8 +60,9 @@ const UserMenu = () => {
                 }
               }
             }
-          } catch (err) {
-            console.error("Error loading dynamic DP", err);
+          } catch {
+            // The saved session details remain usable while the API is offline.
+            // Avoid logging an expected network failure as a Next.js runtime error.
           }
         };
 

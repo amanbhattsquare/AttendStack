@@ -116,8 +116,8 @@ export default function Home() {
                   Employee login
                   <IconArrowRight size={19} strokeWidth={2} />
                 </Link>
-                <Link href="/admin/sign-in" className={styles.secondaryButton}>
-                  Company login
+                <Link href="/register-organization" className={styles.secondaryButton}>
+                  Set up your company
                 </Link>
               </div>
               <div className={styles.heroPoints}>
@@ -320,8 +320,8 @@ export default function Home() {
                 Employee login
                 <IconArrowRight size={18} />
               </Link>
-              <Link href="/admin/sign-in" className={styles.ctaSecondary}>
-                Company login
+              <Link href="/register-organization" className={styles.ctaSecondary}>
+                Set up your company
               </Link>
             </div>
           </div>

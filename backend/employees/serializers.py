@@ -1,3 +1,5 @@
+import re
+
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.db import transaction
@@ -120,6 +122,7 @@ class EmployeeSerializer(serializers.ModelSerializer):
             "pay_frequency_label",
             "bank_name",
             "bank_account_number",
+            "ifsc_code",
             "tax_id",
             "created_at",
             "updated_at",
@@ -134,12 +137,20 @@ class EmployeeSerializer(serializers.ModelSerializer):
 
     def validate_tax_id(self, value):
         value = value.strip().upper()
+        if not value:
+            return value
         if len(value) < 6:
             raise serializers.ValidationError("Enter a valid PAN or tax ID.")
         return value
 
+    def validate_ifsc_code(self, value):
+        value = value.strip().upper()
+        if value and not re.fullmatch(r"^[A-Z]{4}0[A-Z0-9]{6}$", value):
+            raise serializers.ValidationError("Enter a valid 11-character IFSC code.")
+        return value
+
     def validate_annual_salary(self, value):
-        if value <= 0:
+        if value is not None and value <= 0:
             raise serializers.ValidationError("Annual salary must be greater than zero.")
         return value
 

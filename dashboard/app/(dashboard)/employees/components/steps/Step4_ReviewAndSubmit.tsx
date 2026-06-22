@@ -64,6 +64,7 @@ const Step4_ReviewAndSubmit = ({ data }: { data: Partial<EmployeeFormData> }) =>
           <ReviewItem label="Pay Frequency" value={humanize(data.payFrequency || "")} />
           <ReviewItem label="Bank Name" value={data.bankName} />
           <ReviewItem label="Account Number" value={data.bankAccountNumber} />
+          <ReviewItem label="IFSC Code" value={data.ifscCode} />
           <ReviewItem label="Tax ID / PAN" value={data.taxId} />
         </div>
       </div>

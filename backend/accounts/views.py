@@ -20,6 +20,8 @@ from .serializers import (
     CustomTokenObtainPairSerializer,
     RequestPasswordResetOTPSerializer,
     ResetPasswordWithOTPSerializer,
+    EmployeeSelfRegistrationSerializer,
+    OrganizationRegistrationSerializer,
     UserProfileSerializer,
     UserUpdateSerializer,
 )
@@ -37,6 +39,82 @@ class LoginView(TokenObtainPairView):
     Returns access/refresh token pair + user profile.
     """
     serializer_class = CustomTokenObtainPairSerializer
+
+
+class OrganizationRegistrationView(generics.CreateAPIView):
+    """Public organization setup. The created account is the organization's HR owner."""
+
+    authentication_classes = []
+    permission_classes = [permissions.AllowAny]
+    serializer_class = OrganizationRegistrationSerializer
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        organization = serializer.save()
+        return Response(
+            {
+                "detail": "Organization created successfully.",
+                "organization": {
+                    "id": organization.id,
+                    "name": organization.name,
+                    "invite_code": organization.invite_code,
+                },
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class EmployeeSelfRegistrationView(generics.CreateAPIView):
+    """Public employee account registration using an organization invite code."""
+
+    authentication_classes = []
+    permission_classes = [permissions.AllowAny]
+    serializer_class = EmployeeSelfRegistrationSerializer
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        employee = serializer.save()
+        return Response(
+            {
+                "detail": "Your employee account has been created. You can now sign in.",
+                "employee": {
+                    "employee_id": employee.employee_id,
+                    "full_name": employee.full_name,
+                },
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class OrganizationCodeLookupView(APIView):
+    """Confirm the organization attached to an employee onboarding code."""
+
+    authentication_classes = []
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, *args, **kwargs):
+        code = str(request.query_params.get("code", "")).strip().upper()
+        if not code:
+            return Response(
+                {"detail": "Enter an organization code."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from organizations.models import Organization
+
+        organization = Organization.objects.filter(
+            invite_code__iexact=code,
+            is_active=True,
+        ).only("name").first()
+        if organization is None:
+            return Response(
+                {"detail": "Enter a valid active organization code."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return Response({"organization_name": organization.name})
 
 
 class RequestPasswordResetOTPView(APIView):

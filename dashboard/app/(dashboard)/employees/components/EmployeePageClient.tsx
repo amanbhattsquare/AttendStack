@@ -212,7 +212,9 @@ const EmployeePageClient = () => {
         continue;
       }
       const camelKey = toCamelCase(key);
-      (camelCaseData as any)[camelKey] = data[key];
+      // Optional API fields may be null for existing employees. Form controls
+      // and the edit payload expect strings, so normalize them at the boundary.
+      (camelCaseData as any)[camelKey] = data[key] ?? "";
     }
     return camelCaseData;
   };

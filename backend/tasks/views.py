@@ -10,6 +10,7 @@ from rest_framework.response import Response
 
 from accounts.models import UserRole
 from employees.models import Employee
+from organizations.models import Organization
 from .models import Project, Task, TaskStatus
 from .serializers import (
     EmployeeTaskStatusSerializer,
@@ -33,19 +34,37 @@ class WorkspaceAccessMixin:
     def _is_admin_or_hr(self, user):
         return user.role in (UserRole.SUPER_ADMIN, UserRole.HR) or user.is_staff
 
-    def _current_employee(self):
+    def _current_employee(self, required=True):
         employee = Employee.objects.filter(email__iexact=self.request.user.email).first()
         if employee is None and self.request.user.employee_id:
             employee = Employee.objects.filter(employee_id=self.request.user.employee_id).first()
-        if employee is None:
+        if employee is None and required:
             raise NotFound("No employee profile is linked to this login account.")
         return employee
 
     def _organization_for_user(self):
-        employee = self._current_employee()
-        if not employee.organization_id:
-            raise PermissionDenied("Your employee profile is not linked to an organization.")
-        return employee.organization
+        employee = self._current_employee(required=False)
+        if employee and employee.organization_id:
+            return employee.organization
+
+        # Company owners and legacy HR accounts may manage a workspace without
+        # having their own employee record. Their owned organization is still
+        # the correct boundary for projects and task assignments.
+        organization = Organization.objects.filter(owner=self.request.user).first()
+        if organization is not None:
+            return organization
+        raise PermissionDenied("Set up a company workspace before managing projects and tasks.")
+
+    def _organization_for_project_creation(self):
+        try:
+            return self._organization_for_user()
+        except PermissionDenied:
+            # Preserve existing system-admin workspaces created before
+            # organizations were introduced. They remain unscoped until a
+            # company workspace is created in Security Settings.
+            if self.request.user.is_superuser:
+                return None
+            raise
 
     def _validate_employee_scope(self, employee):
         if self.request.user.is_superuser:
@@ -113,14 +132,17 @@ class ProjectViewSet(WorkspaceAccessMixin, viewsets.ModelViewSet):
     def perform_create(self, serializer):
         owner = serializer.validated_data.get("owner")
         if self._is_admin_or_hr(self.request.user):
-            owner = owner or self._current_employee()
-            self._validate_employee_scope(owner)
+            organization = self._organization_for_project_creation()
+            if owner:
+                self._validate_employee_scope(owner)
+                organization = owner.organization
         else:
             # Employees can start shared projects, but cannot make another person the owner.
             owner = self._current_employee()
-        if Project.objects.filter(organization=owner.organization, key=serializer.validated_data["key"]).exists():
+            organization = owner.organization
+        if Project.objects.filter(organization=organization, key=serializer.validated_data["key"]).exists():
             raise ValidationError({"key": "This project key is already in use in your organization."})
-        serializer.save(organization=owner.organization, owner=owner, created_by=self.request.user)
+        serializer.save(organization=organization, owner=owner, created_by=self.request.user)
 
     def perform_update(self, serializer):
         project = serializer.instance
@@ -226,7 +248,7 @@ class TaskViewSet(WorkspaceAccessMixin, viewsets.ModelViewSet):
             assignees = serializer.validated_data.get("assignees") or [serializer.validated_data["assignee"]]
             for assignee in assignees:
                 self._validate_employee_scope(assignee)
-            employee = self._current_employee() if not self.request.user.is_superuser else assignees[0]
+            employee = self._current_employee(required=False)
             self._validate_parent_access(parent, employee)
         else:
             # Individual contributors can add work, but may only assign it to themselves.
@@ -237,7 +259,7 @@ class TaskViewSet(WorkspaceAccessMixin, viewsets.ModelViewSet):
                 raise PermissionDenied("Employees can create tasks for themselves only.")
         save_fields = {
             "assigned_by": self.request.user,
-            "department": serializer.validated_data.get("department") or employee.department,
+            "department": serializer.validated_data.get("department") or (employee.department if employee else serializer.validated_data["assignee"].department),
         }
         if not self._is_admin_or_hr(self.request.user):
             save_fields["assignee"] = employee

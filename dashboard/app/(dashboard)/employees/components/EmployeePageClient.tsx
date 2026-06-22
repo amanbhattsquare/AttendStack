@@ -84,6 +84,18 @@ const statusLabelByValue = employeeStatusOptions.reduce((labels, option) => {
   return labels;
 }, {} as Record<EmployeeStatus, string>);
 
+const employeeStatusOrder: Record<EmployeeStatus, number> = {
+  ACTIVE: 0,
+  ON_LEAVE: 1,
+  INACTIVE: 2,
+  TERMINATED: 3,
+};
+
+const sortEmployeesByStatus = (employees: Employee[]) => [...employees].sort((first, second) =>
+  employeeStatusOrder[first.status] - employeeStatusOrder[second.status]
+  || first.full_name.localeCompare(second.full_name)
+);
+
 const formatDate = (value: string) => {
   if (!value) return "-";
   return new Intl.DateTimeFormat("en-IN", {
@@ -153,7 +165,7 @@ const EmployeePageClient = () => {
       }
 
       const data = (await response.json()) as EmployeeListResponse;
-      setEmployees(Array.isArray(data) ? data : data.results);
+      setEmployees(sortEmployeesByStatus(Array.isArray(data) ? data : data.results));
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Unable to load employees.");
     } finally {
@@ -407,9 +419,9 @@ const EmployeePageClient = () => {
       }
 
       const updatedEmployee = (await response.json()) as Employee;
-      setEmployees((prev) =>
+      setEmployees((prev) => sortEmployeesByStatus(
         prev.map((item) => (item.id === updatedEmployee.id ? { ...item, ...updatedEmployee } : item))
-      );
+      ));
       setStatusEmployee(null);
 
       Swal.fire({

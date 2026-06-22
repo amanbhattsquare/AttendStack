@@ -8,10 +8,10 @@ from rest_framework.exceptions import NotFound
 from accounts.permissions import IsAdminOrHR
 from accounts.models import UserRole
 from django.contrib.auth import get_user_model
-from django.db.models import Exists, OuterRef
+from django.db.models import Case, Exists, IntegerField, OuterRef, Value, When
 
 from organizations.models import Organization
-from .models import Employee
+from .models import Employee, EmployeeStatus
 from .serializers import (
     EmployeeListSerializer,
     EmployeeProfileSerializer,
@@ -34,8 +34,8 @@ class EmployeeViewSet(viewsets.ModelViewSet):
     queryset = Employee.objects.all()
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["full_name", "email", "employee_id", "department", "designation"]
-    ordering_fields = ["full_name", "joining_date", "department", "created_at"]
-    ordering = ["full_name"]
+    ordering_fields = ["full_name", "joining_date", "department", "created_at", "status"]
+    ordering = ["status_sort", "full_name"]
 
     def get_permissions(self):
         if self.action == "me":
@@ -49,14 +49,25 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         if not user.is_superuser:
             try:
                 employee = Employee.objects.get(email=user.email)
-                queryset = queryset.filter(organization=employee.organization)
+                organization = employee.organization
             except Employee.DoesNotExist:
+                # A company owner can manage their workspace before they have
+                # an Employee profile of their own.
+                organization = Organization.objects.filter(owner=user).first()
+            if organization is None:
                 return queryset.none()
+            queryset = queryset.filter(organization=organization)
 
         queryset = queryset.annotate(
-            account_exists_annotation=Exists(
-                User.objects.filter(email__iexact=OuterRef("email"), role=UserRole.EMPLOYEE)
-            )
+            account_exists_annotation=Exists(User.objects.filter(email__iexact=OuterRef("email"), role=UserRole.EMPLOYEE)),
+            status_sort=Case(
+                When(status=EmployeeStatus.ACTIVE, then=Value(0)),
+                When(status=EmployeeStatus.ON_LEAVE, then=Value(1)),
+                When(status=EmployeeStatus.INACTIVE, then=Value(2)),
+                When(status=EmployeeStatus.TERMINATED, then=Value(3)),
+                default=Value(4),
+                output_field=IntegerField(),
+            ),
         )
         department = self.request.query_params.get("department")
         status_filter = self.request.query_params.get("status")
@@ -81,8 +92,7 @@ class EmployeeViewSet(viewsets.ModelViewSet):
                 employee = Employee.objects.get(email=user.email)
                 organization = employee.organization
             except Employee.DoesNotExist:
-                # This case should ideally not happen for non-superusers
-                pass
+                organization = Organization.objects.filter(owner=user).first()
         
         # Ensure an organization is set before saving
         if organization is None:

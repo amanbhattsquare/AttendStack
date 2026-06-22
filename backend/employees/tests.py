@@ -61,6 +61,29 @@ class EmployeeStatusActionTests(APITestCase):
                     self.employee_user,
                 )
 
+    def test_employee_list_orders_active_first_and_terminated_last(self):
+        Employee.objects.create(
+            organization=self.organization,
+            full_name="Inactive Employee",
+            email="inactive@example.com",
+            phone="9876543211",
+            status=EmployeeStatus.INACTIVE,
+        )
+        Employee.objects.create(
+            organization=self.organization,
+            full_name="Terminated Employee",
+            email="terminated@example.com",
+            phone="9876543212",
+            status=EmployeeStatus.TERMINATED,
+        )
+
+        response = self.client.get("/")
+        employees = response.data["results"] if isinstance(response.data, dict) else response.data
+
+        self.assertEqual(response.status_code, http_status.HTTP_200_OK)
+        self.assertEqual(employees[0]["status"], EmployeeStatus.ACTIVE)
+        self.assertEqual(employees[-1]["status"], EmployeeStatus.TERMINATED)
+
     def test_status_action_reactivates_previously_disabled_employee_login(self):
         self.employee_user.is_active = False
         self.employee_user.save(update_fields=["is_active"])

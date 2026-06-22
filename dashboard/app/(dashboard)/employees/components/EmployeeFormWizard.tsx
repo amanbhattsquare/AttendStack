@@ -13,6 +13,10 @@ export type EmployeeFormData = {
   profilePhotoUrl?: string | null;
   aadhaarDocument: File | null;
   aadhaarDocumentUrl?: string | null;
+  panCardDocument: File | null;
+  panCardDocumentUrl?: string | null;
+  cvDocument: File | null;
+  cvDocumentUrl?: string | null;
   fullName: string;
   email: string;
   phone: string;
@@ -41,6 +45,8 @@ export type EmployeeFormErrors = Partial<Record<keyof EmployeeFormData, string>>
 export const initialEmployeeFormData: EmployeeFormData = {
   profilePhoto: null,
   aadhaarDocument: null,
+  panCardDocument: null,
+  cvDocument: null,
   fullName: "",
   email: "",
   phone: "",
@@ -230,6 +236,8 @@ const EmployeeFormWizard = ({ mode = "add", initialData, employeeId, onSave, onC
     });
     if (formData.profilePhoto instanceof File) body.append("profile_photo", formData.profilePhoto);
     if (formData.aadhaarDocument instanceof File) body.append("aadhaar_document", formData.aadhaarDocument);
+    if (formData.panCardDocument instanceof File) body.append("pan_card_document", formData.panCardDocument);
+    if (formData.cvDocument instanceof File) body.append("cv_document", formData.cvDocument);
     return body;
   }, [formData]);
 

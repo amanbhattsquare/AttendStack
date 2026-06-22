@@ -223,6 +223,22 @@ const EmployeePageClient = () => {
         camelCaseData.aadhaarDocumentUrl = data[key];
         continue;
       }
+      if (key === "pan_card_document") {
+        camelCaseData.panCardDocument = null;
+        continue;
+      }
+      if (key === "pan_card_document_url") {
+        camelCaseData.panCardDocumentUrl = data[key];
+        continue;
+      }
+      if (key === "cv_document") {
+        camelCaseData.cvDocument = null;
+        continue;
+      }
+      if (key === "cv_document_url") {
+        camelCaseData.cvDocumentUrl = data[key];
+        continue;
+      }
       const camelKey = toCamelCase(key);
       // Optional API fields may be null for existing employees. Form controls
       // and the edit payload expect strings, so normalize them at the boundary.

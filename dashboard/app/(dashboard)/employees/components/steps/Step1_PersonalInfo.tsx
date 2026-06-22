@@ -76,6 +76,17 @@ const Step1_PersonalInfo = ({ data, errors, onChange }: StepProps) => {
         <div className="col-md-6">
           <label htmlFor="aadhaarUpload" className="form-label">Upload Aadhaar</label>
           <input className="form-control" type="file" id="aadhaarUpload" accept=".pdf,image/*" onChange={(event) => onChange("aadhaarDocument", event.target.files?.[0] || null)} />
+          <small className="text-secondary">{data.aadhaarDocument?.name || (data.aadhaarDocumentUrl ? "Current Aadhaar document uploaded" : "PDF or image, maximum 10 MB")}</small>
+        </div>
+        <div className="col-md-6">
+          <label htmlFor="panCardUpload" className="form-label">Upload PAN Card</label>
+          <input className="form-control" type="file" id="panCardUpload" accept=".pdf,image/*" onChange={(event) => onChange("panCardDocument", event.target.files?.[0] || null)} />
+          <small className="text-secondary">{data.panCardDocument?.name || (data.panCardDocumentUrl ? "Current PAN card uploaded" : "PDF or image, maximum 10 MB")}</small>
+        </div>
+        <div className="col-md-6">
+          <label htmlFor="cvUpload" className="form-label">Upload CV / Resume</label>
+          <input className="form-control" type="file" id="cvUpload" accept=".pdf,.doc,.docx" onChange={(event) => onChange("cvDocument", event.target.files?.[0] || null)} />
+          <small className="text-secondary">{data.cvDocument?.name || (data.cvDocumentUrl ? "Current CV uploaded" : "PDF, DOC, or DOCX; maximum 10 MB")}</small>
         </div>
         <div className="col-12">
           <label htmlFor="address" className="form-label">Address</label>

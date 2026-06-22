@@ -39,6 +39,8 @@ const Step4_ReviewAndSubmit = ({ data }: { data: Partial<EmployeeFormData> }) =>
           <ReviewItem label="Address" value={data.address} />
           <ReviewItem label="Profile Photo" value={data.profilePhoto?.name} />
           <ReviewItem label="Aadhaar Document" value={data.aadhaarDocument?.name} />
+          <ReviewItem label="PAN Card" value={data.panCardDocument?.name || (data.panCardDocumentUrl ? "Current document" : undefined)} />
+          <ReviewItem label="CV / Resume" value={data.cvDocument?.name || (data.cvDocumentUrl ? "Current document" : undefined)} />
 
           <hr className="my-4" />
 

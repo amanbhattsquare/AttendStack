@@ -176,6 +176,7 @@ const EmployeeDashboard = () => {
 
   const [mounted, setMounted] = useState(false);
   const [today, setToday] = useState<any>(null);
+  const [todayLoadError, setTodayLoadError] = useState("");
   const [currentTime, setCurrentTime] = useState(new Date());
   const [actionLoading, setActionLoading] = useState<"check-in" | "check-out" | null>(null);
   const [punchError, setPunchError] = useState("");
@@ -311,17 +312,26 @@ const EmployeeDashboard = () => {
 
   const loadTodayAttendance = async () => {
     const token = localStorage.getItem("authToken");
-    if (!token) return;
+    if (!token) {
+      setTodayLoadError("Your session has expired. Please sign in again to load attendance.");
+      return;
+    }
+    setTodayLoadError("");
     try {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/attendance/me/today/`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (res.ok) {
-        const data = await res.json();
-        setToday(data);
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => null);
+        throw new Error(errorData?.detail || "Unable to load your attendance status.");
       }
+
+      const data = await res.json();
+      setToday(data);
     } catch (err) {
       console.error("Error loading today attendance:", err);
+      setToday(null);
+      setTodayLoadError(err instanceof Error ? err.message : "Unable to load your attendance status.");
     }
   };
 
@@ -656,6 +666,10 @@ const EmployeeDashboard = () => {
                       </div>
                     )}
                   </div>
+                ) : todayLoadError ? (
+                  <Alert variant="warning" className="w-100 mb-0 text-start small">
+                    <strong>Attendance unavailable:</strong> {todayLoadError}
+                  </Alert>
                 ) : (
                   <div className="text-center w-100 py-3">
                     <Spinner animation="border" size="sm" variant="primary" />

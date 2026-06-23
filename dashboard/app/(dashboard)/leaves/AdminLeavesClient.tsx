@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Card, Button, Table, Badge, Modal, Form, Row, Col, Alert, Spinner, InputGroup } from "react-bootstrap";
-import { IconSearch, IconCalendarEvent, IconMessage, IconInfoCircle, IconClock, IconCircleCheck, IconCircleX, IconSettings, IconTrash } from "@tabler/icons-react";
+import { Card, Button, Table, Badge, Modal, Form, Row, Col, Alert, Spinner, InputGroup, Dropdown } from "react-bootstrap";
+import { IconSearch, IconCalendarEvent, IconMessage, IconInfoCircle, IconClock, IconCircleCheck, IconCircleX, IconDotsVertical, IconEye, IconSettings, IconTrash } from "@tabler/icons-react";
 import { Avatar } from "components/common/Avatar";
 import { getAssetPath } from "helper/assetPath";
 
@@ -39,6 +39,7 @@ const AdminLeavesClient = () => {
   // Review Modal State
   const [showModal, setShowModal] = useState(false);
   const [selectedLeave, setSelectedLeave] = useState<LeaveRequest | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
   const [reviewStatus, setReviewStatus] = useState("APPROVED");
   const [adminNotes, setAdminNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -93,11 +94,11 @@ const AdminLeavesClient = () => {
     fetchLeaves();
   }, []);
 
-  const handleOpenReview = (leave: LeaveRequest) => {
-    console.log('Opening review modal for leave id:', leave.id);
+  const handleOpenLeaveModal = (leave: LeaveRequest, editing: boolean) => {
     setSelectedLeave(leave);
     setReviewStatus(leave.status);
     setAdminNotes(leave.admin_notes || "");
+    setIsEditing(editing);
     setShowModal(true);
   };
 
@@ -304,7 +305,7 @@ const AdminLeavesClient = () => {
       </Card>
 
       {/* Requests table card */}
-      <Card className="border-0 shadow-sm" style={{ borderRadius: "16px", overflow: "hidden" }}>
+      <Card className="leave-requests-card border-0 shadow-sm" style={{ borderRadius: "16px" }}>
         <Card.Body className="p-0">
           {isLoading ? (
             <div className="text-center py-5">
@@ -318,7 +319,7 @@ const AdminLeavesClient = () => {
               <p className="text-secondary small mb-0">No leave requests match your search query or selected status filter.</p>
             </div>
           ) : (
-            <div className="table-responsive">
+            <div className="table-responsive leave-table-responsive">
               <Table hover className="align-middle mb-0 custom-leaves-table">
                 <thead className="table-light">
                   <tr className="small text-secondary-emphasis" style={{ fontSize: "0.78rem", textTransform: "uppercase", fontWeight: 600 }}>
@@ -371,30 +372,31 @@ const AdminLeavesClient = () => {
                           {getStatusBadge(leave.status)}
                         </td>
                         <td className="px-4 py-3 text-end">
-                          <div className="d-flex gap-2 justify-content-end">
-                            <Button
-                              type="button"
-                              variant="primary"
-                              size="sm"
-                              onClick={() => handleOpenReview(leave)}
-                              className="d-inline-flex align-items-center gap-1.5 px-3 py-1.5 rounded-3 fw-semibold small"
+                          <Dropdown align="end">
+                            <Dropdown.Toggle
+                              variant="link"
+                              className="leave-action-toggle border-0 text-secondary shadow-none"
+                              id={`leave-actions-${leave.id}`}
+                              aria-label={`Actions for ${leave.employee_name}'s leave request`}
                             >
-                              <>
-                                <IconSettings size={14} />
+                              <IconDotsVertical size={20} />
+                            </Dropdown.Toggle>
+                            <Dropdown.Menu className="leave-action-menu shadow border-0">
+                              <Dropdown.Item onClick={() => handleOpenLeaveModal(leave, false)} className="d-flex align-items-center gap-2">
+                                <IconEye size={16} />
+                                View Details
+                              </Dropdown.Item>
+                              <Dropdown.Item onClick={() => handleOpenLeaveModal(leave, true)} className="d-flex align-items-center gap-2">
+                                <IconSettings size={16} />
                                 Edit Status
-                              </>
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="danger"
-                              size="sm"
-                              onClick={() => handleDelete(leave.id)}
-                              className="d-inline-flex align-items-center gap-1.5 px-3 py-1.5 rounded-3 fw-semibold small"
-                            >
-                              <IconTrash size={14} />
-                              Delete
-                            </Button>
-                          </div>
+                              </Dropdown.Item>
+                              <Dropdown.Divider />
+                              <Dropdown.Item onClick={() => handleDelete(leave.id)} className="d-flex align-items-center gap-2 text-danger">
+                                <IconTrash size={16} />
+                                Delete
+                              </Dropdown.Item>
+                            </Dropdown.Menu>
+                          </Dropdown>
                         </td>
                       </tr>
                     );
@@ -411,7 +413,7 @@ const AdminLeavesClient = () => {
         <Modal show={showModal} onHide={() => setShowModal(false)} centered className="border-0 shadow-lg" size="lg">
           <Modal.Header closeButton className="border-0 px-4 pt-4 pb-2">
             <Modal.Title className="fw-bold text-dark">
-              Edit Leave Status
+              {isEditing ? "Edit Leave Status" : "Leave Application Details"}
             </Modal.Title>
           </Modal.Header>
           <Form onSubmit={handleReviewSubmit}>
@@ -467,54 +469,112 @@ const AdminLeavesClient = () => {
                 </div>
               </div>
 
-              <Form.Group className="mb-3">
-                <Form.Label className="small fw-semibold text-secondary mb-1">Status *</Form.Label>
-                <Form.Select
-                  value={reviewStatus}
-                  onChange={(e) => setReviewStatus(e.target.value)}
-                  className="form-control rounded-3 p-2.5"
-                >
-                  <option value="PENDING">Pending Review</option>
-                  <option value="APPROVED">Approve Leave Application</option>
-                  <option value="REJECTED">Reject Leave Application</option>
-                </Form.Select>
-              </Form.Group>
+              {isEditing ? (
+                <>
+                  <Form.Group className="mb-3">
+                    <Form.Label className="small fw-semibold text-secondary mb-1">Status *</Form.Label>
+                    <Form.Select
+                      value={reviewStatus}
+                      onChange={(e) => setReviewStatus(e.target.value)}
+                      className="form-control rounded-3 p-2.5"
+                    >
+                      <option value="PENDING">Pending Review</option>
+                      <option value="APPROVED">Approve Leave Application</option>
+                      <option value="REJECTED">Reject Leave Application</option>
+                    </Form.Select>
+                  </Form.Group>
 
-              <Form.Group>
-                <Form.Label className="small fw-semibold text-secondary mb-1">HR Remarks / Admin Notes</Form.Label>
-                <Form.Control
-                  as="textarea"
-                  rows={3}
-                  placeholder="Add or update administrative remarks..."
-                  value={adminNotes}
-                  onChange={(e) => setAdminNotes(e.target.value)}
-                  className="form-control rounded-3 p-3"
-                />
-              </Form.Group>
+                  <Form.Group>
+                    <Form.Label className="small fw-semibold text-secondary mb-1">HR Remarks / Admin Notes</Form.Label>
+                    <Form.Control
+                      as="textarea"
+                      rows={3}
+                      placeholder="Add or update administrative remarks..."
+                      value={adminNotes}
+                      onChange={(e) => setAdminNotes(e.target.value)}
+                      className="form-control rounded-3 p-3"
+                    />
+                  </Form.Group>
+                </>
+              ) : (
+                <div>
+                  <span className="small fw-semibold text-secondary d-block mb-1.5">Review Status Details:</span>
+                  <div className="p-3 bg-light rounded-3 border d-flex flex-column gap-2 small">
+                    <div className="d-flex justify-content-between align-items-center">
+                      <span className="fw-medium text-secondary">Current Status:</span>
+                      <span>{getStatusBadge(selectedLeave.status)}</span>
+                    </div>
+                    {selectedLeave.admin_notes ? (
+                      <div className="border-top pt-2 mt-1">
+                        <span className="fw-medium text-secondary d-block mb-1">Administrative Remarks:</span>
+                        <span className="text-dark-emphasis">{selectedLeave.admin_notes}</span>
+                      </div>
+                    ) : (
+                      <span className="border-top pt-2 mt-1 text-secondary">No administrative remarks added.</span>
+                    )}
+                  </div>
+                </div>
+              )}
             </Modal.Body>
             <Modal.Footer className="border-0 px-4 pb-4 pt-2">
               <Button variant="outline-secondary" onClick={() => setShowModal(false)} className="px-4 py-2.5 rounded-3 fw-semibold">
                 Close
               </Button>
-              <Button
-                variant={reviewStatus === "APPROVED" ? "success" : reviewStatus === "REJECTED" ? "danger" : "warning"}
-                type="submit"
-                disabled={isSubmitting}
-                className="px-4 py-2.5 rounded-3 fw-semibold"
-              >
-                {isSubmitting ? (
-                  <>
-                    <Spinner size="sm" animation="border" className="me-2" />
-                    Updating Status...
-                  </>
-                ) : "Save Status"}
-              </Button>
+              {isEditing && (
+                <Button
+                  variant={reviewStatus === "APPROVED" ? "success" : reviewStatus === "REJECTED" ? "danger" : "warning"}
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="px-4 py-2.5 rounded-3 fw-semibold"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Spinner size="sm" animation="border" className="me-2" />
+                      Updating Status...
+                    </>
+                  ) : "Save Status"}
+                </Button>
+              )}
             </Modal.Footer>
           </Form>
         </Modal>
       )}
 
       <style>{`
+        .leave-requests-card {
+          overflow: visible;
+        }
+        .leave-table-responsive {
+          overflow: visible;
+        }
+        .leave-action-toggle {
+          width: 34px;
+          height: 34px;
+          padding: 0;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 8px;
+          background: #fff;
+        }
+        .leave-action-toggle::after {
+          display: none;
+        }
+        .leave-action-toggle:hover,
+        .leave-action-toggle:focus,
+        .leave-action-toggle.show {
+          background: #f5f8fb;
+          color: #0f172a;
+        }
+        .leave-action-menu {
+          min-width: 190px;
+          padding: 8px;
+          z-index: 1080;
+        }
+        .leave-action-menu .dropdown-item {
+          border-radius: 6px;
+          padding: 8px 10px;
+        }
         .custom-leaves-table tbody tr:hover {
           background-color: #f9fafb !important;
         }
@@ -525,6 +585,12 @@ const AdminLeavesClient = () => {
           0% { opacity: 1; }
           50% { opacity: 0.6; }
           100% { opacity: 1; }
+        }
+        @media (max-width: 991.98px) {
+          .leave-table-responsive {
+            overflow-x: auto;
+            padding-bottom: 180px;
+          }
         }
       `}</style>
     </div>

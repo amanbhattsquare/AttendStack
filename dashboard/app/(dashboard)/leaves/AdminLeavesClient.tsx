@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { Card, Button, Table, Badge, Modal, Form, Row, Col, Alert, Spinner, InputGroup } from "react-bootstrap";
-import { IconSearch, IconCalendarEvent, IconMessage, IconInfoCircle, IconClock, IconCircleCheck, IconCircleX, IconEye, IconSettings, IconTrash } from "@tabler/icons-react";
+import { IconSearch, IconCalendarEvent, IconMessage, IconInfoCircle, IconClock, IconCircleCheck, IconCircleX, IconSettings, IconTrash } from "@tabler/icons-react";
 import { Avatar } from "components/common/Avatar";
 import { getAssetPath } from "helper/assetPath";
 
@@ -96,7 +96,7 @@ const AdminLeavesClient = () => {
   const handleOpenReview = (leave: LeaveRequest) => {
     console.log('Opening review modal for leave id:', leave.id);
     setSelectedLeave(leave);
-    setReviewStatus(leave.status === "PENDING" ? "APPROVED" : leave.status);
+    setReviewStatus(leave.status);
     setAdminNotes(leave.admin_notes || "");
     setShowModal(true);
   };
@@ -374,22 +374,15 @@ const AdminLeavesClient = () => {
                           <div className="d-flex gap-2 justify-content-end">
                             <Button
                               type="button"
-                              variant={leave.status === "PENDING" ? "primary" : "outline-secondary"}
+                              variant="primary"
                               size="sm"
                               onClick={() => handleOpenReview(leave)}
                               className="d-inline-flex align-items-center gap-1.5 px-3 py-1.5 rounded-3 fw-semibold small"
                             >
-                              {leave.status === "PENDING" ? (
-                                <>
-                                  <IconSettings size={14} />
-                                  Review
-                                </>
-                              ) : (
-                                <>
-                                  <IconEye size={14} />
-                                  Details
-                                </>
-                              )}
+                              <>
+                                <IconSettings size={14} />
+                                Edit Status
+                              </>
                             </Button>
                             <Button
                               type="button"
@@ -418,7 +411,7 @@ const AdminLeavesClient = () => {
         <Modal show={showModal} onHide={() => setShowModal(false)} centered className="border-0 shadow-lg" size="lg">
           <Modal.Header closeButton className="border-0 px-4 pt-4 pb-2">
             <Modal.Title className="fw-bold text-dark">
-              {selectedLeave.status === "PENDING" ? "Review Leave Application" : "Leave Application Details"}
+              Edit Leave Status
             </Modal.Title>
           </Modal.Header>
           <Form onSubmit={handleReviewSubmit}>
@@ -474,66 +467,48 @@ const AdminLeavesClient = () => {
                 </div>
               </div>
 
-              {selectedLeave.status === "PENDING" ? (
-                <>
-                  <Form.Group className="mb-3">
-                    <Form.Label className="small fw-semibold text-secondary mb-1">Decision / Status Change *</Form.Label>
-                    <Form.Select
-                      value={reviewStatus}
-                      onChange={(e) => setReviewStatus(e.target.value)}
-                      className="form-control rounded-3 p-2.5"
-                    >
-                      <option value="APPROVED">Approve Leave Application</option>
-                      <option value="REJECTED">Reject Leave Application</option>
-                    </Form.Select>
-                  </Form.Group>
+              <Form.Group className="mb-3">
+                <Form.Label className="small fw-semibold text-secondary mb-1">Status *</Form.Label>
+                <Form.Select
+                  value={reviewStatus}
+                  onChange={(e) => setReviewStatus(e.target.value)}
+                  className="form-control rounded-3 p-2.5"
+                >
+                  <option value="PENDING">Pending Review</option>
+                  <option value="APPROVED">Approve Leave Application</option>
+                  <option value="REJECTED">Reject Leave Application</option>
+                </Form.Select>
+              </Form.Group>
 
-                  <Form.Group>
-                    <Form.Label className="small fw-semibold text-secondary mb-1">HR Remarks / Admin Notes</Form.Label>
-                    <Form.Control
-                      as="textarea"
-                      rows={3}
-                      placeholder="Add administrative remarks or specify reason for approval/rejection..."
-                      value={adminNotes}
-                      onChange={(e) => setAdminNotes(e.target.value)}
-                      className="form-control rounded-3 p-3"
-                    />
-                  </Form.Group>
-                </>
-              ) : (
-                <div>
-                  <span className="small fw-semibold text-secondary d-block mb-1.5">Review Status Details:</span>
-                  <div className="p-3 bg-light rounded-3 border d-flex flex-column gap-2 small">
-                    <div className="d-flex justify-content-between align-items-center">
-                      <span className="fw-medium text-secondary">Final Verdict:</span>
-                      <span>{getStatusBadge(selectedLeave.status)}</span>
-                    </div>
-                    {selectedLeave.admin_notes && (
-                      <div className="border-top pt-2 mt-1">
-                        <span className="fw-medium text-secondary d-block mb-1">Administrative Remarks:</span>
-                        <span className="text-dark-emphasis">{selectedLeave.admin_notes}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
+              <Form.Group>
+                <Form.Label className="small fw-semibold text-secondary mb-1">HR Remarks / Admin Notes</Form.Label>
+                <Form.Control
+                  as="textarea"
+                  rows={3}
+                  placeholder="Add or update administrative remarks..."
+                  value={adminNotes}
+                  onChange={(e) => setAdminNotes(e.target.value)}
+                  className="form-control rounded-3 p-3"
+                />
+              </Form.Group>
             </Modal.Body>
             <Modal.Footer className="border-0 px-4 pb-4 pt-2">
               <Button variant="outline-secondary" onClick={() => setShowModal(false)} className="px-4 py-2.5 rounded-3 fw-semibold">
                 Close
               </Button>
-              {selectedLeave.status === "PENDING" && (
-                <Button variant={reviewStatus === "APPROVED" ? "success" : "danger"} type="submit" disabled={isSubmitting} className="px-4 py-2.5 rounded-3 fw-semibold">
-                  {isSubmitting ? (
-                    <>
-                      <Spinner size="sm" animation="border" className="me-2" />
-                      Submitting Verdict...
-                    </>
-                  ) : (
-                    reviewStatus === "APPROVED" ? "Approve Application" : "Reject Application"
-                  )}
-                </Button>
-              )}
+              <Button
+                variant={reviewStatus === "APPROVED" ? "success" : reviewStatus === "REJECTED" ? "danger" : "warning"}
+                type="submit"
+                disabled={isSubmitting}
+                className="px-4 py-2.5 rounded-3 fw-semibold"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Spinner size="sm" animation="border" className="me-2" />
+                    Updating Status...
+                  </>
+                ) : "Save Status"}
+              </Button>
             </Modal.Footer>
           </Form>
         </Modal>

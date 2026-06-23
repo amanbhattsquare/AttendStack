@@ -357,11 +357,71 @@ export default function TaskWorkspace({ employeeMode = false }: { employeeMode?:
     <Row className="g-3 mb-4">
       {[["Projects", metrics.projects, <IconTarget key="i" />], ["Open work", metrics.active, <IconClock key="i" />], ["Overdue", metrics.overdue, <IconAlertTriangle key="i" />], ["Completed", metrics.completed, <IconCircleCheck key="i" />]].map(([label, value, icon]) => <Col key={String(label)} xs={6} md={3}><Card className="border-0 shadow-sm workspace-metric"><Card.Body><span>{icon as React.ReactNode}</span><div><small>{label}</small><strong>{String(value)}</strong></div></Card.Body></Card></Col>)}
     </Row>
-    <Card className="border-0 shadow-sm mb-4"><Card.Body><Row className="g-3"><Col lg={3}><InputGroup><InputGroup.Text className="bg-white"><IconSearch size={18} /></InputGroup.Text><Form.Control value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search tasks or people" /></InputGroup></Col><Col md={4} lg={3}><Form.Select value={projectFilter} onChange={(e) => setProjectFilter(e.target.value)}><option value="ALL">All projects</option>{projects.map((project) => <option value={project.id} key={project.id}>{project.key} · {project.name}</option>)}</Form.Select></Col><Col md={4} lg={2}><Form.Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as Status | "ALL")}><option value="ALL">All statuses</option>{taskStatuses.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</Form.Select></Col><Col md={4} lg={2}><Form.Select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value as Priority | "ALL")}><option value="ALL">All priorities</option>{taskPriorities.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</Form.Select></Col><Col lg={2} className="d-grid"><Button variant="outline-secondary" onClick={resetFilters} className="d-inline-flex align-items-center justify-content-center gap-2"><IconRefresh size={16} /> Reset filters</Button></Col></Row></Card.Body></Card>
     {loading ? <div className="text-center py-5"><Spinner animation="border" /><p className="text-secondary mt-2">Loading project workspace…</p></div> : <>
       <div className="workspace-projects-header mb-3"><div><h5 className="fw-bold mb-0">Projects</h5><small className="text-secondary">Select a project to focus its task list.</small></div><div className="d-flex align-items-center gap-2"><Badge bg="light" text="dark" className="border">{projects.length} total</Badge><Button size="sm" variant="outline-secondary" className="workspace-projects-toggle" onClick={() => setShowProjects((visible) => !visible)} aria-expanded={showProjects}>{showProjects ? <IconChevronUp size={16} /> : <IconChevronDown size={16} />}{showProjects ? "Hide projects" : "Show projects"}</Button></div></div>
       {showProjects && <div className="workspace-projects mb-4">{projects.map((project) => <Card key={project.id} onClick={() => selectProject(project.id)} className={`border-0 shadow-sm workspace-project ${projectFilter === project.id ? "is-selected" : ""}`} style={{ "--project-color": project.color, "--project-tint": colorTint(project.color, 0.22) } as React.CSSProperties} role="button" tabIndex={0} aria-pressed={projectFilter === project.id} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); selectProject(project.id); } }}><Card.Body>{projectFilter === project.id && <span className="project-selected"><IconCheck size={13} /> Selected</span>}<div className="d-flex justify-content-between gap-2"><div><span className="project-key" style={{ color: project.color }}>{project.key}</span><h6>{project.name}</h6></div><div className="d-flex gap-1"><Button size="sm" variant="light" title="Edit project" onClick={(e) => { e.stopPropagation(); openProject(project); }}><IconSettings size={15} /></Button><Button size="sm" variant="light" className="text-danger" title="Delete project" disabled={saving} onClick={(e) => { e.stopPropagation(); void deleteProject(project); }}><IconTrash size={15} /></Button></div></div><p>{project.description || "No project description yet."}</p><div className="d-flex justify-content-between small text-secondary mb-1"><span>{project.completed_task_count}/{project.task_count} complete</span><span>{project.progress}%</span></div><ProgressBar now={project.progress} style={{ "--bs-progress-bar-bg": project.color } as React.CSSProperties} /><div className="project-footer"><Badge className={statusClass(project.status)}>{project.status_label}</Badge><span>{project.due_date ? `Due ${date(project.due_date)}` : "No deadline"}</span></div></Card.Body></Card>)}{projects.length === 0 && <Card className="border-dashed"><Card.Body className="text-center py-4"><IconFolderPlus size={30} className="text-primary mb-2" /><h6>No projects yet</h6><p className="text-secondary small mb-3">Start with a project, then break the work into tasks.</p><Button size="sm" onClick={() => openProject()}>Create first project</Button></Card.Body></Card>}</div>}
-      <Card id="workspace-task-list" className="border-0 shadow-sm workspace-task-list"><Card.Header className="bg-white border-0 pt-4 px-4 d-flex justify-content-between align-items-center"><div><h5 className="fw-bold mb-1">Task list</h5><small className="text-secondary">Click any row for task details and its complete subtask tree.</small></div><Button size="sm" onClick={() => openTask()} disabled={!projects.length}><IconPlus size={16} /> Add task</Button></Card.Header><Card.Body className="p-0">{rootTasks.length ? <div className="table-responsive"><Table hover className="align-middle mb-0 workspace-task-table"><thead className="table-light"><tr className="small text-secondary text-uppercase"><th className="px-4 py-3">Sr. no.</th><th className="py-3">Task</th>{!employeeMode && <th className="py-3">Assigned to</th>}<th className="py-3">Priority &amp; status</th><th className="px-4 py-3 text-end">Action</th></tr></thead><tbody>{rootTasks.map((task, index) => <TaskTableRows key={task.id} task={task} index={index + 1} subtasksByParent={subtasksByParent} projectColors={projectColors} employeeMode={employeeMode} onOpenDetail={setDetailTask} onAddSubtask={(parent) => openTask(undefined, parent)} onEdit={openTask} onProgress={openProgress} onDelete={deleteTask} />)}</tbody></Table></div> : <div className="text-center py-5"><IconListTree size={36} className="text-muted mb-2" /><h6>No tasks in this view</h6><p className="text-secondary small">Create a task or adjust the filters.</p></div>}</Card.Body></Card>
+      <Card id="workspace-task-list" className="border-0 shadow-sm workspace-task-list">
+        <Card.Header className="bg-white border-0 pt-4 px-4 d-flex justify-content-between align-items-center">
+          <div>
+            <h5 className="fw-bold mb-1">Task list</h5>
+            <small className="text-secondary">Click any row for task details and its complete subtask tree.</small>
+          </div>
+          <Button size="sm" onClick={() => openTask()} disabled={!projects.length}><IconPlus size={16} /> Add task</Button>
+        </Card.Header>
+        <Card.Body className="task-list-filters border-top">
+          <Row className="g-3">
+            <Col lg={3}>
+              <InputGroup>
+                <InputGroup.Text className="bg-white"><IconSearch size={18} /></InputGroup.Text>
+                <Form.Control value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search tasks or people" />
+              </InputGroup>
+            </Col>
+            <Col md={4} lg={3}>
+              <Form.Select value={projectFilter} onChange={(e) => setProjectFilter(e.target.value)}>
+                <option value="ALL">All projects</option>
+                {projects.map((project) => <option value={project.id} key={project.id}>{project.key} · {project.name}</option>)}
+              </Form.Select>
+            </Col>
+            <Col md={4} lg={2}>
+              <Form.Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as Status | "ALL")}>
+                <option value="ALL">All statuses</option>
+                {taskStatuses.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+              </Form.Select>
+            </Col>
+            <Col md={4} lg={2}>
+              <Form.Select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value as Priority | "ALL")}>
+                <option value="ALL">All priorities</option>
+                {taskPriorities.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+              </Form.Select>
+            </Col>
+            <Col lg={2} className="d-grid">
+              <Button variant="outline-secondary" onClick={resetFilters} className="d-inline-flex align-items-center justify-content-center gap-2"><IconRefresh size={16} /> Reset filters</Button>
+            </Col>
+          </Row>
+        </Card.Body>
+        <Card.Body className="p-0">
+          {rootTasks.length ? (
+            <div className="table-responsive">
+              <Table hover className="align-middle mb-0 workspace-task-table">
+                <thead className="table-light">
+                  <tr className="small text-secondary text-uppercase">
+                    <th className="px-4 py-3">Sr. no.</th>
+                    <th className="py-3">Task</th>
+                    {!employeeMode && <th className="py-3">Assigned to</th>}
+                    <th className="py-3">Priority &amp; status</th>
+                    <th className="px-4 py-3 text-end">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rootTasks.map((task, index) => <TaskTableRows key={task.id} task={task} index={(currentTaskPage - 1) * TASKS_PER_PAGE + index + 1} subtasksByParent={subtasksByParent} projectColors={projectColors} employeeMode={employeeMode} onOpenDetail={setDetailTask} onAddSubtask={(parent) => openTask(undefined, parent)} onEdit={openTask} onProgress={openProgress} onDelete={deleteTask} />)}
+                </tbody>
+              </Table>
+            </div>
+          ) : (
+            <div className="text-center py-5"><IconListTree size={36} className="text-muted mb-2" /><h6>No tasks in this view</h6><p className="text-secondary small">Create a task or adjust the filters.</p></div>
+          )}
+        </Card.Body>
+      </Card>
       {allRootTasks.length > TASKS_PER_PAGE && (
         <div className="task-list-pagination">
           <span>Showing {(currentTaskPage - 1) * TASKS_PER_PAGE + 1}–{Math.min(currentTaskPage * TASKS_PER_PAGE, allRootTasks.length)} of {allRootTasks.length} tasks</span>
@@ -441,7 +501,7 @@ const tableEnhancements = `
 `;
 
 const projectColorStyles = `
-.workspace-projects-header{display:flex;align-items:center;justify-content:space-between;gap:16px}.workspace-projects{grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}.workspace-projects-toggle{display:inline-flex;align-items:center;gap:6px;border-radius:7px;font-weight:600}.workspace-task-list{scroll-margin-top:24px}.workspace-task-table{min-width:760px}.workspace-task-table th:nth-child(1){width:8%}.workspace-task-table th:nth-child(2){width:auto}.workspace-task-table th:nth-child(3){width:22%}.workspace-task-table th:nth-child(4){width:17%}.workspace-task-table th:nth-child(5){width:7%}.workspace-task-table th:nth-child(3),.workspace-task-table th:nth-child(4),.workspace-task-table th:nth-child(5){white-space:nowrap}body.employee-task-workspace .workspace-task-table{min-width:620px}body.employee-task-workspace .workspace-task-table th:nth-child(3){width:17%}body.employee-task-workspace .workspace-task-table th:nth-child(4){width:8%}.workspace-project{position:relative;border-top-color:var(--project-color,#4f46e5)!important;background:linear-gradient(135deg,var(--project-tint,rgba(79,70,229,.16)) 0%,#fff 82%)!important}.workspace-project.is-selected{outline-color:var(--project-color,#4f46e5);box-shadow:0 0 0 4px var(--project-tint,rgba(79,70,229,.16)),0 12px 26px rgba(15,23,42,.12)!important}.workspace-project:focus-visible{outline:3px solid var(--project-color,#4f46e5);outline-offset:3px}.workspace-project .card-body{position:relative}.project-selected{position:absolute;top:12px;right:86px;display:inline-flex;align-items:center;gap:4px;border-radius:999px;padding:4px 8px;background:var(--project-color,#4f46e5);color:#fff;font-size:.67rem;font-weight:800;line-height:1;box-shadow:0 2px 6px rgba(15,23,42,.14)}.workspace-project .progress-bar{background-color:var(--project-color,#4f46e5)!important}.task-project-badge{display:inline-flex;align-items:center;border:1px solid transparent;border-radius:5px!important;padding:3px 6px!important;font-size:.64rem!important;font-weight:800!important;letter-spacing:.04em;line-height:1}@media(max-width:991.98px){.workspace-projects{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:575.98px){.workspace-projects-header{align-items:flex-start;flex-direction:column}.workspace-projects{grid-template-columns:1fr;width:100%}}
+.workspace-projects-header{display:flex;align-items:center;justify-content:space-between;gap:16px}.workspace-projects{grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}.workspace-projects-toggle{display:inline-flex;align-items:center;gap:6px;border-radius:7px;font-weight:600}.workspace-task-list{scroll-margin-top:24px}.task-list-filters{padding:16px 24px;background:#fbfcfe}.workspace-task-table{min-width:760px}.workspace-task-table th:nth-child(1){width:8%}.workspace-task-table th:nth-child(2){width:auto}.workspace-task-table th:nth-child(3){width:22%}.workspace-task-table th:nth-child(4){width:17%}.workspace-task-table th:nth-child(5){width:7%}.workspace-task-table th:nth-child(3),.workspace-task-table th:nth-child(4),.workspace-task-table th:nth-child(5){white-space:nowrap}body.employee-task-workspace .workspace-task-table{min-width:620px}body.employee-task-workspace .workspace-task-table th:nth-child(3){width:17%}body.employee-task-workspace .workspace-task-table th:nth-child(4){width:8%}.workspace-project{position:relative;border-top-color:var(--project-color,#4f46e5)!important;background:linear-gradient(135deg,var(--project-tint,rgba(79,70,229,.16)) 0%,#fff 82%)!important}.workspace-project.is-selected{outline-color:var(--project-color,#4f46e5);box-shadow:0 0 0 4px var(--project-tint,rgba(79,70,229,.16)),0 12px 26px rgba(15,23,42,.12)!important}.workspace-project:focus-visible{outline:3px solid var(--project-color,#4f46e5);outline-offset:3px}.workspace-project .card-body{position:relative}.project-selected{position:absolute;top:12px;right:86px;display:inline-flex;align-items:center;gap:4px;border-radius:999px;padding:4px 8px;background:var(--project-color,#4f46e5);color:#fff;font-size:.67rem;font-weight:800;line-height:1;box-shadow:0 2px 6px rgba(15,23,42,.14)}.workspace-project .progress-bar{background-color:var(--project-color,#4f46e5)!important}.task-project-badge{display:inline-flex;align-items:center;border:1px solid transparent;border-radius:5px!important;padding:3px 6px!important;font-size:.64rem!important;font-weight:800!important;letter-spacing:.04em;line-height:1}@media(max-width:991.98px){.workspace-projects{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:575.98px){.workspace-projects-header{align-items:flex-start;flex-direction:column}.workspace-projects{grid-template-columns:1fr;width:100%}.task-list-filters{padding:14px}}
 `;
 
 const paginationStyles = `

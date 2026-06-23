@@ -62,10 +62,11 @@ class EmployeeViewSet(viewsets.ModelViewSet):
             account_exists_annotation=Exists(User.objects.filter(email__iexact=OuterRef("email"), role=UserRole.EMPLOYEE)),
             status_sort=Case(
                 When(status=EmployeeStatus.ACTIVE, then=Value(0)),
-                When(status=EmployeeStatus.ON_LEAVE, then=Value(1)),
-                When(status=EmployeeStatus.INACTIVE, then=Value(2)),
-                When(status=EmployeeStatus.TERMINATED, then=Value(3)),
-                default=Value(4),
+                When(status=EmployeeStatus.PROVISION, then=Value(1)),
+                When(status=EmployeeStatus.ON_LEAVE, then=Value(2)),
+                When(status=EmployeeStatus.INACTIVE, then=Value(3)),
+                When(status=EmployeeStatus.TERMINATED, then=Value(4)),
+                default=Value(5),
                 output_field=IntegerField(),
             ),
         )

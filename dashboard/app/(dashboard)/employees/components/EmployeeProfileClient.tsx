@@ -43,7 +43,7 @@ type Employee = {
   employment_type: string;
   employment_type_label: string;
   reporting_manager: string;
-  status: "ACTIVE" | "INACTIVE" | "ON_LEAVE" | "TERMINATED";
+  status: "ACTIVE" | "PROVISION" | "INACTIVE" | "ON_LEAVE" | "TERMINATED";
   status_label: string;
   annual_salary: string;
   pay_frequency: string;
@@ -73,6 +73,7 @@ const API_URL = `${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/employees/`;
 
 const statusBadgeClass: Record<Employee["status"], string> = {
   ACTIVE: "bg-success-subtle text-success",
+  PROVISION: "bg-info-subtle text-info",
   INACTIVE: "bg-secondary-subtle text-secondary",
   ON_LEAVE: "bg-warning-subtle text-warning",
   TERMINATED: "bg-danger-subtle text-danger",

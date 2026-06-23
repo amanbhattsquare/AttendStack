@@ -19,7 +19,7 @@ import { Alert, Button, Dropdown, Form, Modal } from "react-bootstrap";
 import Link from "next/link";
 import EmployeeFormWizard, { EmployeeFormData } from "./EmployeeFormWizard";
 
-type EmployeeStatus = "ACTIVE" | "INACTIVE" | "ON_LEAVE" | "TERMINATED";
+type EmployeeStatus = "ACTIVE" | "PROVISION" | "INACTIVE" | "ON_LEAVE" | "TERMINATED";
 
 type Employee = {
   id: string;
@@ -52,6 +52,7 @@ const API_URL = `${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/employees/`;
 
 const statusBadgeClass: Record<Employee["status"], string> = {
   ACTIVE: "bg-success-subtle text-success",
+  PROVISION: "bg-info-subtle text-info",
   INACTIVE: "bg-secondary-subtle text-secondary",
   ON_LEAVE: "bg-warning-subtle text-warning",
   TERMINATED: "bg-danger-subtle text-danger",
@@ -64,6 +65,10 @@ const employeeStatusOptions: Array<{
   {
     value: "ACTIVE",
     label: "Active",
+  },
+  {
+    value: "PROVISION",
+    label: "Provision",
   },
   {
     value: "ON_LEAVE",
@@ -86,9 +91,10 @@ const statusLabelByValue = employeeStatusOptions.reduce((labels, option) => {
 
 const employeeStatusOrder: Record<EmployeeStatus, number> = {
   ACTIVE: 0,
-  ON_LEAVE: 1,
-  INACTIVE: 2,
-  TERMINATED: 3,
+  PROVISION: 1,
+  ON_LEAVE: 2,
+  INACTIVE: 3,
+  TERMINATED: 4,
 };
 
 const sortEmployeesByStatus = (employees: Employee[]) => [...employees].sort((first, second) =>
@@ -529,6 +535,7 @@ const EmployeePageClient = () => {
                   <Dropdown.Header>Status</Dropdown.Header>
                   <Dropdown.Item onClick={() => setStatusFilter("")}>All Statuses</Dropdown.Item>
                   <Dropdown.Item onClick={() => setStatusFilter("ACTIVE")}>Active</Dropdown.Item>
+                  <Dropdown.Item onClick={() => setStatusFilter("PROVISION")}>Provision</Dropdown.Item>
                   <Dropdown.Item onClick={() => setStatusFilter("INACTIVE")}>Inactive</Dropdown.Item>
                   <Dropdown.Item onClick={() => setStatusFilter("ON_LEAVE")}>On Leave</Dropdown.Item>
                   <Dropdown.Item onClick={() => setStatusFilter("TERMINATED")}>Terminated</Dropdown.Item>

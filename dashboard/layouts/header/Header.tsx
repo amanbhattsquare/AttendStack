@@ -87,9 +87,15 @@ const Header = () => {
   };
 
   const fetchJson = async (url: string, token: string) => {
-    const response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-    if (!response.ok) return null;
-    return response.json();
+    try {
+      const response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      if (!response.ok) return null;
+      return await response.json();
+    } catch {
+      // Notifications are supplementary. Let the rest of the header keep working
+      // when an API endpoint is temporarily unreachable or blocked by the browser.
+      return null;
+    }
   };
 
   const loadDynamicNotifications = async () => {

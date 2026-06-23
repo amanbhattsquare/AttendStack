@@ -10,6 +10,7 @@ from organizations.models import Organization
 
 class EmployeeStatus(models.TextChoices):
     ACTIVE = "ACTIVE", "Active"
+    PROVISION = "PROVISION", "Provision"
     INACTIVE = "INACTIVE", "Inactive"
     ON_LEAVE = "ON_LEAVE", "On Leave"
     TERMINATED = "TERMINATED", "Terminated"

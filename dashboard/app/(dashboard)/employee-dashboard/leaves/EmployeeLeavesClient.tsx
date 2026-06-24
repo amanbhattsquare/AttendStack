@@ -662,7 +662,7 @@ const EmployeeLeavesClient = () => {
               <Form.Control
                 type="file"
                 accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx"
-                onChange={(e) => setAttachment(e.target.files?.[0] || null)}
+                onChange={(e) => setAttachment((e.target as HTMLInputElement).files?.[0] || null)}
                 className="form-control rounded-3 p-2.5"
               />
               <Form.Text>Optional: PDF, image, or Word document up to 5 MB.</Form.Text>

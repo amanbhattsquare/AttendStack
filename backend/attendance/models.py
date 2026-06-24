@@ -145,9 +145,21 @@ class AttendanceRecord(models.Model):
         # Set status to LATE if check-in is after cutoff, else PRESENT
         self.status = AttendanceStatus.LATE if local_check_in > late_cutoff else AttendanceStatus.PRESENT
 
-        # Check for half day (if total duration is less than threshold)
-        if self.check_out and self.total_duration and self.total_duration < timedelta(hours=settings.half_day_threshold):
-            self.status = AttendanceStatus.HALF_DAY
+        # An early checkout is a half day, except during the final two hours of
+        # the scheduled shift.  For example, with an 18:00 shift end, a checkout
+        # at 16:00 or later remains Present/Late, while one before 16:00 is Half Day.
+        if self.check_out:
+            local_check_out = timezone.localtime(self.check_out)
+            scheduled_shift_end = local_check_in.replace(
+                hour=settings.shift_end_time.hour,
+                minute=settings.shift_end_time.minute,
+                second=settings.shift_end_time.second,
+                microsecond=0,
+            )
+            full_day_checkout_cutoff = scheduled_shift_end - timedelta(hours=2)
+
+            if local_check_out < full_day_checkout_cutoff:
+                self.status = AttendanceStatus.HALF_DAY
           
         # Apply Sunday Unpaid Rule if enabled
         if settings.sunday_unpaid_rule_enabled:

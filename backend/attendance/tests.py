@@ -1,6 +1,7 @@
-from datetime import date
+from datetime import date, datetime
 
 from django.test import TestCase
+from django.utils import timezone
 
 from employees.models import Employee
 from holidays.models import Holiday
@@ -43,6 +44,42 @@ class AttendanceRecordSerializerTests(TestCase):
         record = serializer.save()
 
         self.assertEqual(record.status, AttendanceStatus.HALF_DAY)
+
+
+class EarlyCheckoutStatusTests(TestCase):
+    def setUp(self):
+        self.employee = create_employee()
+        settings = SystemSettings.get_settings()
+        settings.shift_end_time = "18:00:00"
+        settings.late_cutoff_time = "10:15:00"
+        settings.sunday_unpaid_rule_enabled = False
+        settings.save()
+
+    def _local_datetime(self, hour, minute=0):
+        return timezone.make_aware(
+            datetime(2026, 5, 4, hour, minute),
+            timezone.get_current_timezone(),
+        )
+
+    def test_checkout_before_final_two_shift_hours_is_half_day(self):
+        record = AttendanceRecord.objects.create(
+            employee=self.employee,
+            date=date(2026, 5, 4),
+            check_in=self._local_datetime(10),
+            check_out=self._local_datetime(15, 59),
+        )
+
+        self.assertEqual(record.status, AttendanceStatus.HALF_DAY)
+
+    def test_checkout_in_final_two_shift_hours_is_full_day(self):
+        record = AttendanceRecord.objects.create(
+            employee=self.employee,
+            date=date(2026, 5, 4),
+            check_in=self._local_datetime(10),
+            check_out=self._local_datetime(16),
+        )
+
+        self.assertEqual(record.status, AttendanceStatus.PRESENT)
 
 
 class LeaveAttendanceSyncTests(TestCase):

@@ -77,6 +77,7 @@ class AttendanceRecordSerializer(serializers.ModelSerializer):
             "status",
             "status_label",
             "live_status",
+            "is_paid",
             "notes",
             "created_at",
             "updated_at",
@@ -93,6 +94,7 @@ class AttendanceRecordSerializer(serializers.ModelSerializer):
             "total_hours",
             "status_label",
             "live_status",
+            "is_paid",
             "created_at",
             "updated_at",
         ]
@@ -149,6 +151,8 @@ class AttendanceRecordSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         manual_status = "status" in self.initial_data
         record = AttendanceRecord(**validated_data)
+        if manual_status and record.status == "HALF_DAY" and not record.leave_request_id:
+            record.is_paid = False
         record.save(auto_refresh_status=not manual_status)
         return record
 
@@ -156,6 +160,8 @@ class AttendanceRecordSerializer(serializers.ModelSerializer):
         manual_status = "status" in self.initial_data
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
+        if manual_status and instance.status == "HALF_DAY" and not instance.leave_request_id:
+            instance.is_paid = False
         instance.save(auto_refresh_status=not manual_status)
         return instance
 
@@ -214,7 +220,9 @@ class LeaveRequestSerializer(serializers.ModelSerializer):
             "start_date",
             "end_date",
             "leave_type",
+            "is_half_day",
             "leave_type_label",
+            "attachment",
             "reason",
             "status",
             "status_label",
@@ -240,9 +248,17 @@ class LeaveRequestSerializer(serializers.ModelSerializer):
         start_date = attrs.get("start_date", getattr(self.instance, "start_date", None))
         end_date = attrs.get("end_date", getattr(self.instance, "end_date", None))
         employee = attrs.get("employee", getattr(self.instance, "employee", None))
+        leave_type = attrs.get("leave_type", getattr(self.instance, "leave_type", None))
+        is_half_day = attrs.get("is_half_day", getattr(self.instance, "is_half_day", False))
 
         if start_date and end_date and start_date > end_date:
             raise serializers.ValidationError({"end_date": "End date cannot be before start date."})
+
+        if is_half_day:
+            if start_date != end_date:
+                raise serializers.ValidationError({"end_date": "A half-day leave must start and end on the same date."})
+            if leave_type not in {"CASUAL", "SICK"}:
+                raise serializers.ValidationError({"leave_type": "Half-day leave is available only for Casual or Sick leave."})
 
         if employee and start_date and start_date < employee.joining_date:
             raise serializers.ValidationError({
@@ -265,3 +281,16 @@ class LeaveRequestSerializer(serializers.ModelSerializer):
                 )
 
         return attrs
+
+    def validate_attachment(self, value):
+        allowed_extensions = {".pdf", ".jpg", ".jpeg", ".png", ".webp", ".doc", ".docx"}
+        filename = value.name.lower()
+        extension = filename[filename.rfind("."):] if "." in filename else ""
+
+        if extension not in allowed_extensions:
+            raise serializers.ValidationError(
+                "Upload a PDF, image, Word document, or supported document file."
+            )
+        if value.size > 5 * 1024 * 1024:
+            raise serializers.ValidationError("Attachment size cannot exceed 5 MB.")
+        return value

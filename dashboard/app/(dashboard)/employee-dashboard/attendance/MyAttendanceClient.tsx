@@ -14,6 +14,7 @@ type AttendanceRecord = {
   status: string;
   status_label: string;
   live_status: string;
+  is_paid: boolean;
 };
 
 type TodayAttendance = {
@@ -281,7 +282,7 @@ const MyAttendanceClient = () => {
       if (record.status === "HOLIDAY") s.holiday += 1;
       if (record.status === "SUNDAY_UNPAID") s.sundayUnpaid += 1;
       if (["ABSENT", "LEAVE", "SUNDAY_UNPAID"].includes(record.status)) s.unpaidDays += 1;
-      if (record.status === "HALF_DAY") s.unpaidDays += 0.5;
+      if (record.status === "HALF_DAY" && !record.is_paid) s.unpaidDays += 0.5;
     });
     return s;
   }, [monthFilteredRecords]);

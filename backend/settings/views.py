@@ -53,9 +53,12 @@ class SystemSettingsView(generics.RetrieveUpdateAPIView):
                         )
             
             paid_leave_policy_fields = {
-                "monthly_paid_leave_days",
-                "leave_carryover_enabled",
-                "max_carryover_days",
+                "casual_leave_days",
+                "sick_leave_days",
+                "maternity_leave_days",
+                "paternity_leave_days",
+                "bereavement_leave_days",
+                "marriage_leave_days",
             }
             should_rebalance_paid_leaves = any(
                 change.field_name in paid_leave_policy_fields for change in changes

@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 from django.test import TestCase
 
-from attendance.models import AttendanceRecord, AttendanceStatus
+from attendance.models import AttendanceRecord, AttendanceStatus, LeaveRequest, LeaveStatus
 from employees.models import Employee
 from holidays.models import Holiday
 
@@ -54,6 +54,32 @@ class PayrollCalculationTests(TestCase):
         self.assertEqual(payroll["unpaid_days"], 1.5)
         self.assertEqual(payroll["deductions"], Decimal("483.87"))
         self.assertEqual(payroll["payable_salary"], Decimal("9516.13"))
+
+    def test_paid_half_day_leave_has_no_salary_deduction(self):
+        employee = create_employee()
+        leave_request = LeaveRequest.objects.create(
+            employee=employee,
+            start_date=date(2026, 5, 5),
+            end_date=date(2026, 5, 5),
+            leave_type="CASUAL",
+            is_half_day=True,
+            reason="Personal work",
+            status=LeaveStatus.APPROVED,
+        )
+        half_day_record = AttendanceRecord(
+            employee=employee,
+            date=date(2026, 5, 5),
+            status=AttendanceStatus.HALF_DAY,
+            is_paid=True,
+            leave_request=leave_request,
+        )
+        half_day_record.save(auto_refresh_status=False)
+
+        payroll = calculate_attendance_payroll(employee, 5, 2026)
+
+        self.assertEqual(payroll["attendance_summary"]["half_day"], 1)
+        self.assertEqual(payroll["unpaid_days"], 0.0)
+        self.assertEqual(payroll["deductions"], Decimal("0.00"))
 
     @patch("payroll.services.timezone.localdate")
     def test_current_month_payroll_ignores_future_attendance_records(self, localdate_mock):

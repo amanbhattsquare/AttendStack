@@ -1,14 +1,16 @@
 from datetime import date, datetime
 
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.utils import timezone
+from rest_framework import serializers
 
 from employees.models import Employee
 from holidays.models import Holiday
 from settings.models import SystemSettings
 
 from .models import AttendanceRecord, AttendanceStatus, LeaveRequest, LeaveStatus
-from .serializers import AttendanceRecordSerializer
+from .serializers import AttendanceRecordSerializer, LeaveRequestSerializer
 from .services import auto_mark_calendar_days, sync_leave_request_attendance
 
 
@@ -44,6 +46,21 @@ class AttendanceRecordSerializerTests(TestCase):
         record = serializer.save()
 
         self.assertEqual(record.status, AttendanceStatus.HALF_DAY)
+
+
+class LeaveAttachmentValidationTests(TestCase):
+    def test_pdf_attachment_is_accepted(self):
+        attachment = SimpleUploadedFile("medical-note.pdf", b"PDF content", content_type="application/pdf")
+        serializer = LeaveRequestSerializer()
+
+        self.assertEqual(serializer.validate_attachment(attachment), attachment)
+
+    def test_unsupported_attachment_is_rejected(self):
+        attachment = SimpleUploadedFile("script.exe", b"not allowed", content_type="application/octet-stream")
+        serializer = LeaveRequestSerializer()
+
+        with self.assertRaises(serializers.ValidationError):
+            serializer.validate_attachment(attachment)
 
 
 class EarlyCheckoutStatusTests(TestCase):
@@ -86,12 +103,11 @@ class LeaveAttendanceSyncTests(TestCase):
     def setUp(self):
         self.employee = create_employee()
         settings = SystemSettings.get_settings()
-        settings.monthly_paid_leave_days = 1
-        settings.leave_carryover_enabled = False
-        settings.max_carryover_days = 5
+        settings.casual_leave_days = 1
+        settings.sick_leave_days = 2
         settings.save()
 
-    def test_approved_leave_marks_each_date_and_respects_monthly_paid_quota(self):
+    def test_approved_leave_marks_each_date_and_respects_its_type_allowance(self):
         leave_request = LeaveRequest.objects.create(
             employee=self.employee,
             start_date=date(2026, 5, 4),
@@ -115,7 +131,7 @@ class LeaveAttendanceSyncTests(TestCase):
             ],
         )
 
-    def test_monthly_paid_quota_resets_for_leave_spanning_multiple_months(self):
+    def test_annual_allowance_does_not_reset_when_a_leave_spans_months(self):
         leave_request = LeaveRequest.objects.create(
             employee=self.employee,
             start_date=date(2026, 5, 31),
@@ -133,7 +149,7 @@ class LeaveAttendanceSyncTests(TestCase):
             records,
             [
                 (date(2026, 5, 31), AttendanceStatus.PAID_LEAVE, True),
-                (date(2026, 6, 1), AttendanceStatus.PAID_LEAVE, True),
+                (date(2026, 6, 1), AttendanceStatus.LEAVE, False),
             ],
         )
 
@@ -153,17 +169,13 @@ class LeaveAttendanceSyncTests(TestCase):
         self.assertEqual(result["deleted"], 1)
         self.assertFalse(AttendanceRecord.objects.filter(employee=self.employee).exists())
 
-    def test_unused_monthly_paid_leave_carries_forward_to_next_month(self):
-        settings = SystemSettings.get_settings()
-        settings.leave_carryover_enabled = True
-        settings.max_carryover_days = 5
-        settings.save()
-
+    def test_each_leave_type_uses_its_own_configured_balance(self):
         leave_request = LeaveRequest.objects.create(
             employee=self.employee,
             start_date=date(2026, 2, 2),
             end_date=date(2026, 2, 3),
             reason="Family work",
+            leave_type="SICK",
             status=LeaveStatus.APPROVED,
         )
 
@@ -184,11 +196,6 @@ class LeaveAttendanceSyncTests(TestCase):
 class EmploymentStartAttendanceTests(TestCase):
     def setUp(self):
         self.employee = create_employee()
-        settings = SystemSettings.get_settings()
-        settings.monthly_paid_leave_days = 1
-        settings.leave_carryover_enabled = False
-        settings.max_carryover_days = 5
-        settings.save()
 
     def test_calendar_records_start_on_the_employee_joining_date(self):
         employee = create_employee(
@@ -206,18 +213,17 @@ class EmploymentStartAttendanceTests(TestCase):
         self.assertFalse(records.filter(date__lt=employee.joining_date).exists())
         self.assertTrue(records.filter(date=date(2026, 5, 17), status=AttendanceStatus.SUNDAY_PAID).exists())
 
-    def test_carry_forward_respects_max_carryover_days(self):
+    def test_half_day_casual_leave_uses_half_of_the_paid_balance(self):
         settings = SystemSettings.get_settings()
-        settings.monthly_paid_leave_days = 2
-        settings.leave_carryover_enabled = True
-        settings.max_carryover_days = 1
+        settings.casual_leave_days = 1
         settings.save()
 
         leave_request = LeaveRequest.objects.create(
             employee=self.employee,
             start_date=date(2026, 2, 2),
-            end_date=date(2026, 2, 5),
+            end_date=date(2026, 2, 2),
             reason="Family work",
+            is_half_day=True,
             status=LeaveStatus.APPROVED,
         )
 
@@ -229,10 +235,7 @@ class EmploymentStartAttendanceTests(TestCase):
         self.assertEqual(
             records,
             [
-                (date(2026, 2, 2), AttendanceStatus.PAID_LEAVE, True),
-                (date(2026, 2, 3), AttendanceStatus.PAID_LEAVE, True),
-                (date(2026, 2, 4), AttendanceStatus.PAID_LEAVE, True),
-                (date(2026, 2, 5), AttendanceStatus.LEAVE, False),
+                (date(2026, 2, 2), AttendanceStatus.HALF_DAY, True),
             ],
         )
 

@@ -185,7 +185,7 @@ const EmployeeDashboard = () => {
   const [tasks, setTasks] = useState<TaskDashboardItem[]>([]);
   const DEFAULT_RULES = `1. Core Working Hours: 10:00 AM to 6:00 PM.
 2. Late Entry: Arriving after 10:15 AM will be marked as Late.
-3. Half Day: Working less than 4 hours will be considered a Half Day.
+3. Half Day: Checking out before the final two hours of the scheduled shift is considered a half day. An approved Casual or Sick half-day leave uses 0.5 of that leave balance.
 4. Leave Requests: Must be submitted at least 24 hours in advance.
 5. Unpaid Leave: Absences without prior approval will be considered Unpaid.`;
 

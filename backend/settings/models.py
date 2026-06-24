@@ -1,6 +1,6 @@
 from django.db import models
 from django.utils import timezone
-from django.core.validators import MinValueValidator, MaxValueValidator
+from django.core.validators import MaxValueValidator
 
 
 class SystemSettings(models.Model):
@@ -9,10 +9,6 @@ class SystemSettings(models.Model):
     shift_start_time = models.TimeField(default="10:00:00")
     late_cutoff_time = models.TimeField(default="10:15:00")
     shift_end_time = models.TimeField(default="18:00:00")
-    half_day_threshold = models.IntegerField(
-        default=4,
-        validators=[MinValueValidator(1), MaxValueValidator(8)]
-    )
     auto_checkout_enabled = models.BooleanField(default=True)
     auto_checkout_time = models.TimeField(default="20:00:00")
     
@@ -79,26 +75,14 @@ class SystemSettings(models.Model):
     burger_rule_enabled = models.BooleanField(default=False, help_text="If enabled, a holiday is marked as unpaid if it is sandwiched between two leave days.")
     
     
-    # Paid Leave Allocation Settings
-    monthly_paid_leave_days = models.IntegerField(
-        default=1,
-        validators=[MinValueValidator(0), MaxValueValidator(31)],
-        help_text="Number of approved leave days per employee that are paid each month",
-    )
-    leave_carryover_enabled = models.BooleanField(
-        default=True,
-        help_text="Carry unused monthly paid leave balance into later months in the same calendar year",
-    )
-    max_carryover_days = models.IntegerField(
-        default=5,
-        validators=[MinValueValidator(0), MaxValueValidator(365)],
-        help_text="Maximum unused paid leave days that can be carried forward",
-    )
-    annual_paid_leave_days = models.IntegerField(default=21, help_text="Default number of annual paid leave days per employee")
-    sick_leave_days = models.IntegerField(default=12, help_text="Default number of annual sick leave days per employee")
-    casual_leave_days = models.IntegerField(default=6, help_text="Default number of annual casual leave days per employee")
-    maternity_leave_days = models.IntegerField(default=180, help_text="Default number of maternity leave days per employee")
-    paternity_leave_days = models.IntegerField(default=14, help_text="Default number of paternity leave days per employee")
+    # Annual leave allocations. Each approved leave is paid only while its
+    # own leave-type balance remains for that calendar year.
+    sick_leave_days = models.PositiveIntegerField(default=12, validators=[MaxValueValidator(365)])
+    casual_leave_days = models.PositiveIntegerField(default=6, validators=[MaxValueValidator(365)])
+    maternity_leave_days = models.PositiveIntegerField(default=180, validators=[MaxValueValidator(365)])
+    paternity_leave_days = models.PositiveIntegerField(default=14, validators=[MaxValueValidator(365)])
+    bereavement_leave_days = models.PositiveIntegerField(default=5, validators=[MaxValueValidator(365)])
+    marriage_leave_days = models.PositiveIntegerField(default=10, validators=[MaxValueValidator(365)])
     
     # Metadata
     created_at = models.DateTimeField(auto_now_add=True)

@@ -9,7 +9,7 @@ import Swal from "sweetalert2";
 
 const DEFAULT_RULES = `1. Core Working Hours: 10:00 AM to 6:00 PM.
 2. Late Entry: Arriving after 10:15 AM will be marked as Late.
-3. Half Day: Working less than 4 hours will be considered a Half Day.
+3. Half Day: Checking out before the final two hours of the scheduled shift is considered a half day. An approved Casual or Sick half-day leave uses 0.5 of that leave balance.
 4. Leave Requests: Must be submitted at least 24 hours in advance.
 5. Unpaid Leave: Absences without prior approval will be considered Unpaid.`;
 
@@ -27,6 +27,7 @@ type AttendanceRecord = {
   status: string;
   status_label: string;
   live_status: string;
+  is_paid: boolean;
 };
 
 type AttendanceListResponse = {
@@ -443,7 +444,7 @@ const AttendanceRecordsClient = () => {
       if (record.status === "SUNDAY_UNPAID") summary[record.employee_id].sundayUnpaid += 1;
       
       if (["ABSENT", "LEAVE", "SUNDAY_UNPAID"].includes(record.status)) summary[record.employee_id].unpaidDays += 1;
-      if (record.status === "HALF_DAY") summary[record.employee_id].unpaidDays += 0.5;
+      if (record.status === "HALF_DAY" && !record.is_paid) summary[record.employee_id].unpaidDays += 0.5;
     });
 
     if (filterMode === "month") {

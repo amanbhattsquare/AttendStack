@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { Card, Button, Table, Badge, Modal, Form, Row, Col, Alert, Spinner } from "react-bootstrap";
-import { IconCalendarPlus, IconCalendarEvent, IconMessage, IconInfoCircle, IconClock, IconCircleCheck, IconCircleX, IconEdit, IconTrash, IconBriefcase, IconHeart, IconUser, IconBook } from "@tabler/icons-react";
+import { IconCalendarPlus, IconCalendarEvent, IconMessage, IconInfoCircle, IconClock, IconCircleCheck, IconCircleX, IconEdit, IconTrash, IconHeart, IconUser } from "@tabler/icons-react";
 import Swal from "sweetalert2";
 
 interface LeaveRequest {
@@ -10,7 +10,9 @@ interface LeaveRequest {
   start_date: string;
   end_date: string;
   leave_type: string;
+  is_half_day: boolean;
   leave_type_label: string;
+  attachment: string | null;
   reason: string;
   status: string;
   status_label: string;
@@ -19,11 +21,12 @@ interface LeaveRequest {
 }
 
 interface LeaveSettings {
-  annual_paid_leave_days: number;
   sick_leave_days: number;
   casual_leave_days: number;
-  monthly_paid_leave_days: number;
-  carry_forward_leave_days: number;
+  maternity_leave_days: number;
+  paternity_leave_days: number;
+  bereavement_leave_days: number;
+  marriage_leave_days: number;
 }
 
 interface LeavePreview {
@@ -39,13 +42,10 @@ interface LeavePreview {
 const DEFAULT_LEAVE_TYPES = [
   { value: "CASUAL", label: "Casual Leave" },
   { value: "SICK", label: "Sick Leave" },
-  { value: "ANNUAL", label: "Annual Leave" },
-  { value: "STUDY", label: "Study Leave" },
   { value: "MATERNITY", label: "Maternity Leave" },
   { value: "PATERNITY", label: "Paternity Leave" },
   { value: "BEREAVEMENT", label: "Bereavement Leave" },
   { value: "MARRIAGE", label: "Marriage Leave" },
-  { value: "OTHER", label: "Other" },
 ];
 
 const EmployeeLeavesClient = () => {
@@ -60,7 +60,9 @@ const EmployeeLeavesClient = () => {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [leaveType, setLeaveType] = useState("CASUAL");
+  const [isHalfDay, setIsHalfDay] = useState(false);
   const [reason, setReason] = useState("");
+  const [attachment, setAttachment] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [leaveTypes, setLeaveTypes] = useState<{ value: string; label: string }[]>(DEFAULT_LEAVE_TYPES);
   const [leavePreview, setLeavePreview] = useState<LeavePreview | null>(null);
@@ -125,7 +127,7 @@ const EmployeeLeavesClient = () => {
     const loadPreview = async () => {
       setIsPreviewLoading(true);
       try {
-        const params = new URLSearchParams({ start_date: startDate, end_date: endDate, leave_type: leaveType });
+        const params = new URLSearchParams({ start_date: startDate, end_date: endDate, leave_type: leaveType, is_half_day: String(isHalfDay) });
         const res = await fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/attendance/leaves/preview/?${params}`, { headers: { Authorization: `Bearer ${token}` }, signal: controller.signal });
         if (!res.ok) throw new Error("Unable to calculate leave impact.");
         setLeavePreview(await res.json());
@@ -137,7 +139,7 @@ const EmployeeLeavesClient = () => {
     };
     void loadPreview();
     return () => controller.abort();
-  }, [showModal, startDate, endDate, leaveType]);
+  }, [showModal, startDate, endDate, leaveType, isHalfDay]);
 
   const resetFormAndCloseModal = () => {
     setShowModal(false);
@@ -145,7 +147,9 @@ const EmployeeLeavesClient = () => {
     setStartDate("");
     setEndDate("");
     setLeaveType("CASUAL");
+    setIsHalfDay(false);
     setReason("");
+    setAttachment(null);
     setLeavePreview(null);
   };
 
@@ -154,7 +158,9 @@ const EmployeeLeavesClient = () => {
     setStartDate(leave.start_date);
     setEndDate(leave.end_date);
     setLeaveType(leave.leave_type);
+    setIsHalfDay(leave.is_half_day);
     setReason(leave.reason);
+    setAttachment(null);
     setShowModal(true);
   };
 
@@ -215,18 +221,20 @@ const EmployeeLeavesClient = () => {
       
       const method = editingLeave ? "PUT" : "POST";
 
+      const formData = new FormData();
+      formData.append("start_date", startDate);
+      formData.append("end_date", endDate);
+      formData.append("leave_type", leaveType);
+      formData.append("is_half_day", String(isHalfDay));
+      formData.append("reason", reason);
+      if (attachment) formData.append("attachment", attachment);
+
       const res = await fetch(url, {
         method: method,
         headers: {
-          "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          start_date: startDate,
-          end_date: endDate,
-          leave_type: leaveType,
-          reason,
-        }),
+        body: formData,
       });
 
       if (!res.ok) {
@@ -260,8 +268,6 @@ const EmployeeLeavesClient = () => {
     switch (type) {
       case "SICK":
         return <Badge bg="danger-subtle" className="text-danger-emphasis px-2 py-1 rounded">Sick Leave</Badge>;
-      case "ANNUAL":
-        return <Badge bg="primary-subtle" className="text-primary-emphasis px-2 py-1 rounded">Annual Leave</Badge>;
       case "CASUAL":
         return <Badge bg="info-subtle" className="text-info-emphasis px-2 py-1 rounded">Casual Leave</Badge>;
       case "MATERNITY":
@@ -272,10 +278,8 @@ const EmployeeLeavesClient = () => {
         return <Badge bg="secondary-subtle" className="text-secondary-emphasis px-2 py-1 rounded">Bereavement Leave</Badge>;
       case "MARRIAGE":
         return <Badge bg="success-subtle" className="text-success-emphasis px-2 py-1 rounded">Marriage Leave</Badge>;
-      case "STUDY":
-        return <Badge bg="warning-subtle" className="text-warning-emphasis px-2 py-1 rounded">Study Leave</Badge>;
       default:
-        return <Badge bg="secondary-subtle" className="text-secondary-emphasis px-2 py-1 rounded">Other</Badge>;
+        return <Badge bg="secondary-subtle" className="text-secondary-emphasis px-2 py-1 rounded">{type}</Badge>;
     }
   };
 
@@ -310,9 +314,12 @@ const EmployeeLeavesClient = () => {
   }, []);
 
   // Calculate used leave days
-  const usedAnnual = leaves.filter(l => l.leave_type === "ANNUAL" && l.status === "APPROVED").reduce((acc, l) => acc + calculateDays(l.start_date, l.end_date), 0);
-  const usedSick = leaves.filter(l => l.leave_type === "SICK" && l.status === "APPROVED").reduce((acc, l) => acc + calculateDays(l.start_date, l.end_date), 0);
-  const usedCasual = leaves.filter(l => l.leave_type === "CASUAL" && l.status === "APPROVED").reduce((acc, l) => acc + calculateDays(l.start_date, l.end_date), 0);
+  const leaveBalance = (leaveType: string, allowance: number) => {
+    const used = leaves
+      .filter((leave) => leave.leave_type === leaveType && leave.status === "APPROVED")
+      .reduce((total, leave) => total + (leave.is_half_day ? 0.5 : calculateDays(leave.start_date, leave.end_date)), 0);
+    return Math.max(allowance - used, 0);
+  };
 
   // Metrics
   const totalRequested = leaves.length;
@@ -327,7 +334,7 @@ const EmployeeLeavesClient = () => {
           <div>
             <h3 className="fw-bold text-dark mb-1">Leave Requests</h3>
             <p className="text-secondary small mb-0">
-              Apply for casual, annual, or medical leaves and track your approval status directly.
+              Apply for your configured leave categories and track approval status directly.
             </p>
           </div>
           <Button
@@ -349,51 +356,66 @@ const EmployeeLeavesClient = () => {
           </Card.Header>
           <Card.Body className="px-4 pb-4">
             <Row className="g-4">
-              <Col md={4}>
-                <div className="d-flex align-items-center justify-content-between p-3 bg-primary-subtle rounded-3">
-                  <div>
-                    <p className="text-primary small fw-semibold mb-1">Annual Leave</p>
-                    <p className="text-primary mb-0"><strong>{leaveSettings.annual_paid_leave_days - usedAnnual}</strong> / {leaveSettings.annual_paid_leave_days} days left</p>
-                  </div>
-                  <IconBriefcase size={24} className="text-primary" />
-                </div>
+              <Col xs={12}>
+                <h6 className="text-uppercase text-secondary small fw-bold mb-0">Regular Leave</h6>
               </Col>
-              <Col md={4}>
+              <Col xs={12} sm={6} lg={3}>
                 <div className="d-flex align-items-center justify-content-between p-3 bg-danger-subtle rounded-3">
                   <div>
                     <p className="text-danger small fw-semibold mb-1">Sick Leave</p>
-                    <p className="text-danger mb-0"><strong>{leaveSettings.sick_leave_days - usedSick}</strong> / {leaveSettings.sick_leave_days} days left</p>
+                    <p className="text-danger mb-0"><strong>{leaveBalance("SICK", leaveSettings.sick_leave_days)}</strong> / {leaveSettings.sick_leave_days} days left</p>
+                    <small className="text-secondary d-block mt-1">Medical illness or treatment</small>
                   </div>
                   <IconHeart size={24} className="text-danger" />
                 </div>
               </Col>
-              <Col md={4}>
+              <Col xs={12} sm={6} lg={3}>
                 <div className="d-flex align-items-center justify-content-between p-3 bg-info-subtle rounded-3">
                   <div>
                     <p className="text-info small fw-semibold mb-1">Casual Leave</p>
-                    <p className="text-info mb-0"><strong>{leaveSettings.casual_leave_days - usedCasual}</strong> / {leaveSettings.casual_leave_days} days left</p>
+                    <p className="text-info mb-0"><strong>{leaveBalance("CASUAL", leaveSettings.casual_leave_days)}</strong> / {leaveSettings.casual_leave_days} days left</p>
+                    <small className="text-secondary d-block mt-1">Urgent personal work</small>
                   </div>
                   <IconUser size={24} className="text-info" />
                 </div>
               </Col>
-              <Col md={4}>
-                <div className="d-flex align-items-center justify-content-between p-3 bg-success-subtle rounded-3">
-                  <div>
-                    <p className="text-success small fw-semibold mb-1">Monthly Paid Leave</p>
-                    <p className="text-success mb-0"><strong>{leaveSettings.monthly_paid_leave_days}</strong> days</p>
+              {([
+                ["BEREAVEMENT", "Bereavement Leave", leaveSettings.bereavement_leave_days, "secondary"],
+                ["MARRIAGE", "Marriage Leave", leaveSettings.marriage_leave_days, "warning"],
+              ] as Array<[string, string, number, string]>).map(([type, label, allowance, color]) => (
+                <Col xs={12} sm={6} lg={3} key={type}>
+                  <div className={`d-flex align-items-center justify-content-between p-3 bg-${color}-subtle rounded-3`}>
+                    <div>
+                      <p className={`text-${color} small fw-semibold mb-1`}>{label}</p>
+                      <p className={`text-${color} mb-0`}><strong>{leaveBalance(type, Number(allowance))}</strong> / {allowance} days left</p>
+                      <small className="text-secondary d-block mt-1">
+                        {type === "MARRIAGE" ? "Own or sibling's marriage" : "Immediate family bereavement"}
+                      </small>
+                    </div>
+                    <IconCalendarEvent size={24} className={`text-${color}`} />
                   </div>
-                  <IconBook size={24} className="text-success" />
-                </div>
+                </Col>
+              ))}
+              <Col xs={12} className="pt-2">
+                <h6 className="text-uppercase text-secondary small fw-bold mb-0">Parental Leave</h6>
               </Col>
-              <Col md={4}>
-                <div className="d-flex align-items-center justify-content-between p-3 bg-warning-subtle rounded-3">
-                  <div>
-                    <p className="text-warning small fw-semibold mb-1">Carry Forward Leave</p>
-                    <p className="text-warning mb-0"><strong>{leaveSettings.carry_forward_leave_days}</strong> days</p>
+              {([
+                ["MATERNITY", "Maternity Leave", leaveSettings.maternity_leave_days, "success"],
+                ["PATERNITY", "Paternity Leave", leaveSettings.paternity_leave_days, "primary"],
+              ] as Array<[string, string, number, string]>).map(([type, label, allowance, color]) => (
+                <Col md={4} key={type}>
+                  <div className={`d-flex align-items-center justify-content-between p-3 bg-${color}-subtle rounded-3`}>
+                    <div>
+                      <p className={`text-${color} small fw-semibold mb-1`}>{label}</p>
+                      <p className={`text-${color} mb-0`}><strong>{leaveBalance(type, allowance)}</strong> / {allowance} days left</p>
+                      <small className="text-secondary d-block mt-1">
+                        {type === "MATERNITY" ? "For eligible new mothers" : "For eligible new fathers"}
+                      </small>
+                    </div>
+                    <IconCalendarEvent size={24} className={`text-${color}`} />
                   </div>
-                  <IconClock size={24} className="text-warning" />
-                </div>
-              </Col>
+                </Col>
+              ))}
             </Row>
           </Card.Body>
         </Card>
@@ -479,7 +501,7 @@ const EmployeeLeavesClient = () => {
                 </thead>
                 <tbody>
                   {leaves.map((leave) => {
-                    const durationDays = calculateDays(leave.start_date, leave.end_date);
+                    const durationDays = leave.is_half_day ? 0.5 : calculateDays(leave.start_date, leave.end_date);
                     const startStr = new Date(leave.start_date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
                     const endStr = new Date(leave.end_date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
                     
@@ -495,7 +517,8 @@ const EmployeeLeavesClient = () => {
                           {durationDays} {durationDays === 1 ? "day" : "days"}
                         </td>
                         <td className="py-3.5 text-secondary small text-truncate" style={{ maxWidth: "220px" }} title={leave.reason}>
-                          {leave.reason}
+                          <div>{leave.reason}</div>
+                          {leave.attachment && <a href={leave.attachment} target="_blank" rel="noreferrer" className="small">View attachment</a>}
                         </td>
                         <td className="py-3.5">
                           {getStatusBadge(leave.status)}
@@ -550,7 +573,11 @@ const EmployeeLeavesClient = () => {
                   <Form.Label className="small fw-semibold text-secondary mb-1">Leave Type *</Form.Label>
                   <Form.Select
                     value={leaveType}
-                    onChange={(e) => setLeaveType(e.target.value)}
+                    onChange={(e) => {
+                      const nextType = e.target.value;
+                      setLeaveType(nextType);
+                      if (isHalfDay && !["CASUAL", "SICK"].includes(nextType)) setIsHalfDay(false);
+                    }}
                     className="form-control rounded-3 p-2.5"
                   >
                     {leaveTypes.map((type) => (
@@ -559,7 +586,19 @@ const EmployeeLeavesClient = () => {
                       </option>
                     ))}
                     </Form.Select>
-
+                  {["CASUAL", "SICK"].includes(leaveType) && (
+                    <Form.Check
+                      className="mt-3"
+                      type="switch"
+                      id="half-day-leave"
+                      label="Apply as half-day leave (0.5 day)"
+                      checked={isHalfDay}
+                      onChange={(e) => {
+                        setIsHalfDay(e.target.checked);
+                        if (e.target.checked && startDate) setEndDate(startDate);
+                      }}
+                    />
+                  )}
                 </Form.Group>
               </Col>
               <Col xs={12} md={6}>
@@ -567,7 +606,7 @@ const EmployeeLeavesClient = () => {
                   <div className="p-3 bg-light rounded-3 text-center border h-100 d-flex flex-column justify-content-center">
                     <span className="small text-secondary fw-semibold">Calculated Leave Duration:</span>
                     <h4 className="fw-bold text-primary mb-0 mt-1">
-                      {calculateDays(startDate, endDate)} {calculateDays(startDate, endDate) === 1 ? "Day" : "Days"}
+                      {isHalfDay ? "0.5 Day" : `${calculateDays(startDate, endDate)} ${calculateDays(startDate, endDate) === 1 ? "Day" : "Days"}`}
                     </h4>
                     {isPreviewLoading ? <small className="text-secondary mt-2">Calculating paid leave impact…</small> : leavePreview && <div className="leave-impact-preview mt-2 pt-2 border-top text-start"><div className="d-flex justify-content-between small"><span>Paid leave available</span><strong className="text-success">{leavePreview.paid_leave_available} days</strong></div><div className="d-flex justify-content-between small mt-1"><span>Paid leave used</span><strong>{leavePreview.paid_leave_used} days</strong></div><div className="d-flex justify-content-between small mt-1"><span>Unpaid leave</span><strong className={leavePreview.unpaid_leave_days ? "text-danger" : "text-success"}>{leavePreview.unpaid_leave_days} days</strong></div><div className="d-flex justify-content-between small mt-1"><span>Estimated salary deduction</span><strong className={leavePreview.unpaid_leave_days ? "text-danger" : "text-success"}>₹{Number(leavePreview.estimated_salary_deduction).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></div><small className="d-block text-secondary mt-2">{leavePreview.note}</small></div>}
                   </div>
@@ -583,7 +622,10 @@ const EmployeeLeavesClient = () => {
                     type="date"
                     required
                     value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
+                    onChange={(e) => {
+                      setStartDate(e.target.value);
+                      if (isHalfDay) setEndDate(e.target.value);
+                    }}
                     className="form-control rounded-3 p-2.5"
                   />
                 </Form.Group>
@@ -594,8 +636,9 @@ const EmployeeLeavesClient = () => {
                   <Form.Control
                     type="date"
                     required
-                    value={endDate}
+                    value={isHalfDay && startDate ? startDate : endDate}
                     onChange={(e) => setEndDate(e.target.value)}
+                    disabled={isHalfDay}
                     className="form-control rounded-3 p-2.5"
                   />
                 </Form.Group>
@@ -613,6 +656,17 @@ const EmployeeLeavesClient = () => {
                 onChange={(e) => setReason(e.target.value)}
                 className="form-control rounded-3 p-3"
               />
+            </Form.Group>
+            <Form.Group controlId="attachment" className="mt-3">
+              <Form.Label className="small fw-semibold text-secondary mb-1">Supporting Attachment</Form.Label>
+              <Form.Control
+                type="file"
+                accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx"
+                onChange={(e) => setAttachment(e.target.files?.[0] || null)}
+                className="form-control rounded-3 p-2.5"
+              />
+              <Form.Text>Optional: PDF, image, or Word document up to 5 MB.</Form.Text>
+              {editingLeave?.attachment && !attachment && <div className="small mt-2"><a href={editingLeave.attachment} target="_blank" rel="noreferrer">View current attachment</a></div>}
             </Form.Group>
           </Modal.Body>
           <Modal.Footer className="border-0 px-4 pb-4 pt-2">

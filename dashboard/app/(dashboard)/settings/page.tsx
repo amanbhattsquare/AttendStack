@@ -44,7 +44,6 @@ interface AttendanceSettings {
   shiftStartTime: string;
   lateCutoffTime: string;
   shiftEndTime: string;
-  halfDayThreshold: number;
   autoCheckoutEnabled: boolean;
   autoCheckoutTime: string;
   ipRestrictionEnabled: boolean;
@@ -179,7 +178,6 @@ const SettingsPage = () => {
                     shiftStartTime: data.shift_start_time,
                     lateCutoffTime: data.late_cutoff_time,
                     shiftEndTime: data.shift_end_time,
-                    halfDayThreshold: data.half_day_threshold,
                     autoCheckoutEnabled: data.auto_checkout_enabled,
                     autoCheckoutTime: data.auto_checkout_time,
                     ipRestrictionEnabled: data.ip_restriction_enabled,
@@ -194,17 +192,12 @@ const SettingsPage = () => {
             setLeaveSettings({
               sundayUnpaidRuleEnabled: data.sunday_unpaid_rule_enabled,
               burgerRuleEnabled: data.burger_rule_enabled,
-              monthlyPaidLeaveDays: data.monthly_paid_leave_days ?? 1,
-              annualPaidLeaveDays: data.annual_paid_leave_days,
               sickLeaveDays: data.sick_leave_days,
               casualLeaveDays: data.casual_leave_days,
               maternityLeaveDays: data.maternity_leave_days,
               paternityLeaveDays: data.paternity_leave_days,
               bereavementLeaveDays: data.bereavement_leave_days || 5,
               marriageLeaveDays: data.marriage_leave_days || 10,
-              studyLeaveDays: data.study_leave_days || 0,
-              leaveCarryoverEnabled: data.leave_carryover_enabled !== undefined ? data.leave_carryover_enabled : true,
-              maxCarryoverDays: data.max_carryover_days || 5,
               leaveEncashmentEnabled: data.leave_encashment_enabled !== undefined ? data.leave_encashment_enabled : true,
               maxEncashmentDays: data.max_encashment_days || 10,
               clubbingEnabled: data.clubbing_enabled !== undefined ? data.clubbing_enabled : true,
@@ -286,19 +279,14 @@ const SettingsPage = () => {
   // Leave settings state - comprehensive for corporate startup
   const [leaveSettings, setLeaveSettings] = useState({
     // Core leave balances
-    monthlyPaidLeaveDays: 1,
-    annualPaidLeaveDays: 21,
     sickLeaveDays: 12,
     casualLeaveDays: 6,
     maternityLeaveDays: 180,
     paternityLeaveDays: 14,
     bereavementLeaveDays: 5,
     marriageLeaveDays: 10,
-    studyLeaveDays: 0,
     
     // Leave policies
-    leaveCarryoverEnabled: true,
-    maxCarryoverDays: 5,
     leaveEncashmentEnabled: true,
     maxEncashmentDays: 10,
     sundayUnpaidRuleEnabled: false,
@@ -322,7 +310,6 @@ const SettingsPage = () => {
           shiftStartTime: "10:00",
           lateCutoffTime: "10:15",
           shiftEndTime: "18:00",
-          halfDayThreshold: 4,
           autoCheckoutEnabled: true,
           autoCheckoutTime: "20:00",
           ipRestrictionEnabled: false,
@@ -513,7 +500,6 @@ const SettingsPage = () => {
         shift_start_time: attendanceSettings.shiftStartTime,
         late_cutoff_time: attendanceSettings.lateCutoffTime,
         shift_end_time: attendanceSettings.shiftEndTime,
-        half_day_threshold: attendanceSettings.halfDayThreshold,
         auto_checkout_enabled: attendanceSettings.autoCheckoutEnabled,
         auto_checkout_time: attendanceSettings.autoCheckoutTime,
         ip_restriction_enabled: attendanceSettings.ipRestrictionEnabled,
@@ -526,17 +512,12 @@ const SettingsPage = () => {
         // Full leave settings (comprehensive for startup)
         sunday_unpaid_rule_enabled: leaveSettings.sundayUnpaidRuleEnabled,
         burger_rule_enabled: leaveSettings.burgerRuleEnabled,
-        monthly_paid_leave_days: leaveSettings.monthlyPaidLeaveDays,
-        annual_paid_leave_days: leaveSettings.annualPaidLeaveDays,
         sick_leave_days: leaveSettings.sickLeaveDays,
         casual_leave_days: leaveSettings.casualLeaveDays,
         maternity_leave_days: leaveSettings.maternityLeaveDays,
         paternity_leave_days: leaveSettings.paternityLeaveDays,
         bereavement_leave_days: leaveSettings.bereavementLeaveDays,
         marriage_leave_days: leaveSettings.marriageLeaveDays,
-        study_leave_days: leaveSettings.studyLeaveDays,
-        leave_carryover_enabled: leaveSettings.leaveCarryoverEnabled,
-        max_carryover_days: leaveSettings.maxCarryoverDays,
         leave_encashment_enabled: leaveSettings.leaveEncashmentEnabled,
         max_encashment_days: leaveSettings.maxEncashmentDays,
         clubbing_enabled: leaveSettings.clubbingEnabled,
@@ -610,7 +591,6 @@ const SettingsPage = () => {
         shiftStartTime: "10:00",
         lateCutoffTime: "10:15",
         shiftEndTime: "18:00",
-        halfDayThreshold: 4,
         autoCheckoutEnabled: true,
         autoCheckoutTime: "20:00",
         ipRestrictionEnabled: false,
@@ -623,10 +603,14 @@ const SettingsPage = () => {
     }
   };
 
-  const totalLeaveDays = 
-    (leaveSettings.annualPaidLeaveDays || 0) +
+  const regularLeaveDays =
     (leaveSettings.sickLeaveDays || 0) +
-    (leaveSettings.casualLeaveDays || 0);
+    (leaveSettings.casualLeaveDays || 0) +
+    (leaveSettings.bereavementLeaveDays || 0) +
+    (leaveSettings.marriageLeaveDays || 0);
+  const parentalLeaveDays =
+    (leaveSettings.maternityLeaveDays || 0) +
+    (leaveSettings.paternityLeaveDays || 0);
 
   if (isLoading) {
     return (
@@ -707,17 +691,6 @@ const SettingsPage = () => {
                                     onChange={(e) => setAttendanceSettings({ ...attendanceSettings, shiftEndTime: e.target.value })}
                                   />
                                   <Form.Text>Official time when work ends.</Form.Text>
-                                </Form.Group>
-                              </Col>
-                              <Col md={6}>
-                                <Form.Group>
-                                  <Form.Label className="fw-semibold">Half-Day Threshold (Hours)</Form.Label>
-                                  <Form.Control
-                                    type="number"
-                                    value={attendanceSettings.halfDayThreshold}
-                                    onChange={(e) => setAttendanceSettings({ ...attendanceSettings, halfDayThreshold: parseInt(e.target.value) || 0 })}
-                                  />
-                                  <Form.Text>Minimum hours for a half-day.</Form.Text>
                                 </Form.Group>
                               </Col>
                               <Col xs={12}>
@@ -966,24 +939,16 @@ const SettingsPage = () => {
                       <Col md={4}>
                         <Card className="border-0 bg-primary bg-opacity-10">
                           <Card.Body className="text-center">
-                            <h3 className="fw-bold text-primary mb-0">{totalLeaveDays}</h3>
-                            <p className="text-muted small mb-0">Total Leave Days</p>
+                            <h3 className="fw-bold text-primary mb-0">{regularLeaveDays}</h3>
+                            <p className="text-muted small mb-0">Regular Leave Days</p>
                           </Card.Body>
                         </Card>
                       </Col>
                       <Col md={4}>
                         <Card className="border-0 bg-info bg-opacity-10">
                           <Card.Body className="text-center">
-                            <h3 className="fw-bold text-info mb-0">{leaveSettings.maxConsecutiveDays}</h3>
-                            <p className="text-muted small mb-0">Max Consecutive Leave</p>
-                          </Card.Body>
-                        </Card>
-                      </Col>
-                      <Col md={4}>
-                        <Card className="border-0 bg-warning bg-opacity-10">
-                          <Card.Body className="text-center">
-                            <h3 className="fw-bold text-warning mb-0">{leaveSettings.maxCarryoverDays}</h3>
-                            <p className="text-muted small mb-0">Max Carry Forward Paid Leaves</p>
+                            <h3 className="fw-bold text-info mb-0">{parentalLeaveDays}</h3>
+                            <p className="text-muted small mb-0">Parental Leave Days</p>
                           </Card.Body>
                         </Card>
                       </Col>
@@ -999,32 +964,8 @@ const SettingsPage = () => {
                               <IconBriefcase size={20} />
                               Core Leave Balances
                             </h5>
-                            <p className="text-muted small mb-4">Standard leave allocations for all full-time employees .</p>
+                            <p className="text-muted small mb-4">Set the annual paid balance for each supported leave category.</p>
                             <Row className="g-3">
-                              <Col md={6}>
-                                <Form.Group>
-                                  <Form.Label className="fw-semibold">Monthly Paid Leave</Form.Label>
-                                  <Form.Control
-                                    type="number"
-                                    min={0}
-                                    max={31}
-                                    value={leaveSettings.monthlyPaidLeaveDays}
-                                    onChange={(e) => setLeaveSettings({ ...leaveSettings, monthlyPaidLeaveDays: parseInt(e.target.value) || 0 })}
-                                  />
-                                  <Form.Text>Paid leave days allowed per employee each month</Form.Text>
-                                </Form.Group>
-                              </Col>
-                              <Col md={6}>
-                                <Form.Group>
-                                  <Form.Label className="fw-semibold">Annual Paid Leave</Form.Label>
-                                  <Form.Control
-                                    type="number"
-                                    value={leaveSettings.annualPaidLeaveDays}
-                                    onChange={(e) => setLeaveSettings({ ...leaveSettings, annualPaidLeaveDays: parseInt(e.target.value) })}
-                                  />
-                                  <Form.Text>Vacation/Personal leave days/year</Form.Text>
-                                </Form.Group>
-                              </Col>
                               <Col md={6}>
                                 <Form.Group>
                                   <Form.Label className="fw-semibold">Sick Leave</Form.Label>
@@ -1049,17 +990,6 @@ const SettingsPage = () => {
                               </Col>
                               <Col md={6}>
                                 <Form.Group>
-                                  <Form.Label className="fw-semibold">Study Leave</Form.Label>
-                                  <Form.Control
-                                    type="number"
-                                    value={leaveSettings.studyLeaveDays}
-                                    onChange={(e) => setLeaveSettings({ ...leaveSettings, studyLeaveDays: parseInt(e.target.value) })}
-                                  />
-                                  <Form.Text>Professional development</Form.Text>
-                                </Form.Group>
-                              </Col>
-                              <Col md={6}>
-                                <Form.Group>
                                   <Form.Label className="fw-semibold">Bereavement Leave</Form.Label>
                                   <Form.Control
                                     type="number"
@@ -1077,7 +1007,7 @@ const SettingsPage = () => {
                                     value={leaveSettings.marriageLeaveDays}
                                     onChange={(e) => setLeaveSettings({ ...leaveSettings, marriageLeaveDays: parseInt(e.target.value) })}
                                   />
-                                  <Form.Text>Wedding celebrations</Form.Text>
+                                  <Form.Text>For the employee&apos;s own marriage or a real brother&apos;s or sister&apos;s marriage.</Form.Text>
                                 </Form.Group>
                               </Col>
                             </Row>
@@ -1132,39 +1062,6 @@ const SettingsPage = () => {
                             <p className="text-muted small mb-4">Rules that govern how leaves can be used</p>
                             
                             <div className="d-flex flex-column gap-3">
-                              <Form.Group>
-                                <div className="d-flex justify-content-between align-items-center">
-                                  <div>
-                                    <Form.Label className="fw-semibold mb-0">Allow Carry Forward Paid Leaves</Form.Label>
-                                    <Form.Text className="small mb-0">
-                                      Unused monthly paid leaves are added to later months in the same year.
-                                    </Form.Text>
-                                  </div>
-                                  <Form.Check
-                                    type="switch"
-                                    id="allow-carry-forward-paid-leaves"
-                                    checked={leaveSettings.leaveCarryoverEnabled}
-                                    onChange={(e) => setLeaveSettings({ ...leaveSettings, leaveCarryoverEnabled: e.target.checked })}
-                                  />
-                                </div>
-                              </Form.Group>
-
-                              {leaveSettings.leaveCarryoverEnabled && (
-                                <Form.Group>
-                                  <Form.Label className="fw-semibold">Max Carry Forward Paid Leaves</Form.Label>
-                                  <Form.Control
-                                    type="number"
-                                    min={0}
-                                    max={365}
-                                    value={leaveSettings.maxCarryoverDays}
-                                    onChange={(e) => setLeaveSettings({ ...leaveSettings, maxCarryoverDays: parseInt(e.target.value) || 0 })}
-                                  />
-                                  <Form.Text>Maximum unused paid leaves that can be carried forward.</Form.Text>
-                                </Form.Group>
-                              )}
-
-                              <hr className="my-2" />
-
                               <Form.Group>
                                 <div className="d-flex justify-content-between align-items-center">
                                   <div>

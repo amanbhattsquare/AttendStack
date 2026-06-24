@@ -9,6 +9,7 @@ interface LeaveApplication {
   id: number;
   employee_name: string;
   leave_type: string;
+  is_half_day: boolean;
   start_date: string;
   end_date: string;
   reason: string;
@@ -20,6 +21,7 @@ interface LeaveApplication {
   id: number;
   employee_name: string;
   leave_type: string;
+  is_half_day: boolean;
   start_date: string;
   end_date: string;
   reason: string;
@@ -276,7 +278,7 @@ const LeaveRequestsPage = () => {
                       <td className="px-4 fw-medium">{app.employee_name}</td>
                       <td><Badge bg="secondary-subtle" className="text-secondary-emphasis">{app.leave_type}</Badge></td>
                       <td>{`${app.start_date} to ${app.end_date}`}</td>
-                      <td>{calculateDays(app.start_date, app.end_date)} days</td>
+                      <td>{app.is_half_day ? 0.5 : calculateDays(app.start_date, app.end_date)} days</td>
                       <td className="text-muted small" style={{maxWidth: '200px'}}>{app.reason?.substring(0, 50)}...</td>
                       <td>{getStatusBadge(app.status)}</td>
                       <td className="px-4 text-end">

@@ -51,7 +51,7 @@ def calculate_attendance_payroll(employee, month: int, year: int, allowances=0, 
     }
     unpaid_days = Decimal("0")
 
-    records = AttendanceRecord.objects.filter(
+    records = AttendanceRecord.objects.select_related("leave_request").filter(
         employee=employee,
         date__year=year,
         date__month=month,
@@ -74,10 +74,19 @@ def calculate_attendance_payroll(employee, month: int, year: int, allowances=0, 
             deduction_details["Absent Day"] = deduction_details.get("Absent Day", Decimal("0")) + per_day_salary
         elif record.status == AttendanceStatus.HALF_DAY:
             summary["half_day"] += 1
-            unpaid_days += Decimal("0.5")
-            half_day_deduction = per_day_salary / 2
-            attendance_deductions += half_day_deduction
-            deduction_details["Half Day"] = deduction_details.get("Half Day", Decimal("0")) + half_day_deduction
+            # Only an approved half-day leave that was covered by a Casual/Sick
+            # balance is paid. A manual or early-checkout half day is unpaid.
+            paid_half_day_leave = (
+                record.is_paid
+                and record.leave_request_id
+                and record.leave_request.status == "APPROVED"
+                and record.leave_request.is_half_day
+            )
+            if not paid_half_day_leave:
+                unpaid_days += Decimal("0.5")
+                half_day_deduction = per_day_salary / 2
+                attendance_deductions += half_day_deduction
+                deduction_details["Half Day"] = deduction_details.get("Half Day", Decimal("0")) + half_day_deduction
         elif record.status == AttendanceStatus.LEAVE:
             summary["leave"] += 1
             unpaid_days += Decimal("1")

@@ -1,10 +1,9 @@
 import ipaddress
-import calendar
 from datetime import date, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 
 from django.db import transaction
-from django.db.models import Count, F, Q
+from django.db.models import F, Q
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.pagination import PageNumberPagination
@@ -22,7 +21,7 @@ from settings.models import SystemSettings
 from .models import AttendanceRecord, AttendanceStatus, LeaveRequest, LeaveStatus, LeaveType
 from .permissions import IsAdminOrReadOnly
 from .serializers import AttendanceRecordSerializer, TodayAttendanceSerializer, LeaveRequestSerializer
-from .services import auto_mark_calendar_days, sync_leave_request_attendance
+from .services import auto_mark_calendar_days, leave_allocation, leave_units, sync_leave_request_attendance
 
 
 def get_ip_address(request):
@@ -535,45 +534,57 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         if leave_type not in LeaveType.values:
             raise ValidationError({"leave_type": "Choose a valid leave type."})
 
+        is_half_day = request.query_params.get("is_half_day", "false").lower() in {"1", "true", "yes"}
+        if is_half_day and start_date != end_date:
+            raise ValidationError({"end_date": "A half-day leave must start and end on the same date."})
+        if is_half_day and leave_type not in {LeaveType.CASUAL, LeaveType.SICK}:
+            raise ValidationError({"leave_type": "Half-day leave is available only for Casual or Sick leave."})
+
         employee = self._current_employee()
         settings = SystemSettings.get_settings()
-        monthly_quota = max(settings.monthly_paid_leave_days or 0, 0)
+        annual_allowance = leave_allocation(settings, leave_type)
         selected_dates = []
         current = start_date
         while current <= end_date:
             selected_dates.append(current)
             current += timedelta(days=1)
 
-        used_by_month = {
-            (row["date__year"], row["date__month"]): row["total"]
-            for row in AttendanceRecord.objects.filter(
-                employee=employee,
-                leave_request__status=LeaveStatus.APPROVED,
-            ).exclude(leave_request__leave_type=LeaveType.OTHER).values("date__year", "date__month").annotate(total=Count("id"))
-        }
-        paid_days = 0
-        unpaid_days = 0
+        used_by_year: dict[int, Decimal] = {}
+        for record in AttendanceRecord.objects.select_related("leave_request").filter(
+            employee=employee,
+            leave_request__status=LeaveStatus.APPROVED,
+            leave_request__leave_type=leave_type,
+            is_paid=True,
+        ):
+            used_by_year[record.date.year] = used_by_year.get(record.date.year, Decimal("0")) + leave_units(record.leave_request)
+
+        units_per_day = Decimal("0.5") if is_half_day else Decimal("1")
+        paid_days = Decimal("0")
+        unpaid_days = Decimal("0")
         deduction = Decimal("0")
-        available_before = 0
+        selected_years = {leave_date.year for leave_date in selected_dates}
+        available_before = sum(
+            max(annual_allowance - used_by_year.get(year, Decimal("0")), Decimal("0"))
+            for year in selected_years
+        )
         for leave_date in selected_dates:
-            month_key = (leave_date.year, leave_date.month)
-            used = used_by_month.get(month_key, 0)
-            available_before += max(monthly_quota - used, 0) if leave_date == min(day for day in selected_dates if (day.year, day.month) == month_key) else 0
-            if leave_type != LeaveType.OTHER and used < monthly_quota:
-                paid_days += 1
+            used = used_by_year.get(leave_date.year, Decimal("0"))
+            if used + units_per_day <= annual_allowance:
+                paid_days += units_per_day
+                used_by_year[leave_date.year] = used + units_per_day
             else:
-                unpaid_days += 1
+                unpaid_days += units_per_day
                 monthly_salary = Decimal(str(employee.annual_salary or 0)) / Decimal("12")
-                deduction += monthly_salary / Decimal(str(calendar.monthrange(leave_date.year, leave_date.month)[1]))
-            used_by_month[month_key] = used + (0 if leave_type == LeaveType.OTHER else 1)
+                days_in_month = (leave_date.replace(day=28) + timedelta(days=4)).replace(day=1) - leave_date.replace(day=1)
+                deduction += (monthly_salary / Decimal(str(days_in_month.days))) * units_per_day
         return Response({
-            "total_days": len(selected_dates),
-            "paid_leave_available": available_before,
-            "paid_leave_used": paid_days,
-            "unpaid_leave_days": unpaid_days,
+            "total_days": float(Decimal(len(selected_dates)) * units_per_day),
+            "paid_leave_available": float(available_before),
+            "paid_leave_used": float(paid_days),
+            "unpaid_leave_days": float(unpaid_days),
             "estimated_salary_deduction": str(deduction.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)),
             "currency": "INR",
-            "note": "Estimate only. Paid leave is deducted and payroll is finalized after approval.",
+            "note": "Estimate only. The approved leave is paid from its configured leave-type balance; any excess is unpaid.",
         })
 
     def get_queryset(self):
@@ -600,6 +611,23 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
                 {"detail": "A pending or approved leave request already exists for this date range."}
             )
 
+    def _validate_half_day_approval(self, serializer):
+        """A half-day request can be approved only after the employee checks out."""
+        instance = serializer.instance
+        target_status = serializer.validated_data.get("status", instance.status if instance else LeaveStatus.PENDING)
+        is_half_day = serializer.validated_data.get("is_half_day", instance.is_half_day if instance else False)
+        leave_date = serializer.validated_data.get("start_date", instance.start_date if instance else None)
+
+        if target_status != LeaveStatus.APPROVED or not is_half_day or not leave_date:
+            return
+
+        employee = serializer.validated_data.get("employee", instance.employee if instance else None)
+        record = AttendanceRecord.objects.filter(employee=employee, date=leave_date).first()
+        if record is None or not record.check_out:
+            raise ValidationError({
+                "detail": "A half-day leave can be approved only after the employee has checked out."
+            })
+
     def perform_create(self, serializer):
         user = self.request.user
         if not self._is_admin_or_hr(user):
@@ -611,6 +639,7 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
             )
             leave_request = serializer.save(employee=employee, status=LeaveStatus.PENDING, admin_notes=None)
         else:
+            self._validate_half_day_approval(serializer)
             leave_request = serializer.save()
 
         sync_leave_request_attendance(leave_request)
@@ -630,6 +659,7 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
             if leave_request.employee_id != employee.id:
                 raise PermissionDenied("You can only edit your own leave requests.")
         else:
+            self._validate_half_day_approval(serializer)
             leave_request = serializer.save()
 
         sync_leave_request_attendance(leave_request)

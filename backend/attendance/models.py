@@ -145,10 +145,21 @@ class AttendanceRecord(models.Model):
         # Set status to LATE if check-in is after cutoff, else PRESENT
         self.status = AttendanceStatus.LATE if local_check_in > late_cutoff else AttendanceStatus.PRESENT
 
+        approved_half_day_leave = (
+            self.leave_request_id
+            and self.leave_request.status == LeaveStatus.APPROVED
+            and self.leave_request.is_half_day
+        )
+
+        # A verified half-day Casual/Sick request is always a half-day record.
+        # Its is_paid value is assigned by the leave-balance service.
+        if approved_half_day_leave:
+            self.status = AttendanceStatus.HALF_DAY
+
         # An early checkout is a half day, except during the final two hours of
-        # the scheduled shift.  For example, with an 18:00 shift end, a checkout
+        # the scheduled shift. For example, with an 18:00 shift end, a checkout
         # at 16:00 or later remains Present/Late, while one before 16:00 is Half Day.
-        if self.check_out:
+        elif self.check_out:
             local_check_out = timezone.localtime(self.check_out)
             scheduled_shift_end = local_check_in.replace(
                 hour=settings.shift_end_time.hour,
@@ -160,6 +171,7 @@ class AttendanceRecord(models.Model):
 
             if local_check_out < full_day_checkout_cutoff:
                 self.status = AttendanceStatus.HALF_DAY
+                self.is_paid = False
           
         # Apply Sunday Unpaid Rule if enabled
         if settings.sunday_unpaid_rule_enabled:
@@ -200,13 +212,10 @@ class AttendanceRecord(models.Model):
 class LeaveType(models.TextChoices):
     CASUAL = "CASUAL", "Casual Leave"
     SICK   = "SICK",   "Sick Leave"
-    ANNUAL = "ANNUAL", "Annual Leave"
-    STUDY = "STUDY", "Study Leave"
     MATERNITY = "MATERNITY", "Maternity Leave"
     PATERNITY = "PATERNITY", "Paternity Leave"
     BEREAVEMENT = "BEREAVEMENT", "Bereavement Leave"
     MARRIAGE = "MARRIAGE", "Marriage Leave"
-    OTHER  = "OTHER",  "Other"
 
 
 class LeaveStatus(models.TextChoices):
@@ -223,6 +232,16 @@ class LeaveRequest(models.Model):
     end_date   = models.DateField()
     leave_type = models.CharField(
         max_length=20, choices=LeaveType.choices, default=LeaveType.CASUAL
+    )
+    is_half_day = models.BooleanField(
+        default=False,
+        help_text="Whether this is a half-day Casual or Sick leave request.",
+    )
+    attachment = models.FileField(
+        upload_to="leave_attachments/%Y/%m/",
+        blank=True,
+        null=True,
+        help_text="Supporting document supplied with the leave request.",
     )
     reason     = models.TextField()
     status     = models.CharField(

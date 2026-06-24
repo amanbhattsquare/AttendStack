@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { Card, Button, Table, Badge, Modal, Form, Row, Col, Alert, Spinner, InputGroup, Dropdown } from "react-bootstrap";
-import { IconSearch, IconCalendarEvent, IconMessage, IconInfoCircle, IconClock, IconCircleCheck, IconCircleX, IconDotsVertical, IconEye, IconSettings, IconTrash } from "@tabler/icons-react";
+import { IconSearch, IconCalendarEvent, IconMessage, IconInfoCircle, IconClock, IconCircleCheck, IconCircleX, IconDotsVertical, IconEye, IconSettings, IconTrash, IconPaperclip, IconDownload } from "@tabler/icons-react";
 import { Avatar } from "components/common/Avatar";
 import { getAssetPath } from "helper/assetPath";
 
@@ -18,7 +18,9 @@ interface LeaveRequest {
   start_date: string;
   end_date: string;
   leave_type: string;
+  is_half_day: boolean;
   leave_type_label: string;
+  attachment: string | null;
   reason: string;
   status: string;
   status_label: string;
@@ -159,12 +161,18 @@ const AdminLeavesClient = () => {
     switch (type) {
       case "SICK":
         return <Badge bg="danger-subtle" className="text-danger-emphasis px-2 py-1 rounded">Sick Leave</Badge>;
-      case "ANNUAL":
-        return <Badge bg="primary-subtle" className="text-primary-emphasis px-2 py-1 rounded">Annual Leave</Badge>;
       case "CASUAL":
         return <Badge bg="info-subtle" className="text-info-emphasis px-2 py-1 rounded">Casual Leave</Badge>;
+      case "MATERNITY":
+        return <Badge bg="success-subtle" className="text-success-emphasis px-2 py-1 rounded">Maternity Leave</Badge>;
+      case "PATERNITY":
+        return <Badge bg="primary-subtle" className="text-primary-emphasis px-2 py-1 rounded">Paternity Leave</Badge>;
+      case "BEREAVEMENT":
+        return <Badge bg="secondary-subtle" className="text-secondary-emphasis px-2 py-1 rounded">Bereavement Leave</Badge>;
+      case "MARRIAGE":
+        return <Badge bg="warning-subtle" className="text-warning-emphasis px-2 py-1 rounded">Marriage Leave</Badge>;
       default:
-        return <Badge bg="secondary-subtle" className="text-secondary-emphasis px-2 py-1 rounded">Other</Badge>;
+        return <Badge bg="secondary-subtle" className="text-secondary-emphasis px-2 py-1 rounded">{type}</Badge>;
     }
   };
 
@@ -175,6 +183,13 @@ const AdminLeavesClient = () => {
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
     return diffDays;
   };
+
+  const attachmentName = (url: string) => {
+    const filename = url.split("?")[0].split("/").pop();
+    return filename ? decodeURIComponent(filename) : "Supporting attachment";
+  };
+
+  const isImageAttachment = (url: string) => /\.(jpe?g|png|webp)$/i.test(url.split("?")[0]);
 
   // Metrics
   const totalRequested = leaves.length;
@@ -334,7 +349,7 @@ const AdminLeavesClient = () => {
                 </thead>
                 <tbody>
                   {filteredLeaves.map((leave) => {
-                    const durationDays = calculateDays(leave.start_date, leave.end_date);
+                    const durationDays = leave.is_half_day ? 0.5 : calculateDays(leave.start_date, leave.end_date);
                     const startStr = new Date(leave.start_date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
                     const endStr = new Date(leave.end_date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
                     
@@ -456,7 +471,7 @@ const AdminLeavesClient = () => {
                   <div className="p-3 bg-light rounded-3 text-center border h-100 d-flex flex-column justify-content-center">
                     <span className="small text-secondary fw-semibold">Calculated Days</span>
                     <h4 className="fw-bold text-primary mb-0 mt-1">
-                      {calculateDays(selectedLeave.start_date, selectedLeave.end_date)} Days
+                      {selectedLeave.is_half_day ? "0.5 Day" : `${calculateDays(selectedLeave.start_date, selectedLeave.end_date)} Days`}
                     </h4>
                   </div>
                 </Col>
@@ -467,6 +482,32 @@ const AdminLeavesClient = () => {
                 <div className="p-3 bg-light rounded-3 border text-dark-emphasis small" style={{ whiteSpace: "pre-line" }}>
                   {selectedLeave.reason}
                 </div>
+                {selectedLeave.attachment && (
+                  <div className="mt-3 border rounded-3 overflow-hidden bg-white">
+                    <div className="p-3 d-flex flex-column flex-sm-row align-items-sm-center gap-3">
+                      <div className="rounded-circle bg-primary-subtle text-primary d-flex align-items-center justify-content-center flex-shrink-0" style={{ width: 40, height: 40 }}>
+                        <IconPaperclip size={20} />
+                      </div>
+                      <div className="flex-grow-1 min-w-0">
+                        <div className="small fw-semibold text-dark">Supporting attachment</div>
+                        <div className="small text-secondary text-truncate" title={attachmentName(selectedLeave.attachment)}>{attachmentName(selectedLeave.attachment)}</div>
+                      </div>
+                      <div className="d-flex gap-2 flex-shrink-0">
+                        <Button as="a" href={selectedLeave.attachment} target="_blank" rel="noreferrer" variant="outline-primary" size="sm" className="d-inline-flex align-items-center gap-1">
+                          <IconEye size={15} /> Open
+                        </Button>
+                        <Button as="a" href={selectedLeave.attachment} download variant="primary" size="sm" className="d-inline-flex align-items-center gap-1">
+                          <IconDownload size={15} /> Download
+                        </Button>
+                      </div>
+                    </div>
+                    {isImageAttachment(selectedLeave.attachment) && (
+                      <div className="border-top bg-light p-3 text-center">
+                        <img src={selectedLeave.attachment} alt={`Attachment from ${selectedLeave.employee_name}`} className="img-fluid rounded-2 border" style={{ maxHeight: 300, objectFit: "contain" }} />
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {isEditing ? (

@@ -96,10 +96,10 @@ function EmployeeAssigneePicker({
               <span style={{ display: "grid", lineHeight: 1.25 }}><strong>{employee.full_name}</strong><small>{employee.employee_id} · {employee.department || "No department"}</small></span>
             </button>
           ))}
-          {!availableEmployees.length && <small className="text-secondary d-block p-2">All active employees are assigned.</small>}
+          {!availableEmployees.length && <small className="text-secondary d-block p-2">{employees.length ? "All active employees are assigned." : "No active employees are available."}</small>}
         </div>
       ) : null}
-      <Form.Text>Select a person to add them to this task.</Form.Text>
+      <Form.Text>{employees.length ? "Select a person to add them to this task." : "Add active employees before assigning this task."}</Form.Text>
     </Form.Group>
   );
 }

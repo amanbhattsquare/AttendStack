@@ -42,7 +42,7 @@ class WorkspaceAccessMixin:
             raise NotFound("No employee profile is linked to this login account.")
         return employee
 
-    def _organization_for_user(self):
+    def _organization_for_user(self, required=True):
         employee = self._current_employee(required=False)
         if employee and employee.organization_id:
             return employee.organization
@@ -53,6 +53,8 @@ class WorkspaceAccessMixin:
         organization = Organization.objects.filter(owner=self.request.user).first()
         if organization is not None:
             return organization
+        if not required:
+            return None
         raise PermissionDenied("Set up a company workspace before managing projects and tasks.")
 
     def _organization_for_project_creation(self):
@@ -69,7 +71,11 @@ class WorkspaceAccessMixin:
     def _validate_employee_scope(self, employee):
         if self.request.user.is_superuser:
             return
-        organization = self._organization_for_user()
+        organization = self._organization_for_user(required=False)
+        if organization is None:
+            if employee.organization_id is None:
+                return
+            raise PermissionDenied("Set up a company workspace before assigning employees from a company workspace.")
         if employee.organization_id != organization.id:
             raise PermissionDenied("You can only assign work within your organization.")
 
@@ -89,7 +95,11 @@ class WorkspaceAccessMixin:
             if has_project_access:
                 return
             raise PermissionDenied("You do not have access to this project.")
-        organization = self._organization_for_user()
+        organization = self._organization_for_user(required=False)
+        if organization is None:
+            if project.organization_id is None:
+                return
+            raise PermissionDenied("Set up a company workspace before managing projects and tasks.")
         if project.organization_id != organization.id:
             raise PermissionDenied("This project is outside your organization.")
 
@@ -112,7 +122,8 @@ class ProjectViewSet(WorkspaceAccessMixin, viewsets.ModelViewSet):
         )
         user = self.request.user
         if self._is_admin_or_hr(user) and not user.is_superuser:
-            queryset = queryset.filter(organization=self._organization_for_user())
+            organization = self._organization_for_user(required=False)
+            queryset = queryset.filter(organization=organization)
         elif not user.is_superuser:
             # Employees see projects that contain their assigned/created work, even
             # when a legacy employee profile has no organization relationship yet.
@@ -190,7 +201,7 @@ class TaskViewSet(WorkspaceAccessMixin, viewsets.ModelViewSet):
         user = self.request.user
         if self._is_admin_or_hr(user):
             if not user.is_superuser:
-                organization = self._organization_for_user()
+                organization = self._organization_for_user(required=False)
                 queryset = queryset.filter(
                     Q(project__organization=organization) |
                     Q(project__isnull=True, assignee__organization=organization)

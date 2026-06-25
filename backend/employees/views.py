@@ -55,8 +55,9 @@ class EmployeeViewSet(viewsets.ModelViewSet):
                 # an Employee profile of their own.
                 organization = Organization.objects.filter(owner=user).first()
             if organization is None:
-                return queryset.none()
-            queryset = queryset.filter(organization=organization)
+                queryset = queryset.filter(organization__isnull=True)
+            else:
+                queryset = queryset.filter(organization=organization)
 
         queryset = queryset.annotate(
             account_exists_annotation=Exists(User.objects.filter(email__iexact=OuterRef("email"), role=UserRole.EMPLOYEE)),

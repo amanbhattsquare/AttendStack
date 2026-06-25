@@ -220,7 +220,7 @@ const AdminDashboard = () => {
     : 0;
   const pendingLeaves = leaves.filter((leave) => leave.status === "PENDING").length;
   const pendingPayroll = payrolls.filter((payroll) => payroll.status === "PENDING").length;
-  const activeTasks = tasks.filter((task) => ["PENDING", "TODO", "IN_PROGRESS", "ON_HOLD"].includes(task.status)).length;
+  const activeTasks = tasks.filter((task) => task.status === "IN_PROGRESS").length;
   const overdueTasks = tasks.filter((task) => task.is_overdue).length;
   const dueSoonTasks = tasks.filter((task) => {
     const days = daysUntil(task.due_date);
@@ -233,7 +233,7 @@ const AdminDashboard = () => {
   const recentTasks = useMemo(() => {
     const priorityRank = { URGENT: 0, HIGH: 1, MEDIUM: 2, LOW: 3 } as const;
     return [...tasks]
-      .filter((task) => !["COMPLETED", "CLOSED", "CANCELLED"].includes(task.status))
+      .filter((task) => task.status === "IN_PROGRESS")
       .sort((a, b) => {
         const priorityDifference = priorityRank[a.priority] - priorityRank[b.priority];
         if (priorityDifference) return priorityDifference;

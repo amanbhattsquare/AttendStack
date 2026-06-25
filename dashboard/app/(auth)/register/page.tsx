@@ -2,13 +2,14 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import axios from "axios";
 import { Alert, Button, Card, Col, Container, Form, InputGroup, Row, Spinner } from "react-bootstrap";
-import { IconBuildingCommunity, IconCamera, IconEye, IconEyeOff, IconLock, IconUserCheck, IconX } from "@tabler/icons-react";
+import { IconBuildingCommunity, IconCamera, IconCircleCheck, IconEye, IconEyeOff, IconLock, IconUserCheck, IconX } from "@tabler/icons-react";
 
 const apiRoot = (process.env.NEXT_PUBLIC_API_ENDPOINT || "").replace(/\/$/, "");
 
-type FormData = {
+type EmployeeFormData = {
   organization_code: string;
   full_name: string;
   email: string;
@@ -27,7 +28,9 @@ type FormData = {
   confirm_password: string;
 };
 
-const initialForm: FormData = {
+type FieldErrors = Partial<Record<keyof EmployeeFormData, string>>;
+
+const initialForm: EmployeeFormData = {
   organization_code: "", full_name: "", email: "", phone: "", date_of_birth: "", aadhaar_number: "", address: "", bank_name: "", bank_account_number: "", ifsc_code: "", tax_id: "",
   emergency_contact_name: "", emergency_contact_relationship: "", emergency_contact_phone: "",
   password: "", confirm_password: "",
@@ -45,10 +48,12 @@ const errorMessage = (error: unknown) => {
 };
 
 export default function EmployeeRegistrationPage() {
+  const router = useRouter();
   const [form, setForm] = useState(initialForm);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [success, setSuccess] = useState(false);
   const [organizationName, setOrganizationName] = useState("");
   const [organizationCodeStatus, setOrganizationCodeStatus] = useState<"idle" | "checking" | "valid" | "invalid">("idle");
@@ -59,7 +64,16 @@ export default function EmployeeRegistrationPage() {
   const [panCardDocument, setPanCardDocument] = useState<File | null>(null);
   const [cvDocument, setCvDocument] = useState<File | null>(null);
 
-  const update = (key: keyof FormData, value: string) => setForm((current) => ({ ...current, [key]: value }));
+  const update = (key: keyof EmployeeFormData, value: string) => {
+    setForm((current) => ({ ...current, [key]: value }));
+    setFieldErrors((current) => ({ ...current, [key]: undefined }));
+  };
+
+  useEffect(() => {
+    if (!success) return;
+    const redirectTimer = window.setTimeout(() => router.replace("/sign-in"), 3000);
+    return () => window.clearTimeout(redirectTimer);
+  }, [success, router]);
 
   useEffect(() => () => {
     if (profilePhotoPreview) URL.revokeObjectURL(profilePhotoPreview);
@@ -122,8 +136,24 @@ export default function EmployeeRegistrationPage() {
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setError("");
+    const nextErrors: FieldErrors = {};
+    const email = form.email.trim();
+    const phone = form.phone.trim();
+
+    if (!form.organization_code.trim()) nextErrors.organization_code = "Organization code is required.";
+    else if (organizationCodeStatus !== "valid") nextErrors.organization_code = "Enter a valid active organization code.";
+    if (form.full_name.trim().split(/\s+/).filter(Boolean).length < 2) nextErrors.full_name = "Enter your first and last name.";
+    if (!/^\S+@\S+\.\S+$/.test(email)) nextErrors.email = "Enter a valid email address.";
+    if (!/^\+?[0-9]{10,15}$/.test(phone)) nextErrors.phone = "Enter a valid 10 to 15 digit phone number.";
+    if (form.password.length < 8) nextErrors.password = "Use at least 8 characters.";
+    if (form.confirm_password !== form.password) nextErrors.confirm_password = "Passwords do not match.";
+
+    if (Object.keys(nextErrors).length) {
+      setFieldErrors(nextErrors);
+      setError("Please correct the highlighted fields before creating your account.");
+      return;
+    }
     if (organizationCodeStatus !== "valid") {
-      setError("Enter a valid organization code before creating your account.");
       return;
     }
     setLoading(true);
@@ -140,6 +170,15 @@ export default function EmployeeRegistrationPage() {
       await axios.post(`${apiRoot}/api/v1/accounts/register-employee/`, payload);
       setSuccess(true);
     } catch (requestError) {
+      if (axios.isAxiosError(requestError) && requestError.response?.data && typeof requestError.response.data === "object") {
+        const apiErrors: FieldErrors = {};
+        Object.entries(requestError.response.data).forEach(([key, value]) => {
+          if (key in initialForm && Array.isArray(value) && typeof value[0] === "string") {
+            apiErrors[key as keyof EmployeeFormData] = value[0];
+          }
+        });
+        setFieldErrors(apiErrors);
+      }
       setError(errorMessage(requestError));
     } finally {
       setLoading(false);
@@ -147,40 +186,39 @@ export default function EmployeeRegistrationPage() {
   };
 
   return (
-    <Container fluid className="min-vh-100 bg-light py-5 d-flex align-items-center">
+    <Container fluid className="min-vh-100 py-5 d-flex align-items-center" style={{ background: "radial-gradient(circle, rgba(248,250,252,1) 0%, rgba(238,244,255,1) 100%)" }}>
       <Row className="justify-content-center w-100 mx-0">
         <Col lg={8} xl={7}>
-          <Card className="border-0 shadow-sm overflow-hidden">
+          <Card className="border-0 shadow-lg rounded-4 overflow-hidden">
             <Card.Body className="p-4 p-md-5">
-              <div className="d-flex align-items-start gap-3 mb-4">
-                <span className="bg-primary-subtle text-primary rounded-3 p-3"><IconUserCheck size={26} /></span>
-                <div>
-                  <p className="text-primary fw-semibold text-uppercase small mb-1">Employee onboarding</p>
-                  <h1 className="h3 mb-1">Create your employee account</h1>
-                  <p className="text-secondary mb-0">Use the organization code shared by your employer. Your employment and pay details are managed by your organization.</p>
-                </div>
+              <div className="text-center mb-4">
+                <span className="bg-primary-subtle text-primary rounded-3 p-3 d-inline-block mb-3"><IconUserCheck size={32} /></span>
+                <h1 className="h3 mb-1">Create Your Employee Account</h1>
+                <p className="text-secondary mb-0">Join your team by using the organization code provided by your employer.</p>
               </div>
 
               {success ? (
-                <Alert variant="success" className="mb-0">
-                  <h2 className="h5">Your account is ready</h2>
-                  <p className="mb-3">You can now sign in and complete any remaining profile details. Your organization controls role, department, salary, and payroll information.</p>
-                  <Link className="btn btn-success" href="/sign-in">Go to employee sign in</Link>
-                </Alert>
+                <div className="text-center p-4">
+                  <IconCircleCheck size={48} className="text-success mb-3" />
+                  <h2 className="h4 fw-bold">Account Created Successfully!</h2>
+                  <p className="text-secondary mb-4">Welcome aboard! We're thrilled to have you. You will be redirected to the sign-in page shortly.</p>
+                  <Link href="/sign-in" className="btn btn-primary">Sign In Now</Link>
+                </div>
               ) : (
                 <Form onSubmit={submit} noValidate>
-                  {error && <Alert variant="danger">{error}</Alert>}
+                  {error && <Alert variant="danger" className="mb-4 border-0"><strong>Please review your form.</strong> {error}</Alert>}
+
                   <div className="rounded-3 border bg-body-tertiary p-3 mb-4 d-flex gap-3">
                     <IconBuildingCommunity className="text-primary flex-shrink-0 mt-1" size={21} />
                     <div><strong>Organization code required</strong><p className="small text-secondary mb-0">Ask your HR or organization owner for their current code. This keeps your account connected to the right company.</p></div>
                   </div>
 
                   <Row className="g-3">
-                    <Col md={6}><Form.Group controlId="organization-code"><Form.Label>Organization code</Form.Label><Form.Control value={form.organization_code} onChange={(e) => update("organization_code", e.target.value.toUpperCase())} placeholder="ORG-XXXXXXXX" required autoCapitalize="characters" isValid={organizationCodeStatus === "valid"} isInvalid={organizationCodeStatus === "invalid" && form.organization_code.length >= 12} /><Form.Text className={organizationCodeStatus === "valid" ? "text-success" : undefined}>{organizationCodeStatus === "checking" ? "Verifying organization…" : organizationCodeStatus === "valid" ? "Organization verified" : ""}</Form.Text><Form.Control.Feedback type="invalid">Enter a valid active organization code.</Form.Control.Feedback></Form.Group></Col>
+                    <Col md={6}><Form.Group controlId="organization-code"><Form.Label>Organization code</Form.Label><Form.Control value={form.organization_code} onChange={(e) => update("organization_code", e.target.value.toUpperCase())} placeholder="ORG-XXXXXXXX" required autoCapitalize="characters" isValid={organizationCodeStatus === "valid"} isInvalid={Boolean(fieldErrors.organization_code) || (organizationCodeStatus === "invalid" && form.organization_code.length > 0)} /><Form.Text className={organizationCodeStatus === "valid" ? "text-success" : undefined}>{organizationCodeStatus === "checking" ? "Verifying organization…" : organizationCodeStatus === "valid" ? "Organization verified" : ""}</Form.Text><Form.Control.Feedback type="invalid">{fieldErrors.organization_code || "Enter a valid active organization code."}</Form.Control.Feedback></Form.Group></Col>
                     <Col md={6}><Form.Group controlId="organization-name"><Form.Label>Company name</Form.Label><Form.Control value={organizationName} readOnly placeholder="Appears after your code is verified" aria-describedby="organization-name-help" isValid={organizationCodeStatus === "valid"} /><Form.Text id="organization-name-help">This confirms the company you will join.</Form.Text></Form.Group></Col>
-                    <Col md={6}><Form.Group controlId="full-name"><Form.Label>Full name</Form.Label><Form.Control value={form.full_name} onChange={(e) => update("full_name", e.target.value)} placeholder="e.g., Priya Sharma" autoComplete="name" required /></Form.Group></Col>
-                    <Col md={6}><Form.Group controlId="email"><Form.Label>Work email <span className="text-secondary fw-normal">(used to sign in)</span></Form.Label><Form.Control type="email" value={form.email} onChange={(e) => update("email", e.target.value)} placeholder="you@company.com" autoComplete="email" required aria-describedby="email-login-help" /><Form.Text id="email-login-help">Use an email address you can access. You will use it to sign in to AttendStack.</Form.Text></Form.Group></Col>
-                    <Col md={6}><Form.Group controlId="phone"><Form.Label>Phone number</Form.Label><Form.Control type="tel" value={form.phone} onChange={(e) => update("phone", e.target.value)} placeholder="9876543210" autoComplete="tel" required /></Form.Group></Col>
+                    <Col md={6}><Form.Group controlId="full-name"><Form.Label>Full name</Form.Label><Form.Control value={form.full_name} onChange={(e) => update("full_name", e.target.value)} placeholder="e.g., Priya Sharma" autoComplete="name" required isInvalid={Boolean(fieldErrors.full_name)} /><Form.Control.Feedback type="invalid">{fieldErrors.full_name}</Form.Control.Feedback></Form.Group></Col>
+                    <Col md={6}><Form.Group controlId="email"><Form.Label>Work email <span className="text-secondary fw-normal">(used to sign in)</span></Form.Label><Form.Control type="email" value={form.email} onChange={(e) => update("email", e.target.value)} placeholder="you@company.com" autoComplete="email" required aria-describedby="email-login-help" isInvalid={Boolean(fieldErrors.email)} /><Form.Control.Feedback type="invalid">{fieldErrors.email}</Form.Control.Feedback><Form.Text id="email-login-help">Use an email address you can access. You will use it to sign in to AttendStack.</Form.Text></Form.Group></Col>
+                    <Col md={6}><Form.Group controlId="phone"><Form.Label>Phone number</Form.Label><Form.Control type="tel" value={form.phone} onChange={(e) => update("phone", e.target.value)} placeholder="9876543210" autoComplete="tel" required isInvalid={Boolean(fieldErrors.phone)} /><Form.Control.Feedback type="invalid">{fieldErrors.phone}</Form.Control.Feedback></Form.Group></Col>
                     <Col md={6}><Form.Group controlId="dob"><Form.Label>Date of birth <span className="text-secondary">(optional)</span></Form.Label><Form.Control type="date" value={form.date_of_birth} onChange={(e) => update("date_of_birth", e.target.value)} autoComplete="bday" /></Form.Group></Col>
                     <Col md={6}><Form.Group controlId="address"><Form.Label>Address <span className="text-secondary">(optional)</span></Form.Label><Form.Control value={form.address} onChange={(e) => update("address", e.target.value)} placeholder="City, State, PIN code" autoComplete="street-address" /></Form.Group></Col>
                   </Row>
@@ -214,8 +252,8 @@ export default function EmployeeRegistrationPage() {
 
                   <h2 className="h6 mt-4 mb-3">Secure your account</h2>
                   <Row className="g-3">
-                    <Col md={6}><Form.Group controlId="password"><Form.Label>Password</Form.Label><InputGroup><Form.Control type={showPassword ? "text" : "password"} value={form.password} onChange={(e) => update("password", e.target.value)} placeholder="At least 8 characters" autoComplete="new-password" minLength={8} required /><Button type="button" variant="outline-secondary" onClick={() => setShowPassword((visible) => !visible)} aria-label={showPassword ? "Hide password" : "Show password"}>{showPassword ? <IconEyeOff size={18} /> : <IconEye size={18} />}</Button></InputGroup></Form.Group></Col>
-                    <Col md={6}><Form.Group controlId="confirm-password"><Form.Label>Confirm password</Form.Label><Form.Control type={showPassword ? "text" : "password"} value={form.confirm_password} onChange={(e) => update("confirm_password", e.target.value)} placeholder="Re-enter your password" autoComplete="new-password" minLength={8} required /></Form.Group></Col>
+                    <Col md={6}><Form.Group controlId="password"><Form.Label>Password</Form.Label><InputGroup><Form.Control type={showPassword ? "text" : "password"} value={form.password} onChange={(e) => update("password", e.target.value)} placeholder="At least 8 characters" autoComplete="new-password" minLength={8} required isInvalid={Boolean(fieldErrors.password)} /><Button type="button" variant="outline-secondary" onClick={() => setShowPassword((visible) => !visible)} aria-label={showPassword ? "Hide password" : "Show password"}>{showPassword ? <IconEyeOff size={18} /> : <IconEye size={18} />}</Button></InputGroup><Form.Control.Feedback type="invalid" className="d-block">{fieldErrors.password}</Form.Control.Feedback></Form.Group></Col>
+                    <Col md={6}><Form.Group controlId="confirm-password"><Form.Label>Confirm password</Form.Label><Form.Control type={showPassword ? "text" : "password"} value={form.confirm_password} onChange={(e) => update("confirm_password", e.target.value)} placeholder="Re-enter your password" autoComplete="new-password" minLength={8} required isInvalid={Boolean(fieldErrors.confirm_password)} /><Form.Control.Feedback type="invalid">{fieldErrors.confirm_password}</Form.Control.Feedback></Form.Group></Col>
                   </Row>
 
                   <div className="d-flex flex-column flex-sm-row align-items-sm-center justify-content-between gap-3 mt-4 pt-3 border-top">

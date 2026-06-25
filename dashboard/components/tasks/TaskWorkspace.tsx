@@ -7,7 +7,7 @@ import {
   IconCircleCheck, IconClock, IconDotsVertical, IconFolderPlus, IconListTree, IconPaperclip, IconPlus,
   IconRefresh, IconSearch, IconSettings, IconTarget, IconTrash, IconX,
 } from "@tabler/icons-react";
-import { Badge, Button, Card, Col, Dropdown, Form, InputGroup, Modal, Pagination, ProgressBar, Row, Spinner, Table } from "react-bootstrap";
+import { Badge, Button, Card, Col, Dropdown, Form, InputGroup, Modal, Pagination, ProgressBar, Row, Spinner, Table, Tooltip, OverlayTrigger } from "react-bootstrap";
 import { getAssetPath } from "helper/assetPath";
 
 type Status = "PENDING" | "TODO" | "IN_PROGRESS" | "ON_HOLD" | "COMPLETED" | "CLOSED" | "CANCELLED";
@@ -111,7 +111,7 @@ export default function TaskWorkspace({ employeeMode = false }: { employeeMode?:
   const [notice, setNotice] = useState("");
   const [query, setQuery] = useState("");
   const [projectFilter, setProjectFilter] = useState("ALL");
-  const [statusFilter, setStatusFilter] = useState<Status | "ALL">("ALL");
+  const [statusFilter, setStatusFilter] = useState<Status | "ALL">("IN_PROGRESS");
   const [priorityFilter, setPriorityFilter] = useState<Priority | "ALL">("ALL");
   const [showProjects, setShowProjects] = useState(true);
   const [taskPage, setTaskPage] = useState(1);

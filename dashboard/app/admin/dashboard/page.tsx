@@ -220,6 +220,7 @@ const AdminDashboard = () => {
     : 0;
   const pendingLeaves = leaves.filter((leave) => leave.status === "PENDING").length;
   const pendingPayroll = payrolls.filter((payroll) => payroll.status === "PENDING").length;
+  const openTasks = tasks.filter((task) => !["COMPLETED", "CLOSED", "CANCELLED"].includes(task.status)).length;
   const activeTasks = tasks.filter((task) => task.status === "IN_PROGRESS").length;
   const overdueTasks = tasks.filter((task) => task.is_overdue).length;
   const dueSoonTasks = tasks.filter((task) => {
@@ -402,40 +403,40 @@ const AdminDashboard = () => {
             <Card.Body className="pt-0">
               <Row className="g-3 mb-4">
                 <Col xs={6} lg={3} xl={2}>
-                  <div className="task-dashboard-metric is-neutral">
+                  <Link href="/tasks?task_filter=open" className="task-dashboard-metric is-neutral">
                     <span>Open Tasks</span>
-                    <strong>{activeTasks}</strong>
-                  </div>
+                    <strong>{openTasks}</strong>
+                  </Link>
                 </Col>
                 <Col xs={6} lg={3} xl={2}>
-                  <div className="task-dashboard-metric is-primary">
+                  <Link href="/tasks?task_filter=active" className="task-dashboard-metric is-primary">
                     <span>Active</span>
                     <strong>{activeTasks}</strong>
-                  </div>
+                  </Link>
                 </Col>
                 <Col xs={6} lg={3} xl={2}>
-                  <div className="task-dashboard-metric is-danger">
+                  <Link href="/tasks?task_filter=overdue" className="task-dashboard-metric is-danger">
                     <span>Overdue</span>
                     <strong>{overdueTasks}</strong>
-                  </div>
+                  </Link>
                 </Col>
                 <Col xs={6} lg={3} xl={2}>
-                  <div className="task-dashboard-metric is-warning">
+                  <Link href="/tasks?task_filter=due-soon" className="task-dashboard-metric is-warning">
                     <span>Due Soon</span>
                     <strong>{dueSoonTasks}</strong>
-                  </div>
+                  </Link>
                 </Col>
                 <Col xs={6} lg={3} xl={2}>
-                  <div className="task-dashboard-metric is-warning">
+                  <Link href="/tasks?task_filter=on-hold" className="task-dashboard-metric is-warning">
                     <span>On Hold</span>
                     <strong>{onHoldTasks}</strong>
-                  </div>
+                  </Link>
                 </Col>
                 <Col xs={6} lg={3} xl={2}>
-                  <div className="task-dashboard-metric is-danger">
+                  <Link href="/tasks?task_filter=high-priority" className="task-dashboard-metric is-danger">
                     <span>High Priority</span>
                     <strong>{urgentTasks}</strong>
-                  </div>
+                  </Link>
                 </Col>
               </Row>
 
@@ -522,6 +523,20 @@ const AdminDashboard = () => {
           padding: 14px 16px;
           position: relative;
           overflow: hidden;
+          text-decoration: none;
+          transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+        }
+
+        .task-dashboard-metric:hover,
+        .task-dashboard-metric:focus-visible {
+          border-color: #cbd5e1;
+          box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+          transform: translateY(-2px);
+        }
+
+        .task-dashboard-metric:focus-visible {
+          outline: 3px solid rgba(37, 99, 235, 0.18);
+          outline-offset: 2px;
         }
 
         .task-status-badge {

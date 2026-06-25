@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import Swal from "sweetalert2";
 import {
   IconAlertTriangle, IconCalendarDue, IconCheck, IconChevronDown, IconChevronLeft, IconChevronRight, IconChevronUp,
@@ -13,6 +14,7 @@ import { getAssetPath } from "helper/assetPath";
 type Status = "PENDING" | "TODO" | "IN_PROGRESS" | "ON_HOLD" | "COMPLETED" | "CLOSED" | "CANCELLED";
 type Priority = "LOW" | "MEDIUM" | "HIGH" | "URGENT";
 type ProjectStatus = "PLANNING" | "ACTIVE" | "ON_HOLD" | "COMPLETED" | "ARCHIVED";
+type DashboardTaskFilter = "open" | "active" | "overdue" | "due-soon" | "on-hold" | "high-priority";
 
 type Project = { id: string; name: string; key: string; description: string; status: ProjectStatus; status_label: string; owner: string | null; owner_name: string | null; created_by_name: string | null; created_by_role: string | null; department: string; start_date: string | null; due_date: string | null; color: string; task_count: number; completed_task_count: number; progress: number };
 type Task = { id: string; title: string; description: string; project: string | null; project_name: string | null; project_key: string | null; parent: string | null; parent_title: string | null; subtask_count: number; assignee: string; assignees: string[]; assignee_name: string; assignee_names: string[]; assignee_avatar_url: string | null; assigned_by_name: string | null; priority: Priority; priority_label: string; status: Status; status_label: string; due_date: string | null; start_date: string | null; department: string; project_category: string; attachment_url: string | null; attachment_name: string | null; employee_notes: string; admin_notes: string; is_overdue: boolean };
@@ -28,6 +30,7 @@ const emptyTask: TaskForm = { title: "", description: "", project: "", parent: "
 const taskStatuses: Array<{ value: Status; label: string }> = [{ value: "PENDING", label: "Pending" }, { value: "TODO", label: "To do" }, { value: "IN_PROGRESS", label: "In progress" }, { value: "ON_HOLD", label: "On hold" }, { value: "COMPLETED", label: "Completed" }, { value: "CLOSED", label: "Closed" }, { value: "CANCELLED", label: "Cancelled" }];
 const taskPriorities: Array<{ value: Priority; label: string }> = [{ value: "LOW", label: "Low" }, { value: "MEDIUM", label: "Medium" }, { value: "HIGH", label: "High" }, { value: "URGENT", label: "Urgent" }];
 const TASKS_PER_PAGE = 10;
+const dashboardTaskFilterLabels: Record<DashboardTaskFilter, string> = { open: "Open tasks", active: "Active", overdue: "Overdue", "due-soon": "Due soon", "on-hold": "On hold", "high-priority": "High priority" };
 
 const headers = (): Record<string, string> => {
   const token = localStorage.getItem("authToken");
@@ -43,6 +46,7 @@ const errorFrom = async (response: Response) => {
 const date = (value: string | null) => value ? new Intl.DateTimeFormat("en-IN", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(value)) : "No date";
 const activeStatus = (status: Status) => !["COMPLETED", "CLOSED", "CANCELLED"].includes(status);
 const statusClass = (status: string) => `workspace-status workspace-${status.toLowerCase().replace("_", "-")}`;
+const daysUntilTask = (value: string | null) => { if (!value) return null; const today = new Date(); today.setHours(0, 0, 0, 0); const taskDate = new Date(value); taskDate.setHours(0, 0, 0, 0); return Math.ceil((taskDate.getTime() - today.getTime()) / 86400000); };
 const collectSubtasks = (parentId: string, groups: Record<string, Task[]>, level = 1): Array<{ task: Task; level: number }> => (groups[parentId] || []).flatMap((task) => [{ task, level }, ...collectSubtasks(task.id, groups, level + 1)]);
 const colorTint = (hex: string, opacity = 0.1) => {
   const value = hex.replace("#", "");
@@ -101,6 +105,7 @@ function EmployeeAssigneePicker({
 }
 
 export default function TaskWorkspace({ employeeMode = false }: { employeeMode?: boolean }) {
+  const searchParams = useSearchParams();
   const [projects, setProjects] = useState<Project[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -113,6 +118,7 @@ export default function TaskWorkspace({ employeeMode = false }: { employeeMode?:
   const [projectFilter, setProjectFilter] = useState("ALL");
   const [statusFilter, setStatusFilter] = useState<Status | "ALL">("IN_PROGRESS");
   const [priorityFilter, setPriorityFilter] = useState<Priority | "ALL">("ALL");
+  const [dashboardFilter, setDashboardFilter] = useState<DashboardTaskFilter | null>(null);
   const [showProjects, setShowProjects] = useState(true);
   const [taskPage, setTaskPage] = useState(1);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -195,7 +201,26 @@ export default function TaskWorkspace({ employeeMode = false }: { employeeMode?:
 
   useEffect(() => {
     setTaskPage(1);
-  }, [query, projectFilter, statusFilter, priorityFilter]);
+  }, [query, projectFilter, statusFilter, priorityFilter, dashboardFilter]);
+
+  useEffect(() => {
+    const value = searchParams.get("task_filter");
+    const validFilters: DashboardTaskFilter[] = ["open", "active", "overdue", "due-soon", "on-hold", "high-priority"];
+    if (!value || !validFilters.includes(value as DashboardTaskFilter)) {
+      setDashboardFilter(null);
+      return;
+    }
+    const filter = value as DashboardTaskFilter;
+    setDashboardFilter(filter);
+    setQuery("");
+    setProjectFilter("ALL");
+    setPriorityFilter("ALL");
+    setStatusFilter(filter === "active" ? "IN_PROGRESS" : filter === "on-hold" ? "ON_HOLD" : "ALL");
+    setTaskPage(1);
+    window.setTimeout(() => {
+      document.getElementById("workspace-task-list")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 0);
+  }, [searchParams]);
 
   useEffect(() => {
     if (!taskModal) return;
@@ -241,8 +266,19 @@ export default function TaskWorkspace({ employeeMode = false }: { employeeMode?:
   }), [projects, tasks]);
   const visibleTasks = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    return tasks.filter((item) => (projectFilter === "ALL" || item.project === projectFilter) && (statusFilter === "ALL" || item.status === statusFilter) && (priorityFilter === "ALL" || item.priority === priorityFilter) && (!needle || [item.title, item.description, item.assignee_name, item.assignee_names?.join(" "), item.project_name, item.project_key].filter(Boolean).some((value) => value!.toLowerCase().includes(needle))));
-  }, [tasks, query, projectFilter, statusFilter, priorityFilter]);
+    return tasks.filter((item) => {
+      const dueInDays = daysUntilTask(item.due_date);
+      const matchesDashboardFilter =
+        !dashboardFilter ||
+        (dashboardFilter === "open" && activeStatus(item.status)) ||
+        (dashboardFilter === "active" && item.status === "IN_PROGRESS") ||
+        (dashboardFilter === "overdue" && item.is_overdue) ||
+        (dashboardFilter === "due-soon" && dueInDays !== null && dueInDays >= 0 && dueInDays <= 3 && activeStatus(item.status)) ||
+        (dashboardFilter === "on-hold" && item.status === "ON_HOLD") ||
+        (dashboardFilter === "high-priority" && ["URGENT", "HIGH"].includes(item.priority) && activeStatus(item.status));
+      return matchesDashboardFilter && (projectFilter === "ALL" || item.project === projectFilter) && (statusFilter === "ALL" || item.status === statusFilter) && (priorityFilter === "ALL" || item.priority === priorityFilter) && (!needle || [item.title, item.description, item.assignee_name, item.assignee_names?.join(" "), item.project_name, item.project_key].filter(Boolean).some((value) => value!.toLowerCase().includes(needle)));
+    });
+  }, [tasks, query, projectFilter, statusFilter, priorityFilter, dashboardFilter]);
   const allRootTasks = visibleTasks.filter((item) => !item.parent);
   const totalTaskPages = Math.max(1, Math.ceil(allRootTasks.length / TASKS_PER_PAGE));
   const currentTaskPage = Math.min(taskPage, totalTaskPages);
@@ -262,6 +298,7 @@ export default function TaskWorkspace({ employeeMode = false }: { employeeMode?:
     setProjectFilter("ALL");
     setStatusFilter("ALL");
     setPriorityFilter("ALL");
+    setDashboardFilter(null);
     setTaskPage(1);
   };
   const selectProject = (projectId: string) => {
@@ -365,6 +402,7 @@ export default function TaskWorkspace({ employeeMode = false }: { employeeMode?:
           <Button size="sm" onClick={() => openTask()} disabled={!projects.length}><IconPlus size={16} /> Add task</Button>
         </Card.Header>
         <Card.Body className="task-list-filters border-top">
+          {dashboardFilter && <div className="dashboard-filter-chip mb-3"><span>Dashboard filter</span><strong>{dashboardTaskFilterLabels[dashboardFilter]}</strong><button type="button" onClick={resetFilters} aria-label="Clear dashboard filter"><IconX size={14} /></button></div>}
           <Row className="g-3">
             <Col lg={3}>
               <InputGroup>
@@ -523,6 +561,7 @@ const tableEnhancements = `
 
 const projectColorStyles = `
 .workspace-projects-header{display:flex;align-items:center;justify-content:space-between;gap:16px}.workspace-projects{grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}.workspace-projects-toggle{display:inline-flex;align-items:center;gap:6px;border-radius:7px;font-weight:600}.workspace-task-list{scroll-margin-top:24px}.task-list-filters{padding:16px 24px;background:#fbfcfe}.workspace-task-table{min-width:820px}.workspace-task-table th:nth-child(1){width:8%}.workspace-task-table th:nth-child(2){width:auto}.workspace-task-table th:nth-child(3){width:22%}.workspace-task-table th:nth-child(4){width:15%}.workspace-task-table th:nth-child(5){width:18%}.workspace-task-table th:nth-child(3),.workspace-task-table th:nth-child(4),.workspace-task-table th:nth-child(5){white-space:nowrap}body.employee-task-workspace .workspace-task-table{min-width:660px}body.employee-task-workspace .workspace-task-table th:nth-child(3){width:20%}body.employee-task-workspace .workspace-task-table th:nth-child(4){width:22%}.task-subtask-count{display:inline-flex!important;align-items:center;gap:6px;border:1px solid #dbe4ef!important;border-radius:999px!important;background:#fff!important;color:#334155!important;font-size:.72rem!important;font-weight:750!important;line-height:1;white-space:nowrap}.task-subtask-count.is-expanded{background:#eef2ff!important;border-color:#c7d2fe!important;color:#4338ca!important}.task-subtask-badge{display:inline-flex!important;align-items:center;gap:5px;border-radius:999px!important;padding:5px 8px!important;color:#475569!important;font-size:.7rem!important}.workspace-project{position:relative;border-top-color:var(--project-color,#4f46e5)!important;background:linear-gradient(135deg,var(--project-tint,rgba(79,70,229,.16)) 0%,#fff 82%)!important}.workspace-project.is-selected{outline-color:var(--project-color,#4f46e5);box-shadow:0 0 0 4px var(--project-tint,rgba(79,70,229,.16)),0 12px 26px rgba(15,23,42,.12)!important}.workspace-project:focus-visible{outline:3px solid var(--project-color,#4f46e5);outline-offset:3px}.workspace-project .card-body{position:relative}.project-selected{position:absolute;top:12px;right:86px;display:inline-flex;align-items:center;gap:4px;border-radius:999px;padding:4px 8px;background:var(--project-color,#4f46e5);color:#fff;font-size:.67rem;font-weight:800;line-height:1;box-shadow:0 2px 6px rgba(15,23,42,.14)}.workspace-project .progress-bar{background-color:var(--project-color,#4f46e5)!important}.task-project-badge{display:inline-flex;align-items:center;border:1px solid transparent;border-radius:5px!important;padding:3px 6px!important;font-size:.64rem!important;font-weight:800!important;letter-spacing:.04em;line-height:1}@media(max-width:991.98px){.workspace-projects{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:575.98px){.workspace-projects-header{align-items:flex-start;flex-direction:column}.workspace-projects{grid-template-columns:1fr;width:100%}.task-list-filters{padding:14px}}
+.dashboard-filter-chip{display:inline-flex;align-items:center;gap:8px;width:max-content;max-width:100%;border:1px solid #bfdbfe;border-radius:999px;background:#eff6ff;color:#1d4ed8;padding:6px 8px 6px 11px;font-size:.76rem}.dashboard-filter-chip span{font-weight:800;text-transform:uppercase;font-size:.63rem;letter-spacing:.04em;color:#2563eb}.dashboard-filter-chip strong{color:#0f172a;font-size:.78rem}.dashboard-filter-chip button{display:grid;place-items:center;width:22px;height:22px;border:0;border-radius:50%;background:#dbeafe;color:#1d4ed8}.dashboard-filter-chip button:hover{background:#bfdbfe}@media(max-width:575.98px){.dashboard-filter-chip{width:100%;justify-content:space-between;border-radius:8px}}
 `;
 
 const projectActionStyles = `

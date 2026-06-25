@@ -38,7 +38,7 @@ class EmployeeViewSet(viewsets.ModelViewSet):
     ordering = ["status_sort", "full_name"]
 
     def get_permissions(self):
-        if self.action == "me":
+        if self.action in ("list", "me"):
             return [IsAuthenticated()]
         return super().get_permissions()
 

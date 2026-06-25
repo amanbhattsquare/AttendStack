@@ -251,29 +251,25 @@ class TaskViewSet(WorkspaceAccessMixin, viewsets.ModelViewSet):
             employee = self._current_employee(required=False)
             self._validate_parent_access(parent, employee)
         else:
-            # Individual contributors can add work, but may only assign it to themselves.
             employee = self._current_employee()
             self._validate_parent_access(parent, employee)
             requested_assignees = serializer.validated_data.get("assignees") or [serializer.validated_data.get("assignee", employee)]
-            if any(assignee.id != employee.id for assignee in requested_assignees):
-                raise PermissionDenied("Employees can create tasks for themselves only.")
+            for assignee in requested_assignees:
+                self._validate_employee_scope(assignee)
+        primary_assignee = serializer.validated_data.get("assignee") or (serializer.validated_data.get("assignees") or [employee])[0]
         save_fields = {
             "assigned_by": self.request.user,
-            "department": serializer.validated_data.get("department") or (employee.department if employee else serializer.validated_data["assignee"].department),
+            "department": serializer.validated_data.get("department") or primary_assignee.department,
         }
-        if not self._is_admin_or_hr(self.request.user):
-            save_fields["assignee"] = employee
         serializer.save(**save_fields)
 
     def perform_update(self, serializer):
         task = serializer.instance
         if not self._is_admin_or_hr(self.request.user):
-            if task.assigned_by_id != self.request.user.id:
-                raise PermissionDenied("You can edit only tasks you created. You can still update assigned task status.")
             employee = self._current_employee()
             assignees = serializer.validated_data.get("assignees") or [serializer.validated_data.get("assignee", task.assignee)]
-            if any(assignee.id != employee.id for assignee in assignees):
-                raise PermissionDenied("Employees can assign their created tasks only to themselves.")
+            for assignee in assignees:
+                self._validate_employee_scope(assignee)
             self._validate_parent_access(serializer.validated_data.get("parent", task.parent), employee)
         project = serializer.validated_data.get("project", task.project)
         if project:

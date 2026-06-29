@@ -30,6 +30,7 @@ const emptyTask: TaskForm = { title: "", description: "", project: "", parent: "
 const taskStatuses: Array<{ value: Status; label: string }> = [{ value: "PENDING", label: "Pending" }, { value: "TODO", label: "To do" }, { value: "IN_PROGRESS", label: "In progress" }, { value: "ON_HOLD", label: "On hold" }, { value: "COMPLETED", label: "Completed" }, { value: "CLOSED", label: "Closed" }, { value: "CANCELLED", label: "Cancelled" }];
 const taskPriorities: Array<{ value: Priority; label: string }> = [{ value: "LOW", label: "Low" }, { value: "MEDIUM", label: "Medium" }, { value: "HIGH", label: "High" }, { value: "URGENT", label: "Urgent" }];
 const TASKS_PER_PAGE = 10;
+const ASSIGNABLE_EMPLOYEE_STATUSES = new Set(["ACTIVE", "PROVISION", "ON_LEAVE"]);
 const dashboardTaskFilterLabels: Record<DashboardTaskFilter, string> = { open: "Open tasks", active: "Active", overdue: "Overdue", "due-soon": "Due soon", "on-hold": "On hold", "high-priority": "High priority" };
 
 const headers = (): Record<string, string> => {
@@ -99,7 +100,7 @@ function EmployeeAssigneePicker({
           {!availableEmployees.length && <small className="text-secondary d-block p-2">{employees.length ? "All active employees are assigned." : "No active employees are available."}</small>}
         </div>
       ) : null}
-      <Form.Text>{employees.length ? "Select a person to add them to this task." : "Add active employees before assigning this task."}</Form.Text>
+      <Form.Text>{employees.length ? "Assign employees from any department in your organization." : "Add an eligible employee before assigning this task."}</Form.Text>
     </Form.Group>
   );
 }
@@ -252,7 +253,13 @@ export default function TaskWorkspace({ employeeMode = false }: { employeeMode?:
         setError("Projects could not be loaded, but your assigned tasks are still available.");
       }
       setTasks(list<Task>(await responses[1].json()));
-      if (responses[2]?.ok) setEmployees(list<Employee>(await responses[2].json()).filter((item) => item.status === "ACTIVE"));
+      if (responses[2]?.ok) {
+        setEmployees(
+          list<Employee>(await responses[2].json()).filter((item) =>
+            ASSIGNABLE_EMPLOYEE_STATUSES.has(item.status)
+          )
+        );
+      }
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to load the workspace."); }
     finally { setLoading(false); }
   };

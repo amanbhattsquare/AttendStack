@@ -59,3 +59,85 @@ class CompanyOwnerWorkspaceTests(APITestCase):
         task = Task.objects.get(pk=task_response.data["id"])
         self.assertEqual(task.assignee, self.employee)
         self.assertEqual(task.assigned_by, self.owner)
+
+
+class CrossDepartmentTaskAssignmentTests(APITestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.assigner_user = User.objects.create_user(
+            email="engineer@northstar.example",
+            password="StrongPass123!",
+            employee_id="ENG-001",
+        )
+        self.organization = Organization.objects.create(name="Northstar Labs")
+        self.assigner = Employee.objects.create(
+            organization=self.organization,
+            employee_id="ENG-001",
+            full_name="Engineering Employee",
+            email=self.assigner_user.email,
+            phone="9876543210",
+            department="Engineering",
+        )
+        self.assignee = Employee.objects.create(
+            organization=self.organization,
+            employee_id="DES-001",
+            full_name="Design Employee",
+            email="designer@northstar.example",
+            phone="9876543211",
+            department="Design",
+        )
+        self.outside_employee = Employee.objects.create(
+            organization=Organization.objects.create(name="Outside Company"),
+            employee_id="OUT-001",
+            full_name="Outside Employee",
+            email="outside@example.com",
+            phone="9876543212",
+            department="Design",
+        )
+        self.client.force_authenticate(self.assigner_user)
+
+    def test_employee_can_assign_task_to_another_department_in_same_organization(self):
+        employees_response = self.client.get("/api/v1/employees/")
+        visible_employee_ids = {
+            employee["id"] for employee in employees_response.data["results"]
+        }
+        self.assertIn(str(self.assignee.id), visible_employee_ids)
+        self.assertNotIn(str(self.outside_employee.id), visible_employee_ids)
+
+        project_response = self.client.post(
+            reverse("tasks:project-list"),
+            {
+                "name": "Cross-functional launch",
+                "key": "XLAUNCH",
+                "status": "ACTIVE",
+                "color": "#4f46e5",
+            },
+            format="json",
+        )
+        self.assertEqual(
+            project_response.status_code,
+            status.HTTP_201_CREATED,
+            project_response.data,
+        )
+
+        task_response = self.client.post(
+            reverse("tasks:task-list"),
+            {
+                "title": "Prepare launch visuals",
+                "project": project_response.data["id"],
+                "assignee": str(self.assignee.id),
+                "assignees": [str(self.assignee.id)],
+                "priority": "HIGH",
+                "status": "TODO",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            task_response.status_code,
+            status.HTTP_201_CREATED,
+            task_response.data,
+        )
+        task = Task.objects.get(pk=task_response.data["id"])
+        self.assertEqual(task.assignee, self.assignee)
+        self.assertEqual(task.assigned_by, self.assigner_user)

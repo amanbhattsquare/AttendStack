@@ -1,7 +1,8 @@
 import uuid
 
 from django.core.validators import RegexValidator
-from django.db import models
+from django.db import models, transaction
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 
 from organizations.models import Organization
@@ -14,6 +15,35 @@ class EmployeeStatus(models.TextChoices):
     INACTIVE = "INACTIVE", "Inactive"
     ON_LEAVE = "ON_LEAVE", "On Leave"
     TERMINATED = "TERMINATED", "Terminated"
+
+
+ATTENDANCE_ELIGIBLE_STATUSES = (
+    EmployeeStatus.ACTIVE,
+    EmployeeStatus.PROVISION,
+    EmployeeStatus.ON_LEAVE,
+)
+
+ATTENDANCE_WORKING_STATUSES = (
+    EmployeeStatus.ACTIVE,
+    EmployeeStatus.PROVISION,
+)
+
+
+class EmployeeQuerySet(models.QuerySet):
+    def attendance_eligible_on(self, attendance_date):
+        """Employees whose latest status on a date permits attendance."""
+        latest_status = EmployeeStatusHistory.objects.filter(
+            employee_id=models.OuterRef("pk"),
+            effective_date__lte=attendance_date,
+        ).order_by("-effective_date", "-created_at", "-pk")
+
+        return self.annotate(
+            attendance_status_on_date=Coalesce(
+                models.Subquery(latest_status.values("status")[:1]),
+                models.F("status"),
+                output_field=models.CharField(),
+            )
+        ).filter(attendance_status_on_date__in=ATTENDANCE_ELIGIBLE_STATUSES)
 
 
 class EmploymentType(models.TextChoices):
@@ -94,6 +124,8 @@ class Employee(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    objects = EmployeeQuerySet.as_manager()
+
     class Meta:
         ordering = ["full_name"]
         indexes = [
@@ -105,6 +137,13 @@ class Employee(models.Model):
         return f"{self.full_name} ({self.employee_id})"
 
     def save(self, *args, **kwargs):
+        is_new = self._state.adding
+        update_fields = kwargs.get("update_fields")
+        status_is_saved = update_fields is None or "status" in update_fields
+        previous_status = None
+        if not is_new and status_is_saved:
+            previous_status = Employee.objects.filter(pk=self.pk).values_list("status", flat=True).first()
+
         if not self.employee_id:
             last_emp = Employee.objects.filter(employee_id__startswith="EMP-").order_by("-employee_id").first()
             if last_emp:
@@ -123,4 +162,61 @@ class Employee(models.Model):
                     break
                 new_num += 1
                 
-        super().save(*args, **kwargs)
+        with transaction.atomic():
+            super().save(*args, **kwargs)
+
+            if is_new or (status_is_saved and previous_status != self.status):
+                default_effective_date = self.joining_date if is_new else timezone.localdate()
+                effective_date = getattr(self, "_status_effective_date", default_effective_date)
+                effective_date = max(effective_date, self.joining_date)
+                EmployeeStatusHistory.objects.create(
+                    employee=self,
+                    status=self.status,
+                    effective_date=effective_date,
+                )
+            if hasattr(self, "_status_effective_date"):
+                del self._status_effective_date
+
+    def status_on(self, effective_date):
+        prefetched_history = getattr(self, "_prefetched_objects_cache", {}).get("status_history")
+        if prefetched_history is not None:
+            matching_history = [
+                entry for entry in prefetched_history if entry.effective_date <= effective_date
+            ]
+            if matching_history:
+                return max(
+                    matching_history,
+                    key=lambda entry: (entry.effective_date, entry.created_at, entry.pk),
+                ).status
+            return self.status
+
+        status = (
+            self.status_history.filter(effective_date__lte=effective_date)
+            .order_by("-effective_date", "-created_at", "-pk")
+            .values_list("status", flat=True)
+            .first()
+        )
+        return status or self.status
+
+    def is_attendance_eligible_on(self, attendance_date):
+        return self.status_on(attendance_date) in ATTENDANCE_ELIGIBLE_STATUSES
+
+
+class EmployeeStatusHistory(models.Model):
+    employee = models.ForeignKey(
+        Employee,
+        on_delete=models.CASCADE,
+        related_name="status_history",
+    )
+    status = models.CharField(max_length=20, choices=EmployeeStatus.choices)
+    effective_date = models.DateField(db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["effective_date", "created_at", "pk"]
+        indexes = [
+            models.Index(fields=["employee", "effective_date"]),
+        ]
+
+    def __str__(self):
+        return f"{self.employee.employee_id}: {self.get_status_display()} from {self.effective_date}"

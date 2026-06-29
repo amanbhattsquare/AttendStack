@@ -3,6 +3,7 @@ import re
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.db import transaction
+from django.utils import timezone
 
 from accounts.models import UserRole
 from .models import Employee, EmployeeStatus
@@ -118,6 +119,22 @@ class EmployeeListSerializer(serializers.ModelSerializer):
 
 class EmployeeStatusUpdateSerializer(serializers.Serializer):
     status = serializers.ChoiceField(choices=EmployeeStatus.choices)
+    effective_date = serializers.DateField(default=timezone.localdate)
+
+    def validate_effective_date(self, value):
+        employee = self.context["employee"]
+        if value < employee.joining_date:
+            raise serializers.ValidationError("The effective date cannot be before the joining date.")
+        if value > timezone.localdate():
+            raise serializers.ValidationError("The effective date cannot be in the future.")
+        latest_date = employee.status_history.order_by("-effective_date").values_list(
+            "effective_date", flat=True
+        ).first()
+        if latest_date and value < latest_date:
+            raise serializers.ValidationError(
+                f"The effective date cannot be before the latest status change ({latest_date})."
+            )
+        return value
 
 
 class EmployeeSerializer(serializers.ModelSerializer):

@@ -16,8 +16,14 @@ from ipware import get_client_ip
 from geopy.distance import geodesic
 
 from accounts.permissions import IsAdminOrHR
-from employees.models import Employee, EmployeeStatus
+from employees.models import (
+    ATTENDANCE_ELIGIBLE_STATUSES,
+    ATTENDANCE_WORKING_STATUSES,
+    Employee,
+    EmployeeStatus,
+)
 from settings.models import SystemSettings
+from .eligibility import attendance_eligible_records
 from .models import AttendanceRecord, AttendanceStatus, LeaveRequest, LeaveStatus, LeaveType
 from .permissions import IsAdminOrReadOnly
 from .serializers import AttendanceRecordSerializer, TodayAttendanceSerializer, LeaveRequestSerializer
@@ -74,7 +80,7 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
         return super().get_permissions()
 
     def get_queryset(self):
-        queryset = super().get_queryset()
+        queryset = attendance_eligible_records(super().get_queryset())
         user = self.request.user
         
         params = self.request.query_params
@@ -139,9 +145,17 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
             employee = Employee.objects.filter(employee_id=self.request.user.employee_id).first()
         if employee is None:
             raise NotFound("No employee profile is linked to this login account.")
-        if employee.status != EmployeeStatus.ACTIVE:
-            raise ValidationError({"detail": "Only active employees can mark attendance."})
-        if timezone.localdate() < employee.joining_date:
+        today = timezone.localdate()
+        employment_status = employee.status_on(today)
+        if employment_status not in ATTENDANCE_ELIGIBLE_STATUSES:
+            raise ValidationError(
+                {"detail": "Attendance is unavailable while your employment status is Inactive or Terminated."}
+            )
+        if employment_status not in ATTENDANCE_WORKING_STATUSES:
+            raise ValidationError(
+                {"detail": "Check-in and check-out are unavailable while your status is On Leave."}
+            )
+        if today < employee.joining_date:
             raise ValidationError({"detail": "Attendance is available from your joining date."})
         return employee
 
@@ -156,6 +170,13 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
 
     def _today_payload(self, employee, record=None):
         today = timezone.localdate()
+        employment_status = getattr(employee, "attendance_status_on_date", employee.status)
+        default_status = (
+            AttendanceStatus.LEAVE
+            if employment_status == EmployeeStatus.ON_LEAVE
+            else AttendanceStatus.ABSENT
+        )
+        default_status_label = "Leave" if default_status == AttendanceStatus.LEAVE else "Absent"
         return {
             "employee_uuid": employee.id,
             "employee_id": employee.employee_id,
@@ -169,9 +190,9 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
             "check_in": record.check_in if record else None,
             "check_out": record.check_out if record else None,
             "total_hours": record.total_hours if record else None,
-            "status": record.status if record else AttendanceStatus.ABSENT,
-            "status_label": record.get_status_display() if record else "Absent",
-            "live_status": record.live_status if record else "Absent",
+            "status": record.status if record else default_status,
+            "status_label": record.get_status_display() if record else default_status_label,
+            "live_status": record.live_status if record else default_status_label,
         }
 
     @action(detail=False, methods=["get"], url_path="today")
@@ -182,8 +203,7 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
             record.employee.id: record
             for record in AttendanceRecord.objects.select_related("employee").filter(date=today)
         }
-        employees = Employee.objects.filter(
-            status=EmployeeStatus.ACTIVE,
+        employees = Employee.objects.attendance_eligible_on(today).filter(
             joining_date__lte=today,
         ).order_by("full_name")
         payload = [self._today_payload(employee, records.get(employee.id)) for employee in employees]

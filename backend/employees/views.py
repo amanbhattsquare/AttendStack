@@ -194,10 +194,14 @@ class EmployeeViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["patch"], url_path="status")
     def update_status(self, request, pk=None):
         employee = self.get_object()
-        serializer = EmployeeStatusUpdateSerializer(data=request.data)
+        serializer = EmployeeStatusUpdateSerializer(
+            data=request.data,
+            context={"employee": employee},
+        )
         serializer.is_valid(raise_exception=True)
 
         employee.status = serializer.validated_data["status"]
+        employee._status_effective_date = serializer.validated_data["effective_date"]
         employee.save(update_fields=["status", "updated_at"])
         sync_employee_user_access(employee)
 

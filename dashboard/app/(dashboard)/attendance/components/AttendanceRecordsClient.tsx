@@ -40,6 +40,7 @@ type EmployeeOption = {
   employee_id: string;
   full_name: string;
   email: string;
+  status: "ACTIVE" | "PROVISION" | "ON_LEAVE" | "INACTIVE" | "TERMINATED";
   annual_salary?: number | string;
 };
 
@@ -209,7 +210,12 @@ const AttendanceRecordsClient = () => {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/employees/`, { headers: authHeaders() });
       if (!response.ok) throw new Error("Failed to load employees list.");
       const data = await response.json();
-      setEmployeesList(Array.isArray(data) ? data : data.results || []);
+      const employees = (Array.isArray(data) ? data : data.results || []) as EmployeeOption[];
+      setEmployeesList(
+        employees.filter((employee) =>
+          ["ACTIVE", "PROVISION", "ON_LEAVE"].includes(employee.status)
+        )
+      );
     } catch (err) {
       // console.error("Failed to load employees list:", err);
     }

@@ -1,5 +1,6 @@
 from django.contrib.auth import authenticate, get_user_model
 from django.test import override_settings
+from django.utils import timezone
 from rest_framework import status as http_status
 from rest_framework.test import APITestCase
 
@@ -106,6 +107,24 @@ class EmployeeStatusActionTests(APITestCase):
         )
 
         self.assertEqual(response.status_code, http_status.HTTP_400_BAD_REQUEST)
+
+    def test_status_action_records_the_effective_date(self):
+        effective_date = timezone.localdate()
+        response = self.client.patch(
+            f"/{self.employee.id}/status/",
+            {
+                "status": EmployeeStatus.TERMINATED,
+                "effective_date": effective_date.isoformat(),
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, http_status.HTTP_200_OK)
+        latest_change = self.employee.status_history.order_by(
+            "-effective_date", "-created_at"
+        ).first()
+        self.assertEqual(latest_change.status, EmployeeStatus.TERMINATED)
+        self.assertEqual(latest_change.effective_date, effective_date)
 
     def test_employee_email_update_also_updates_linked_login(self):
         response = self.client.patch(

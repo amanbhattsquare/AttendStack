@@ -5,11 +5,12 @@ from django.test import TestCase
 from django.utils import timezone
 from rest_framework import serializers
 
-from employees.models import Employee
+from employees.models import Employee, EmployeeStatus
 from holidays.models import Holiday
 from settings.models import SystemSettings
 
 from .models import AttendanceRecord, AttendanceStatus, LeaveRequest, LeaveStatus
+from .eligibility import attendance_eligible_records
 from .serializers import AttendanceRecordSerializer, LeaveRequestSerializer
 from .services import auto_mark_calendar_days, sync_leave_request_attendance
 
@@ -46,6 +47,63 @@ class AttendanceRecordSerializerTests(TestCase):
         record = serializer.save()
 
         self.assertEqual(record.status, AttendanceStatus.HALF_DAY)
+
+
+class AttendanceEmploymentStatusTests(TestCase):
+    def setUp(self):
+        self.employee = create_employee()
+
+    def _change_status(self, status, effective_date):
+        self.employee.status = status
+        self.employee._status_effective_date = effective_date
+        self.employee.save(update_fields=["status", "updated_at"])
+
+    def test_records_are_hidden_only_during_inactive_and_terminated_periods(self):
+        for attendance_date in (
+            date(2026, 5, 9),
+            date(2026, 5, 10),
+            date(2026, 5, 19),
+            date(2026, 5, 20),
+        ):
+            AttendanceRecord.objects.create(
+                employee=self.employee,
+                date=attendance_date,
+                status=AttendanceStatus.PRESENT,
+            )
+
+        self._change_status(EmployeeStatus.INACTIVE, date(2026, 5, 10))
+        self._change_status(EmployeeStatus.ACTIVE, date(2026, 5, 20))
+
+        visible_dates = list(
+            attendance_eligible_records(
+                AttendanceRecord.objects.filter(employee=self.employee)
+            ).order_by("date").values_list("date", flat=True)
+        )
+
+        self.assertEqual(
+            visible_dates,
+            [date(2026, 5, 9), date(2026, 5, 20)],
+        )
+
+    def test_manual_attendance_is_rejected_from_termination_date(self):
+        self._change_status(EmployeeStatus.TERMINATED, date(2026, 5, 10))
+        serializer = AttendanceRecordSerializer(
+            data={
+                "employee": str(self.employee.id),
+                "date": "2026-05-10",
+                "status": AttendanceStatus.PRESENT,
+            }
+        )
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("employee", serializer.errors)
+
+    def test_provision_and_on_leave_statuses_remain_attendance_eligible(self):
+        self._change_status(EmployeeStatus.PROVISION, date(2026, 5, 10))
+        self._change_status(EmployeeStatus.ON_LEAVE, date(2026, 5, 20))
+
+        self.assertTrue(self.employee.is_attendance_eligible_on(date(2026, 5, 10)))
+        self.assertTrue(self.employee.is_attendance_eligible_on(date(2026, 5, 20)))
 
 
 class LeaveAttachmentValidationTests(TestCase):
@@ -243,6 +301,43 @@ class EmploymentStartAttendanceTests(TestCase):
 from rest_framework.test import APITestCase
 from django.urls import reverse
 from rest_framework import status
+
+
+class AttendanceVisibilityApiTests(APITestCase):
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+
+        User = get_user_model()
+        self.admin = User.objects.create_superuser(
+            email="attendance.admin@example.com",
+            password="StrongPass123!",
+        )
+        self.employee = create_employee()
+        self.client.force_authenticate(self.admin)
+
+    def test_list_keeps_pre_transition_history_and_hides_ineligible_dates(self):
+        for attendance_date in (date(2026, 5, 9), date(2026, 5, 10)):
+            AttendanceRecord.objects.create(
+                employee=self.employee,
+                date=attendance_date,
+                status=AttendanceStatus.PRESENT,
+            )
+
+        self.employee.status = EmployeeStatus.TERMINATED
+        self.employee._status_effective_date = date(2026, 5, 10)
+        self.employee.save(update_fields=["status", "updated_at"])
+
+        response = self.client.get(
+            reverse("attendance:attendance-list"),
+            {"year": 2026, "month": 5},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            [record["date"] for record in response.data],
+            ["2026-05-09"],
+        )
+
 
 class GeofenceBypassTests(APITestCase):
     def setUp(self):

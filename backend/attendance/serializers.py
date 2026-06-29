@@ -131,8 +131,8 @@ class AttendanceRecordSerializer(serializers.ModelSerializer):
         return super().to_internal_value(data)
 
     def validate(self, attrs):
-        employee = attrs.get("employee")
-        date_val = attrs.get("date")
+        employee = attrs.get("employee", getattr(self.instance, "employee", None))
+        date_val = attrs.get("date", getattr(self.instance, "date", None))
         
         # If creating a new record
         if not self.instance:
@@ -145,6 +145,21 @@ class AttendanceRecordSerializer(serializers.ModelSerializer):
             if AttendanceRecord.objects.filter(employee=employee, date=date_val).exists():
                 raise serializers.ValidationError(
                     "An attendance record already exists for this employee on this date."
+                )
+
+        if employee and date_val:
+            if date_val < employee.joining_date:
+                raise serializers.ValidationError(
+                    {"date": "Attendance cannot be recorded before the employee's joining date."}
+                )
+            if not employee.is_attendance_eligible_on(date_val):
+                raise serializers.ValidationError(
+                    {
+                        "employee": (
+                            "Attendance cannot be recorded for an employee who was "
+                            "Inactive or Terminated on this date."
+                        )
+                    }
                 )
         return attrs
 

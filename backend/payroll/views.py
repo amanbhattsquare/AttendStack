@@ -3,7 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.db.models import Q
 from attendance.permissions import IsAdminOrReadOnly
-from employees.models import Employee, EmployeeStatus
+from employees.models import Employee
 from .models import Payroll, PayrollStatus
 from .serializers import PayrollSerializer
 from .services import build_employee_payroll_summary, calculate_attendance_payroll, payroll_period_end
@@ -57,8 +57,9 @@ class PayrollViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        active_employees = Employee.objects.filter(
-            status=EmployeeStatus.ACTIVE,
+        active_employees = Employee.objects.attendance_eligible_on(
+            payroll_period_end(month, year)
+        ).filter(
             joining_date__lte=payroll_period_end(month, year),
         )
         generated_count = 0
@@ -120,8 +121,9 @@ class PayrollViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        employees = Employee.objects.filter(
-            status=EmployeeStatus.ACTIVE,
+        employees = Employee.objects.attendance_eligible_on(
+            payroll_period_end(month, year)
+        ).filter(
             joining_date__lte=payroll_period_end(month, year),
         ).order_by("full_name")
         if search:

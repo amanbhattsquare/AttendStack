@@ -49,6 +49,11 @@ type PasswordActionResponse = {
 type PasswordAction = "create-password" | "reset-password";
 
 const API_URL = `${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/employees/`;
+const localDateValue = () => {
+  const now = new Date();
+  const offsetDate = new Date(now.getTime() - now.getTimezoneOffset() * 60_000);
+  return offsetDate.toISOString().slice(0, 10);
+};
 
 const statusBadgeClass: Record<Employee["status"], string> = {
   ACTIVE: "bg-success-subtle text-success",
@@ -151,6 +156,7 @@ const EmployeePageClient = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [statusEmployee, setStatusEmployee] = useState<Employee | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<EmployeeStatus>("ACTIVE");
+  const [statusEffectiveDate, setStatusEffectiveDate] = useState(localDateValue);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Partial<EmployeeFormData> | null>(null);
   const [isEditModalLoading, setIsEditModalLoading] = useState(false);
@@ -318,12 +324,14 @@ const EmployeePageClient = () => {
   const openStatusModal = (employee: Employee) => {
     setStatusEmployee(employee);
     setSelectedStatus(employee.status);
+    setStatusEffectiveDate(localDateValue());
   };
 
   const closeStatusModal = () => {
     if (actionLoadingKey?.endsWith(":status")) return;
     setStatusEmployee(null);
     setSelectedStatus("ACTIVE");
+    setStatusEffectiveDate(localDateValue());
   };
 
   const closePasswordModal = () => {
@@ -433,7 +441,10 @@ const EmployeePageClient = () => {
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ status: selectedStatus }),
+        body: JSON.stringify({
+          status: selectedStatus,
+          effective_date: statusEffectiveDate,
+        }),
       });
 
       if (!response.ok) {
@@ -768,6 +779,22 @@ const EmployeePageClient = () => {
                   </label>
                 ))}
               </div>
+            </Form.Group>
+
+            <Form.Group controlId="statusEffectiveDate">
+              <Form.Label className="fw-semibold">Effective Date</Form.Label>
+              <Form.Control
+                type="date"
+                required
+                min={statusEmployee?.joining_date}
+                max={localDateValue()}
+                value={statusEffectiveDate}
+                onChange={(event) => setStatusEffectiveDate(event.target.value)}
+              />
+              <Form.Text className="text-muted">
+                Attendance is shown only while the employee is Active, Provision, or On Leave.
+                Inactive and Terminated dates are excluded from this date onward.
+              </Form.Text>
             </Form.Group>
           </Modal.Body>
           <Modal.Footer>

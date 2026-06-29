@@ -5,6 +5,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from django.utils import timezone
 
 from attendance.models import AttendanceRecord, AttendanceStatus
+from attendance.eligibility import attendance_eligible_records
 from attendance.services import auto_mark_calendar_days
 
 
@@ -51,7 +52,9 @@ def calculate_attendance_payroll(employee, month: int, year: int, allowances=0, 
     }
     unpaid_days = Decimal("0")
 
-    records = AttendanceRecord.objects.select_related("leave_request").filter(
+    records = attendance_eligible_records(
+        AttendanceRecord.objects.select_related("leave_request")
+    ).filter(
         employee=employee,
         date__year=year,
         date__month=month,

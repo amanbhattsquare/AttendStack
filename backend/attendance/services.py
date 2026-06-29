@@ -4,7 +4,7 @@ from decimal import Decimal
 
 from django.db import transaction
 
-from employees.models import Employee, EmployeeStatus
+from employees.models import ATTENDANCE_WORKING_STATUSES, Employee
 from holidays.models import Holiday
 from settings.models import SystemSettings
 
@@ -117,7 +117,10 @@ def sync_leave_request_attendance(leave_request) -> dict[str, int]:
     requested_dates = {
         leave_date
         for leave_date in iter_dates(leave_request.start_date, leave_request.end_date)
-        if leave_date >= leave_request.employee.joining_date
+        if (
+            leave_date >= leave_request.employee.joining_date
+            and leave_request.employee.is_attendance_eligible_on(leave_date)
+        )
     }
     affected_years.update(day.year for day in requested_dates)
 
@@ -199,12 +202,17 @@ def auto_mark_calendar_days(month: int, year: int) -> dict[str, int]:
     created_count = 0
     updated_count = 0
     skipped_count = 0
-    active_employees = Employee.objects.filter(status=EmployeeStatus.ACTIVE)
+    employees = Employee.objects.filter(
+        joining_date__lte=date(year, month, days_in_month),
+    ).prefetch_related("status_history")
 
-    for employee in active_employees:
+    for employee in employees:
         employment_start = max(employee.joining_date, date(year, month, 1))
         for holiday_date in holiday_dates:
-            if holiday_date < employment_start:
+            if (
+                holiday_date < employment_start
+                or not employee.is_attendance_eligible_on(holiday_date)
+            ):
                 continue
             _, created = AttendanceRecord.objects.get_or_create(
                 employee=employee,
@@ -218,7 +226,10 @@ def auto_mark_calendar_days(month: int, year: int) -> dict[str, int]:
             skipped_count += int(not created)
 
         for sunday_date in sunday_dates:
-            if sunday_date < employment_start:
+            if (
+                sunday_date < employment_start
+                or not employee.is_attendance_eligible_on(sunday_date)
+            ):
                 continue
             record, created = AttendanceRecord.objects.get_or_create(
                 employee=employee,
@@ -257,8 +268,8 @@ def auto_mark_absent_yesterday():
     if Holiday.objects.filter(date=yesterday).exists():
         return {"status": "skipped", "reason": "Holiday"}
 
-    active_employees = Employee.objects.filter(
-        status=EmployeeStatus.ACTIVE,
+    active_employees = Employee.objects.attendance_eligible_on(yesterday).filter(
+        attendance_status_on_date__in=ATTENDANCE_WORKING_STATUSES,
         joining_date__lte=yesterday,
     )
     marked_absent_count = 0

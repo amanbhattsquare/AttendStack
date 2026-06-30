@@ -4,6 +4,7 @@ from rest_framework import serializers
 
 from employees.models import Employee
 from .models import AttendanceRecord, LeaveRequest, LeaveStatus
+from .services import monthly_leave_limit_error, monthly_leave_limit_snapshot
 
 
 def parse_time_or_datetime(value, date_val):
@@ -294,6 +295,27 @@ class LeaveRequestSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     {"detail": "A pending or approved leave request already exists for this date range."}
                 )
+
+            target_status = attrs.get(
+                "status",
+                getattr(self.instance, "status", LeaveStatus.PENDING),
+            )
+            if target_status != LeaveStatus.REJECTED:
+                snapshot = monthly_leave_limit_snapshot(
+                    employee,
+                    start_date,
+                    end_date,
+                    leave_type,
+                    is_half_day,
+                    exclude_request=self.instance,
+                )
+                leave_type_label = dict(LeaveRequest._meta.get_field("leave_type").choices).get(
+                    leave_type,
+                    leave_type,
+                )
+                policy_error = monthly_leave_limit_error(snapshot, leave_type_label)
+                if policy_error:
+                    raise serializers.ValidationError({"detail": policy_error})
 
         return attrs
 

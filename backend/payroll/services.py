@@ -4,7 +4,7 @@ from decimal import Decimal, ROUND_HALF_UP
 
 from django.utils import timezone
 
-from attendance.models import AttendanceRecord, AttendanceStatus
+from attendance.models import AttendanceRecord, AttendanceStatus, LeaveStatus, LeaveType
 from attendance.eligibility import attendance_eligible_records
 from attendance.services import auto_mark_calendar_days
 
@@ -51,6 +51,10 @@ def calculate_attendance_payroll(employee, month: int, year: int, allowances=0, 
         "sunday_paid": 0,
     }
     unpaid_days = Decimal("0")
+    leave_breakdown = {
+        leave_type.lower(): {"paid": Decimal("0"), "unpaid": Decimal("0")}
+        for leave_type in LeaveType.values
+    }
 
     records = attendance_eligible_records(
         AttendanceRecord.objects.select_related("leave_request")
@@ -66,6 +70,16 @@ def calculate_attendance_payroll(employee, month: int, year: int, allowances=0, 
     attendance_deductions = Decimal("0")
 
     for record in records:
+        if (
+            record.leave_request_id
+            and record.leave_request.status == LeaveStatus.APPROVED
+            and record.leave_request.leave_type in LeaveType.values
+        ):
+            leave_key = record.leave_request.leave_type.lower()
+            leave_unit = Decimal("0.5") if record.leave_request.is_half_day else Decimal("1")
+            payment_key = "paid" if record.is_paid else "unpaid"
+            leave_breakdown[leave_key][payment_key] += leave_unit
+
         if record.status == AttendanceStatus.PRESENT:
             summary["present"] += 1
         elif record.status == AttendanceStatus.LATE:
@@ -117,6 +131,15 @@ def calculate_attendance_payroll(employee, month: int, year: int, allowances=0, 
         deduction_details["Manual Adjustment"] = str(manual_deductions)
 
     payable_salary = money(basic_salary + allowances - deductions)
+    serialized_leave_breakdown = {
+        leave_type: {
+            "paid": float(values["paid"]),
+            "unpaid": float(values["unpaid"]),
+            "total": float(values["paid"] + values["unpaid"]),
+        }
+        for leave_type, values in leave_breakdown.items()
+        if values["paid"] or values["unpaid"]
+    }
     
     return {
         "basic_salary": basic_salary,
@@ -131,6 +154,7 @@ def calculate_attendance_payroll(employee, month: int, year: int, allowances=0, 
         "period_end": period_end,
         "per_day_salary": money(per_day_salary),
         "attendance_summary": summary,
+        "leave_breakdown": serialized_leave_breakdown,
     }
 
 
@@ -157,6 +181,7 @@ def build_employee_payroll_summary(employee, month: int, year: int, request=None
         "sundayPaid": payroll["attendance_summary"]["sunday_paid"],
         "sundayUnpaid": payroll["attendance_summary"]["sunday_unpaid"],
         "unpaidDays": payroll["unpaid_days"],
+        "leaveBreakdown": payroll["leave_breakdown"],
         "monthlySalary": payroll["basic_salary"],
         "deductions": payroll["deductions"],
         "payableSalary": payroll["payable_salary"],

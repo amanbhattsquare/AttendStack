@@ -250,6 +250,90 @@ class LeaveAttendanceSyncTests(TestCase):
             ],
         )
 
+    def test_leave_approval_recalculates_an_existing_payroll(self):
+        from payroll.models import Payroll
+        from payroll.services import calculate_attendance_payroll
+
+        absent = AttendanceRecord(
+            employee=self.employee,
+            date=date(2026, 5, 4),
+            status=AttendanceStatus.ABSENT,
+            is_paid=False,
+        )
+        absent.save(auto_refresh_status=False)
+        initial = calculate_attendance_payroll(self.employee, 5, 2026)
+        payroll = Payroll.objects.create(
+            employee=self.employee,
+            month=5,
+            year=2026,
+            basic_salary=initial["basic_salary"],
+            deductions=initial["deductions"],
+            deduction_details=initial["deduction_details"],
+        )
+        self.assertGreater(payroll.deductions, 0)
+
+        leave_request = LeaveRequest.objects.create(
+            employee=self.employee,
+            start_date=date(2026, 5, 4),
+            end_date=date(2026, 5, 4),
+            reason="Family work",
+            status=LeaveStatus.APPROVED,
+        )
+        result = sync_leave_request_attendance(leave_request)
+
+        payroll.refresh_from_db()
+        self.assertEqual(result["payrolls_updated"], 1)
+        self.assertEqual(payroll.deductions, 0)
+        self.assertEqual(payroll.net_salary, payroll.basic_salary)
+
+
+class MonthlyLeaveLimitTests(TestCase):
+    def setUp(self):
+        self.employee = create_employee()
+        settings = SystemSettings.get_settings()
+        settings.casual_leave_monthly_limit = 3
+        settings.sick_leave_monthly_limit = 7
+        settings.save()
+
+    def test_pending_and_approved_requests_reserve_the_monthly_limit(self):
+        LeaveRequest.objects.create(
+            employee=self.employee,
+            start_date=date(2026, 5, 4),
+            end_date=date(2026, 5, 5),
+            leave_type="CASUAL",
+            reason="Existing request",
+            status=LeaveStatus.PENDING,
+        )
+        serializer = LeaveRequestSerializer(data={
+            "employee": str(self.employee.id),
+            "start_date": "2026-05-11",
+            "end_date": "2026-05-12",
+            "leave_type": "CASUAL",
+            "reason": "New request",
+        })
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("monthly limit exceeded", str(serializer.errors["detail"][0]).lower())
+
+    def test_cross_month_request_is_capped_per_calendar_month(self):
+        LeaveRequest.objects.create(
+            employee=self.employee,
+            start_date=date(2026, 5, 4),
+            end_date=date(2026, 5, 5),
+            leave_type="CASUAL",
+            reason="Existing request",
+            status=LeaveStatus.APPROVED,
+        )
+        serializer = LeaveRequestSerializer(data={
+            "employee": str(self.employee.id),
+            "start_date": "2026-05-31",
+            "end_date": "2026-06-01",
+            "leave_type": "CASUAL",
+            "reason": "Cross-month request",
+        })
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+
 
 class EmploymentStartAttendanceTests(TestCase):
     def setUp(self):
@@ -339,6 +423,50 @@ class AttendanceVisibilityApiTests(APITestCase):
         )
 
 
+class MonthlyLeaveLimitApiTests(APITestCase):
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+
+        User = get_user_model()
+        self.user = User.objects.create_user(
+            email="monthly.limit@example.com",
+            password="StrongPass123!",
+            employee_id="EMP-LIMIT-001",
+        )
+        self.employee = create_employee(
+            email="monthly.limit@example.com",
+            employee_id="EMP-LIMIT-001",
+            aadhaar_number="123456789014",
+        )
+        settings = SystemSettings.get_settings()
+        settings.casual_leave_monthly_limit = 3
+        settings.save()
+        LeaveRequest.objects.create(
+            employee=self.employee,
+            start_date=date(2026, 5, 4),
+            end_date=date(2026, 5, 5),
+            leave_type="CASUAL",
+            reason="Existing request",
+            status=LeaveStatus.PENDING,
+        )
+        self.client.force_authenticate(self.user)
+
+    def test_employee_create_cannot_bypass_monthly_limit(self):
+        response = self.client.post(
+            reverse("attendance:leaves-list"),
+            {
+                "start_date": "2026-05-11",
+                "end_date": "2026-05-12",
+                "leave_type": "CASUAL",
+                "reason": "New request",
+            },
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("monthly limit exceeded", response.data["detail"].lower())
+        self.assertEqual(LeaveRequest.objects.filter(employee=self.employee).count(), 1)
+
+
 class GeofenceBypassTests(APITestCase):
     def setUp(self):
         from django.contrib.auth import get_user_model
@@ -410,3 +538,26 @@ class GeofenceBypassTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data["code"], "OUTSIDE_GEOFENCE")
+
+    def test_employee_cannot_check_in_over_approved_full_day_leave(self):
+        today = timezone.localdate()
+        leave_request = LeaveRequest.objects.create(
+            employee=self.employee,
+            start_date=today,
+            end_date=today,
+            leave_type="CASUAL",
+            reason="Approved personal leave",
+            status=LeaveStatus.APPROVED,
+        )
+        sync_leave_request_attendance(leave_request)
+
+        response = self.client.post(
+            reverse("attendance:attendance-check-in"),
+            {"latitude": 26.8342, "longitude": 80.9862, "accuracy": 20},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("approved full-day leave", response.data["detail"])
+        record = AttendanceRecord.objects.get(employee=self.employee, date=today)
+        self.assertEqual(record.status, AttendanceStatus.PAID_LEAVE)
+        self.assertIsNone(record.check_in)

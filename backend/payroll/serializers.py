@@ -74,4 +74,5 @@ class PayrollSerializer(serializers.ModelSerializer):
             "unpaid_days": payroll["unpaid_days"],
             "days_in_month": payroll["days_in_month"],
             "per_day_salary": payroll["per_day_salary"],
+            "leave_breakdown": payroll["leave_breakdown"],
         }

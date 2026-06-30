@@ -80,6 +80,10 @@ class PayrollCalculationTests(TestCase):
         self.assertEqual(payroll["attendance_summary"]["half_day"], 1)
         self.assertEqual(payroll["unpaid_days"], 0.0)
         self.assertEqual(payroll["deductions"], Decimal("0.00"))
+        self.assertEqual(
+            payroll["leave_breakdown"]["casual"],
+            {"paid": 0.5, "unpaid": 0.0, "total": 0.5},
+        )
 
     @patch("payroll.services.timezone.localdate")
     def test_current_month_payroll_ignores_future_attendance_records(self, localdate_mock):

@@ -23,6 +23,12 @@ const formatCurrency = (val: number | string) =>
 const formatDays = (val: number | string | undefined) =>
   Number(val || 0).toLocaleString("en-IN", { maximumFractionDigits: 1 });
 
+const leaveTotal = (summary: any, paymentType: "paid" | "unpaid") =>
+  Object.values(summary?.leave_breakdown || {}).reduce(
+    (total: number, item: any) => total + Number(item?.[paymentType] || 0),
+    0,
+  );
+
 const MySalaryClient = () => {
   const { companyLogo, companyName } = useBranding();
   const [payrolls, setPayrolls] = useState<any[]>([]);
@@ -164,7 +170,8 @@ const MySalaryClient = () => {
                       </td>
                       <td>
                         <div className="fw-bold text-success">{formatCurrency(p.payable_salary ?? p.net_salary)}</div>
-                        <small className="text-danger">Unpaid Days: {formatDays(p.attendance_summary?.unpaid_days)}</small>
+                        <small className="text-secondary d-block">Paid leave: {formatDays(leaveTotal(p.attendance_summary, "paid"))} day(s)</small>
+                        <small className="text-danger">Unpaid days: {formatDays(p.attendance_summary?.unpaid_days)}</small>
                       </td>
                       <td>
                         <Badge bg={p.status === "PAID" ? "success" : "warning"}>
@@ -226,6 +233,16 @@ const MySalaryClient = () => {
                 </strong>
                 .
               </p>
+              {deductionData.attendance_summary?.leave_breakdown && (
+                <Alert variant="info" className="small">
+                  <strong>Approved leave included in payroll:</strong>{" "}
+                  {Object.entries(deductionData.attendance_summary.leave_breakdown).map(([type, values]: [string, any]) => (
+                    <span key={type} className="me-3 text-capitalize">
+                      {type}: {formatDays(values.paid)} paid / {formatDays(values.unpaid)} unpaid
+                    </span>
+                  ))}
+                </Alert>
+              )}
               <Table striped bordered hover>
                 <thead>
                   <tr>

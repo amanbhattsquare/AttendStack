@@ -194,6 +194,8 @@ const SettingsPage = () => {
               burgerRuleEnabled: data.burger_rule_enabled,
               sickLeaveDays: data.sick_leave_days,
               casualLeaveDays: data.casual_leave_days,
+              sickLeaveMonthlyLimit: data.sick_leave_monthly_limit ?? 7,
+              casualLeaveMonthlyLimit: data.casual_leave_monthly_limit ?? 3,
               maternityLeaveDays: data.maternity_leave_days,
               paternityLeaveDays: data.paternity_leave_days,
               bereavementLeaveDays: data.bereavement_leave_days || 5,
@@ -281,6 +283,8 @@ const SettingsPage = () => {
     // Core leave balances
     sickLeaveDays: 12,
     casualLeaveDays: 6,
+    sickLeaveMonthlyLimit: 7,
+    casualLeaveMonthlyLimit: 3,
     maternityLeaveDays: 180,
     paternityLeaveDays: 14,
     bereavementLeaveDays: 5,
@@ -514,6 +518,8 @@ const SettingsPage = () => {
         burger_rule_enabled: leaveSettings.burgerRuleEnabled,
         sick_leave_days: leaveSettings.sickLeaveDays,
         casual_leave_days: leaveSettings.casualLeaveDays,
+        sick_leave_monthly_limit: leaveSettings.sickLeaveMonthlyLimit,
+        casual_leave_monthly_limit: leaveSettings.casualLeaveMonthlyLimit,
         maternity_leave_days: leaveSettings.maternityLeaveDays,
         paternity_leave_days: leaveSettings.paternityLeaveDays,
         bereavement_leave_days: leaveSettings.bereavementLeaveDays,
@@ -968,7 +974,7 @@ const SettingsPage = () => {
                             <Row className="g-3">
                               <Col md={6}>
                                 <Form.Group>
-                                  <Form.Label className="fw-semibold">Sick Leave</Form.Label>
+                                  <Form.Label className="fw-semibold">Sick Leave (annual paid)</Form.Label>
                                   <Form.Control
                                     type="number"
                                     value={leaveSettings.sickLeaveDays}
@@ -979,13 +985,39 @@ const SettingsPage = () => {
                               </Col>
                               <Col md={6}>
                                 <Form.Group>
-                                  <Form.Label className="fw-semibold">Casual Leave</Form.Label>
+                                  <Form.Label className="fw-semibold">Casual Leave (annual paid)</Form.Label>
                                   <Form.Control
                                     type="number"
                                     value={leaveSettings.casualLeaveDays}
                                     onChange={(e) => setLeaveSettings({ ...leaveSettings, casualLeaveDays: parseInt(e.target.value) })}
                                   />
                                   <Form.Text>Urgent personal matters</Form.Text>
+                                </Form.Group>
+                              </Col>
+                              <Col md={6}>
+                                <Form.Group>
+                                  <Form.Label className="fw-semibold">Sick Leave Monthly Limit</Form.Label>
+                                  <Form.Control
+                                    type="number"
+                                    min={1}
+                                    max={31}
+                                    value={leaveSettings.sickLeaveMonthlyLimit}
+                                    onChange={(e) => setLeaveSettings({ ...leaveSettings, sickLeaveMonthlyLimit: parseInt(e.target.value) || 1 })}
+                                  />
+                                  <Form.Text>Maximum requested per employee each month (default 7 days)</Form.Text>
+                                </Form.Group>
+                              </Col>
+                              <Col md={6}>
+                                <Form.Group>
+                                  <Form.Label className="fw-semibold">Casual Leave Monthly Limit</Form.Label>
+                                  <Form.Control
+                                    type="number"
+                                    min={1}
+                                    max={31}
+                                    value={leaveSettings.casualLeaveMonthlyLimit}
+                                    onChange={(e) => setLeaveSettings({ ...leaveSettings, casualLeaveMonthlyLimit: parseInt(e.target.value) || 1 })}
+                                  />
+                                  <Form.Text>Maximum requested per employee each month (default 3 days)</Form.Text>
                                 </Form.Group>
                               </Col>
                               <Col md={6}>

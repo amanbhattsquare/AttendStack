@@ -23,6 +23,8 @@ interface LeaveRequest {
 interface LeaveSettings {
   sick_leave_days: number;
   casual_leave_days: number;
+  sick_leave_monthly_limit: number;
+  casual_leave_monthly_limit: number;
   maternity_leave_days: number;
   paternity_leave_days: number;
   bereavement_leave_days: number;
@@ -36,6 +38,21 @@ interface LeavePreview {
   unpaid_leave_days: number;
   estimated_salary_deduction: string;
   currency: string;
+  monthly_limit: number | null;
+  monthly_periods: Array<{
+    year: number;
+    month: number;
+    month_name: string;
+    limit: number;
+    used: number;
+    requested: number;
+    remaining: number;
+    remaining_after_request: number;
+    projected: number;
+    exceeded: boolean;
+  }>;
+  monthly_limit_exceeded: boolean;
+  monthly_limit_message: string | null;
   note: string;
 }
 
@@ -47,6 +64,16 @@ const DEFAULT_LEAVE_TYPES = [
   { value: "BEREAVEMENT", label: "Bereavement Leave" },
   { value: "MARRIAGE", label: "Marriage Leave" },
 ];
+
+const apiError = (payload: unknown, fallback: string) => {
+  if (!payload || typeof payload !== "object") return fallback;
+  const data = payload as Record<string, unknown>;
+  if (typeof data.detail === "string") return data.detail;
+  const first = Object.values(data)
+    .flatMap((value) => Array.isArray(value) ? value : [value])
+    .find((value) => typeof value === "string");
+  return typeof first === "string" ? first : fallback;
+};
 
 const EmployeeLeavesClient = () => {
   const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
@@ -79,7 +106,7 @@ const EmployeeLeavesClient = () => {
     }
 
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/attendance/leaves/`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/attendance/leaves/?page_size=100`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -128,6 +155,7 @@ const EmployeeLeavesClient = () => {
       setIsPreviewLoading(true);
       try {
         const params = new URLSearchParams({ start_date: startDate, end_date: endDate, leave_type: leaveType, is_half_day: String(isHalfDay) });
+        if (editingLeave) params.set("exclude_id", String(editingLeave.id));
         const res = await fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/attendance/leaves/preview/?${params}`, { headers: { Authorization: `Bearer ${token}` }, signal: controller.signal });
         if (!res.ok) throw new Error("Unable to calculate leave impact.");
         setLeavePreview(await res.json());
@@ -139,7 +167,7 @@ const EmployeeLeavesClient = () => {
     };
     void loadPreview();
     return () => controller.abort();
-  }, [showModal, startDate, endDate, leaveType, isHalfDay]);
+  }, [showModal, startDate, endDate, leaveType, isHalfDay, editingLeave]);
 
   const resetFormAndCloseModal = () => {
     setShowModal(false);
@@ -239,7 +267,7 @@ const EmployeeLeavesClient = () => {
 
       if (!res.ok) {
         const errData = await res.json();
-        throw new Error(errData.detail || "Unable to submit leave request.");
+        throw new Error(apiError(errData, "Unable to submit leave request."));
       }
 
       setSuccessMsg(editingLeave ? "Your leave request has been updated successfully!" : "Your leave request has been submitted successfully for HR review!");
@@ -315,10 +343,43 @@ const EmployeeLeavesClient = () => {
 
   // Calculate used leave days
   const leaveBalance = (leaveType: string, allowance: number) => {
+    const currentYear = new Date().getFullYear();
     const used = leaves
       .filter((leave) => leave.leave_type === leaveType && leave.status === "APPROVED")
-      .reduce((total, leave) => total + (leave.is_half_day ? 0.5 : calculateDays(leave.start_date, leave.end_date)), 0);
+      .reduce((total, leave) => {
+        if (leave.is_half_day) {
+          return total + (new Date(`${leave.start_date}T00:00:00`).getFullYear() === currentYear ? 0.5 : 0);
+        }
+        let leaveDate = new Date(`${leave.start_date}T00:00:00`);
+        const finalDate = new Date(`${leave.end_date}T00:00:00`);
+        let usedThisYear = 0;
+        while (leaveDate <= finalDate) {
+          if (leaveDate.getFullYear() === currentYear) usedThisYear += 1;
+          leaveDate = new Date(leaveDate.getFullYear(), leaveDate.getMonth(), leaveDate.getDate() + 1);
+        }
+        return total + usedThisYear;
+      }, 0);
     return Math.max(allowance - used, 0);
+  };
+
+  const currentMonthUsage = (type: string) => {
+    const today = new Date();
+    return leaves
+      .filter((leave) => leave.leave_type === type && ["PENDING", "APPROVED"].includes(leave.status))
+      .reduce((total, leave) => {
+        if (leave.is_half_day) {
+          const leaveDate = new Date(`${leave.start_date}T00:00:00`);
+          return total + (leaveDate.getFullYear() === today.getFullYear() && leaveDate.getMonth() === today.getMonth() ? 0.5 : 0);
+        }
+        let leaveDate = new Date(`${leave.start_date}T00:00:00`);
+        const finalDate = new Date(`${leave.end_date}T00:00:00`);
+        let usedThisMonth = 0;
+        while (leaveDate <= finalDate) {
+          if (leaveDate.getFullYear() === today.getFullYear() && leaveDate.getMonth() === today.getMonth()) usedThisMonth += 1;
+          leaveDate = new Date(leaveDate.getFullYear(), leaveDate.getMonth(), leaveDate.getDate() + 1);
+        }
+        return total + usedThisMonth;
+      }, 0);
   };
 
   // Metrics
@@ -364,7 +425,7 @@ const EmployeeLeavesClient = () => {
                   <div>
                     <p className="text-danger small fw-semibold mb-1">Sick Leave</p>
                     <p className="text-danger mb-0"><strong>{leaveBalance("SICK", leaveSettings.sick_leave_days)}</strong> / {leaveSettings.sick_leave_days} days left</p>
-                    <small className="text-secondary d-block mt-1">Medical illness or treatment</small>
+                    <small className="text-secondary d-block mt-1">{currentMonthUsage("SICK")} / {leaveSettings.sick_leave_monthly_limit ?? 7} requested this month</small>
                   </div>
                   <IconHeart size={24} className="text-danger" />
                 </div>
@@ -374,7 +435,7 @@ const EmployeeLeavesClient = () => {
                   <div>
                     <p className="text-info small fw-semibold mb-1">Casual Leave</p>
                     <p className="text-info mb-0"><strong>{leaveBalance("CASUAL", leaveSettings.casual_leave_days)}</strong> / {leaveSettings.casual_leave_days} days left</p>
-                    <small className="text-secondary d-block mt-1">Urgent personal work</small>
+                    <small className="text-secondary d-block mt-1">{currentMonthUsage("CASUAL")} / {leaveSettings.casual_leave_monthly_limit ?? 3} requested this month</small>
                   </div>
                   <IconUser size={24} className="text-info" />
                 </div>
@@ -417,6 +478,9 @@ const EmployeeLeavesClient = () => {
                 </Col>
               ))}
             </Row>
+            <Alert variant="light" className="border mt-4 mb-0 small">
+              <strong>Monthly request policy:</strong> Casual Leave is limited to {leaveSettings.casual_leave_monthly_limit ?? 3} days and Sick Leave to {leaveSettings.sick_leave_monthly_limit ?? 7} days per calendar month. Pending requests reserve the balance.
+            </Alert>
           </Card.Body>
         </Card>
       )}
@@ -564,7 +628,7 @@ const EmployeeLeavesClient = () => {
           <Modal.Body className="px-4 py-3">
             <Alert variant="info" className="border-0 shadow-sm d-flex align-items-center gap-2 rounded-3 small">
               <IconInfoCircle size={18} className="flex-shrink-0" />
-              Your standard shifts are 10:00 AM – 06:00 PM. Leave requests must be approved by HR or Admin.
+              Approved leave automatically updates your attendance and payroll. Monthly limits include both pending and approved requests.
             </Alert>
 
             <Row className="g-3 mb-3">
@@ -608,7 +672,27 @@ const EmployeeLeavesClient = () => {
                     <h4 className="fw-bold text-primary mb-0 mt-1">
                       {isHalfDay ? "0.5 Day" : `${calculateDays(startDate, endDate)} ${calculateDays(startDate, endDate) === 1 ? "Day" : "Days"}`}
                     </h4>
-                    {isPreviewLoading ? <small className="text-secondary mt-2">Calculating paid leave impact…</small> : leavePreview && <div className="leave-impact-preview mt-2 pt-2 border-top text-start"><div className="d-flex justify-content-between small"><span>Paid leave available</span><strong className="text-success">{leavePreview.paid_leave_available} days</strong></div><div className="d-flex justify-content-between small mt-1"><span>Paid leave used</span><strong>{leavePreview.paid_leave_used} days</strong></div><div className="d-flex justify-content-between small mt-1"><span>Unpaid leave</span><strong className={leavePreview.unpaid_leave_days ? "text-danger" : "text-success"}>{leavePreview.unpaid_leave_days} days</strong></div><div className="d-flex justify-content-between small mt-1"><span>Estimated salary deduction</span><strong className={leavePreview.unpaid_leave_days ? "text-danger" : "text-success"}>₹{Number(leavePreview.estimated_salary_deduction).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></div><small className="d-block text-secondary mt-2">{leavePreview.note}</small></div>}
+                    {isPreviewLoading ? (
+                      <small className="text-secondary mt-2">Calculating paid leave impact…</small>
+                    ) : leavePreview && (
+                      <div className="leave-impact-preview mt-2 pt-2 border-top text-start">
+                        {leavePreview.monthly_periods.map((period) => (
+                          <div key={`${period.year}-${period.month}`} className={`small mb-2 p-2 rounded ${period.exceeded ? "bg-danger-subtle text-danger" : "bg-success-subtle text-success"}`}>
+                            <div className="d-flex justify-content-between gap-2">
+                              <span>{period.month_name} monthly limit</span>
+                              <strong>{period.projected} / {period.limit} days</strong>
+                            </div>
+                            <span className="d-block mt-1">{period.used} already pending/approved + {period.requested} in this request</span>
+                          </div>
+                        ))}
+                        {leavePreview.monthly_limit_message && <div className="small text-danger fw-semibold mb-2">{leavePreview.monthly_limit_message}</div>}
+                        <div className="d-flex justify-content-between small"><span>Annual paid balance available</span><strong className="text-success">{leavePreview.paid_leave_available} days</strong></div>
+                        <div className="d-flex justify-content-between small mt-1"><span>Paid leave used</span><strong>{leavePreview.paid_leave_used} days</strong></div>
+                        <div className="d-flex justify-content-between small mt-1"><span>Unpaid leave</span><strong className={leavePreview.unpaid_leave_days ? "text-danger" : "text-success"}>{leavePreview.unpaid_leave_days} days</strong></div>
+                        <div className="d-flex justify-content-between small mt-1"><span>Estimated salary deduction</span><strong className={leavePreview.unpaid_leave_days ? "text-danger" : "text-success"}>₹{Number(leavePreview.estimated_salary_deduction).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></div>
+                        <small className="d-block text-secondary mt-2">{leavePreview.note}</small>
+                      </div>
+                    )}
                   </div>
                 )}
               </Col>
@@ -673,7 +757,7 @@ const EmployeeLeavesClient = () => {
             <Button variant="outline-secondary" onClick={resetFormAndCloseModal} className="px-4 py-2.5 rounded-3 fw-semibold">
               Cancel
             </Button>
-            <Button variant="primary" type="submit" disabled={isSubmitting} className="px-4 py-2.5 rounded-3 fw-semibold">
+            <Button variant="primary" type="submit" disabled={isSubmitting || Boolean(leavePreview?.monthly_limit_exceeded)} className="px-4 py-2.5 rounded-3 fw-semibold">
               {isSubmitting ? (
                 <>
                   <Spinner size="sm" animation="border" className="me-2" />

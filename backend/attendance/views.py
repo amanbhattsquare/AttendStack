@@ -27,7 +27,14 @@ from .eligibility import attendance_eligible_records
 from .models import AttendanceRecord, AttendanceStatus, LeaveRequest, LeaveStatus, LeaveType
 from .permissions import IsAdminOrReadOnly
 from .serializers import AttendanceRecordSerializer, TodayAttendanceSerializer, LeaveRequestSerializer
-from .services import auto_mark_calendar_days, leave_allocation, leave_units, sync_leave_request_attendance
+from .services import (
+    auto_mark_calendar_days,
+    leave_allocation,
+    leave_units,
+    monthly_leave_limit_error,
+    monthly_leave_limit_snapshot,
+    sync_leave_request_attendance,
+)
 
 
 def get_ip_address(request):
@@ -398,6 +405,17 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
         today = timezone.localdate()
         record, created = AttendanceRecord.objects.get_or_create(employee=employee, date=today)
 
+        if (
+            record.leave_request_id
+            and record.leave_request.status == LeaveStatus.APPROVED
+            and not record.leave_request.is_half_day
+        ):
+            raise ValidationError({
+                "detail": (
+                    "Check-in is unavailable because approved full-day leave is recorded for today. "
+                    "Contact HR if the leave should be cancelled."
+                )
+            })
         if record.check_in:
             raise ValidationError({"detail": "You have already checked in today."})
 
@@ -561,8 +579,20 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
             raise ValidationError({"leave_type": "Half-day leave is available only for Casual or Sick leave."})
 
         employee = self._current_employee()
+        excluded_request = None
+        exclude_id = request.query_params.get("exclude_id")
+        if exclude_id:
+            excluded_request = LeaveRequest.objects.filter(pk=exclude_id, employee=employee).first()
         settings = SystemSettings.get_settings()
         annual_allowance = leave_allocation(settings, leave_type)
+        monthly_snapshot = monthly_leave_limit_snapshot(
+            employee,
+            start_date,
+            end_date,
+            leave_type,
+            is_half_day,
+            exclude_request=excluded_request,
+        )
         selected_dates = []
         current = start_date
         while current <= end_date:
@@ -570,12 +600,15 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
             current += timedelta(days=1)
 
         used_by_year: dict[int, Decimal] = {}
-        for record in AttendanceRecord.objects.select_related("leave_request").filter(
+        paid_leave_records = AttendanceRecord.objects.select_related("leave_request").filter(
             employee=employee,
             leave_request__status=LeaveStatus.APPROVED,
             leave_request__leave_type=leave_type,
             is_paid=True,
-        ):
+        )
+        if excluded_request:
+            paid_leave_records = paid_leave_records.exclude(leave_request=excluded_request)
+        for record in paid_leave_records:
             used_by_year[record.date.year] = used_by_year.get(record.date.year, Decimal("0")) + leave_units(record.leave_request)
 
         units_per_day = Decimal("0.5") if is_half_day else Decimal("1")
@@ -597,6 +630,22 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
                 monthly_salary = Decimal(str(employee.annual_salary or 0)) / Decimal("12")
                 days_in_month = (leave_date.replace(day=28) + timedelta(days=4)).replace(day=1) - leave_date.replace(day=1)
                 deduction += (monthly_salary / Decimal(str(days_in_month.days))) * units_per_day
+        monthly_periods = [
+            {
+                **period,
+                "limit": float(period["limit"]),
+                "used": float(period["used"]),
+                "requested": float(period["requested"]),
+                "remaining": float(period["remaining"]),
+                "remaining_after_request": float(period["remaining_after_request"]),
+                "projected": float(period["projected"]),
+            }
+            for period in monthly_snapshot["periods"]
+        ]
+        monthly_policy_error = monthly_leave_limit_error(
+            monthly_snapshot,
+            dict(LeaveType.choices).get(leave_type, leave_type),
+        )
         return Response({
             "total_days": float(Decimal(len(selected_dates)) * units_per_day),
             "paid_leave_available": float(available_before),
@@ -604,7 +653,11 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
             "unpaid_leave_days": float(unpaid_days),
             "estimated_salary_deduction": str(deduction.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)),
             "currency": "INR",
-            "note": "Estimate only. The approved leave is paid from its configured leave-type balance; any excess is unpaid.",
+            "monthly_limit": float(monthly_snapshot["limit"]) if monthly_snapshot["limit"] is not None else None,
+            "monthly_periods": monthly_periods,
+            "monthly_limit_exceeded": bool(monthly_snapshot["violations"]),
+            "monthly_limit_message": monthly_policy_error,
+            "note": "Estimate only. Pending and approved requests count toward monthly limits. Approved leave is paid from its annual leave-type balance; any excess is unpaid.",
         })
 
     def get_queryset(self):
@@ -632,57 +685,131 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
             )
 
     def _validate_half_day_approval(self, serializer):
-        """A half-day request can be approved only after the employee checks out."""
+        """Validate attendance prerequisites before approving a leave request."""
         instance = serializer.instance
         target_status = serializer.validated_data.get("status", instance.status if instance else LeaveStatus.PENDING)
         is_half_day = serializer.validated_data.get("is_half_day", instance.is_half_day if instance else False)
-        leave_date = serializer.validated_data.get("start_date", instance.start_date if instance else None)
+        start_date = serializer.validated_data.get("start_date", instance.start_date if instance else None)
+        end_date = serializer.validated_data.get("end_date", instance.end_date if instance else None)
 
-        if target_status != LeaveStatus.APPROVED or not is_half_day or not leave_date:
+        if target_status != LeaveStatus.APPROVED or not start_date or not end_date:
             return
 
         employee = serializer.validated_data.get("employee", instance.employee if instance else None)
-        record = AttendanceRecord.objects.filter(employee=employee, date=leave_date).first()
+        if not is_half_day:
+            punched_record_exists = AttendanceRecord.objects.filter(
+                employee=employee,
+                date__range=(start_date, end_date),
+            ).filter(Q(check_in__isnull=False) | Q(check_out__isnull=False)).exists()
+            if punched_record_exists:
+                raise ValidationError({
+                    "detail": (
+                        "Full-day leave cannot be approved for a date that already has attendance punches. "
+                        "Use a half-day request or correct the attendance record first."
+                    )
+                })
+            return
+
+        record = AttendanceRecord.objects.filter(employee=employee, date=start_date).first()
         if record is None or not record.check_out:
             raise ValidationError({
                 "detail": "A half-day leave can be approved only after the employee has checked out."
             })
 
+    def _validate_monthly_policy(self, serializer, employee):
+        instance = serializer.instance
+        target_status = serializer.validated_data.get(
+            "status",
+            instance.status if instance else LeaveStatus.PENDING,
+        )
+        if target_status == LeaveStatus.REJECTED:
+            return
+        start_date = serializer.validated_data.get(
+            "start_date",
+            instance.start_date if instance else None,
+        )
+        end_date = serializer.validated_data.get(
+            "end_date",
+            instance.end_date if instance else None,
+        )
+        leave_type = serializer.validated_data.get(
+            "leave_type",
+            instance.leave_type if instance else LeaveType.CASUAL,
+        )
+        is_half_day = serializer.validated_data.get(
+            "is_half_day",
+            instance.is_half_day if instance else False,
+        )
+        snapshot = monthly_leave_limit_snapshot(
+            employee,
+            start_date,
+            end_date,
+            leave_type,
+            is_half_day,
+            exclude_request=instance,
+        )
+        policy_error = monthly_leave_limit_error(
+            snapshot,
+            dict(LeaveType.choices).get(leave_type, leave_type),
+        )
+        if policy_error:
+            raise ValidationError({"detail": policy_error})
+
     def perform_create(self, serializer):
         user = self.request.user
-        if not self._is_admin_or_hr(user):
-            employee = self._current_employee()
-            self._raise_if_leave_overlaps(
-                employee,
-                serializer.validated_data["start_date"],
-                serializer.validated_data["end_date"],
-            )
-            leave_request = serializer.save(employee=employee, status=LeaveStatus.PENDING, admin_notes=None)
-        else:
-            self._validate_half_day_approval(serializer)
-            leave_request = serializer.save()
+        employee = (
+            self._current_employee()
+            if not self._is_admin_or_hr(user)
+            else serializer.validated_data.get("employee")
+        )
+        if employee is None:
+            raise ValidationError({"employee": "Choose an employee for this leave request."})
 
-        sync_leave_request_attendance(leave_request)
+        with transaction.atomic():
+            employee = Employee.objects.select_for_update().get(pk=employee.pk)
+            self._validate_monthly_policy(serializer, employee)
+            if not self._is_admin_or_hr(user):
+                self._raise_if_leave_overlaps(
+                    employee,
+                    serializer.validated_data["start_date"],
+                    serializer.validated_data["end_date"],
+                )
+                leave_request = serializer.save(
+                    employee=employee,
+                    status=LeaveStatus.PENDING,
+                    admin_notes=None,
+                )
+            else:
+                self._validate_half_day_approval(serializer)
+                leave_request = serializer.save(employee=employee)
+
+            sync_leave_request_attendance(leave_request)
 
     def perform_update(self, serializer):
         user = self.request.user
         
-        # If user is Employee, they cannot update status or admin_notes
-        if not self._is_admin_or_hr(user):
-            forbidden_fields = {"employee", "status", "admin_notes"}
-            if forbidden_fields.intersection(self.request.data.keys()):
-                raise PermissionDenied("Employees can only edit leave dates, type, and reason.")
-            if serializer.instance.status != LeaveStatus.PENDING:
-                raise ValidationError({"detail": "Only pending leave requests can be edited by employees."})
-            employee = self._current_employee()
-            leave_request = serializer.save()
-            if leave_request.employee_id != employee.id:
-                raise PermissionDenied("You can only edit your own leave requests.")
-        else:
-            self._validate_half_day_approval(serializer)
-            leave_request = serializer.save()
+        with transaction.atomic():
+            employee = Employee.objects.select_for_update().get(
+                pk=serializer.validated_data.get("employee", serializer.instance.employee).pk
+            )
+            self._validate_monthly_policy(serializer, employee)
 
-        sync_leave_request_attendance(leave_request)
+            # If user is Employee, they cannot update status or admin_notes.
+            if not self._is_admin_or_hr(user):
+                forbidden_fields = {"employee", "status", "admin_notes"}
+                if forbidden_fields.intersection(self.request.data.keys()):
+                    raise PermissionDenied("Employees can only edit leave dates, type, and reason.")
+                if serializer.instance.status != LeaveStatus.PENDING:
+                    raise ValidationError({"detail": "Only pending leave requests can be edited by employees."})
+                current_employee = self._current_employee()
+                if serializer.instance.employee_id != current_employee.id:
+                    raise PermissionDenied("You can only edit your own leave requests.")
+                leave_request = serializer.save(employee=employee)
+            else:
+                self._validate_half_day_approval(serializer)
+                leave_request = serializer.save(employee=employee)
+
+            sync_leave_request_attendance(leave_request)
 
     def perform_destroy(self, instance):
         user = self.request.user

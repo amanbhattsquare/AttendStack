@@ -477,6 +477,12 @@ const AdminLeavesClient = () => {
                 </Col>
               </Row>
 
+              {isEditing && (
+                <Alert variant="info" className="border-0 small">
+                  Approval immediately marks the covered attendance dates as paid or unpaid leave and recalculates any existing payroll for those months. Monthly Casual and Sick Leave limits are enforced automatically.
+                </Alert>
+              )}
+
               <div className="mb-4">
                 <span className="small fw-semibold text-secondary d-block mb-1.5">Employee Explanation / Reason:</span>
                 <div className="p-3 bg-light rounded-3 border text-dark-emphasis small" style={{ whiteSpace: "pre-line" }}>

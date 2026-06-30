@@ -79,6 +79,16 @@ class SystemSettings(models.Model):
     # own leave-type balance remains for that calendar year.
     sick_leave_days = models.PositiveIntegerField(default=12, validators=[MaxValueValidator(365)])
     casual_leave_days = models.PositiveIntegerField(default=6, validators=[MaxValueValidator(365)])
+    sick_leave_monthly_limit = models.PositiveIntegerField(
+        default=7,
+        validators=[MaxValueValidator(31)],
+        help_text="Maximum Sick Leave days an employee may request in one calendar month.",
+    )
+    casual_leave_monthly_limit = models.PositiveIntegerField(
+        default=3,
+        validators=[MaxValueValidator(31)],
+        help_text="Maximum Casual Leave days an employee may request in one calendar month.",
+    )
     maternity_leave_days = models.PositiveIntegerField(default=180, validators=[MaxValueValidator(365)])
     paternity_leave_days = models.PositiveIntegerField(default=14, validators=[MaxValueValidator(365)])
     bereavement_leave_days = models.PositiveIntegerField(default=5, validators=[MaxValueValidator(365)])

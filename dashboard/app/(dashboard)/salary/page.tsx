@@ -21,6 +21,12 @@ const authHeaders = (): HeadersInit => {
 const formatCurrency = (val: number | string) =>
   new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(Number(val));
 
+const leaveTotal = (summary: any, paymentType: "paid" | "unpaid") =>
+  Object.values(summary?.leave_breakdown || {}).reduce(
+    (total: number, item: any) => total + Number(item?.[paymentType] || 0),
+    0,
+  );
+
 const monthsList = [
   { value: 1, label: "January" },
   { value: 2, label: "February" },
@@ -397,7 +403,11 @@ const SalaryPage = () => {
                               <IconInfoCircle size={16} />
                             </Button>
                           </td>
-                          <td className="fw-bold text-success">{formatCurrency(netSalary)}</td>
+                          <td>
+                            <div className="fw-bold text-success">{formatCurrency(netSalary)}</div>
+                            <small className="text-secondary d-block">Paid leave: {leaveTotal(p.attendance_summary, "paid")} day(s)</small>
+                            <small className="text-danger">Unpaid days: {Number(p.attendance_summary?.unpaid_days || 0)}</small>
+                          </td>
                           <td>
                             <Badge bg={p.status === "PAID" ? "success" : "warning"}>
                               {p.status}

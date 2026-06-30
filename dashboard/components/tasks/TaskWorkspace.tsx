@@ -401,7 +401,7 @@ export default function TaskWorkspace({ employeeMode = false }: { employeeMode?:
       <div className="workspace-projects-header mb-3"><div><h5 className="fw-bold mb-0">Projects</h5><small className="text-secondary">Select a project to focus its task list.</small></div><div className="d-flex align-items-center gap-2"><Badge bg="light" text="dark" className="border">{projects.length} total</Badge><Button size="sm" variant="outline-secondary" className="workspace-projects-toggle" onClick={() => setShowProjects((visible) => !visible)} aria-expanded={showProjects}>{showProjects ? <IconChevronUp size={16} /> : <IconChevronDown size={16} />}{showProjects ? "Hide projects" : "Show projects"}</Button></div></div>
       {showProjects && <div className="workspace-projects mb-4">{projects.map((project) => <Card key={project.id} onClick={() => selectProject(project.id)} className={`border-0 shadow-sm workspace-project ${projectFilter === project.id ? "is-selected" : ""}`} style={{ "--project-color": project.color, "--project-tint": colorTint(project.color, 0.22) } as React.CSSProperties} role="button" tabIndex={0} aria-pressed={projectFilter === project.id} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); selectProject(project.id); } }}><Card.Body>{projectFilter === project.id && <span className="project-selected"><IconCheck size={13} /> Selected</span>}<div className="d-flex justify-content-between gap-2"><div><span className="project-key" style={{ color: project.color }}>{project.key}</span><h6>{project.name}</h6></div><div className="d-flex gap-1"><Button size="sm" variant="link" className="project-action-button" title="Edit project" aria-label={`Edit ${project.name}`} onClick={(e) => { e.stopPropagation(); openProject(project); }}><IconSettings size={16} /></Button><Button size="sm" variant="link" className="project-action-button text-danger" title="Delete project" aria-label={`Delete ${project.name}`} disabled={saving} onClick={(e) => { e.stopPropagation(); void deleteProject(project); }}><IconTrash size={16} /></Button></div></div><p>{project.description || "No project description yet."}</p><div className="d-flex justify-content-between small text-secondary mb-1"><span>{project.completed_task_count}/{project.task_count} complete</span><span>{project.progress}%</span></div><ProgressBar now={project.progress} style={{ "--bs-progress-bar-bg": project.color } as React.CSSProperties} /><div className="project-footer"><Badge className={statusClass(project.status)}>{project.status_label}</Badge><span>{project.due_date ? `Due ${date(project.due_date)}` : "No deadline"}</span></div></Card.Body></Card>)}{projects.length === 0 && <Card className="border-dashed"><Card.Body className="text-center py-4"><IconFolderPlus size={30} className="text-primary mb-2" /><h6>No projects yet</h6><p className="text-secondary small mb-3">Start with a project, then break the work into tasks.</p><Button size="sm" onClick={() => openProject()}>Create first project</Button></Card.Body></Card>}</div>}
       <Card id="workspace-task-list" className="border-0 shadow-sm workspace-task-list">
-        <Card.Header className="bg-white border-0 pt-4 px-4 d-flex justify-content-between align-items-center">
+        <Card.Header className="bg-white border-0 pt-4 px-4 d-flex justify-content-between align-items-center task-list-header">
           <div>
             <h5 className="fw-bold mb-1">Task list</h5>
             <small className="text-secondary">Click the subtask count to view nested subtasks, or click a row for details.</small>
@@ -442,7 +442,7 @@ export default function TaskWorkspace({ employeeMode = false }: { employeeMode?:
         </Card.Body>
         <Card.Body className="p-0">
           {rootTasks.length ? (
-            <div className="table-responsive">
+            <div className="table-responsive task-list-table-wrap">
               <Table hover className="align-middle mb-0 workspace-task-table">
                 <thead className="table-light">
                   <tr className="small text-secondary text-uppercase">
@@ -483,7 +483,7 @@ export default function TaskWorkspace({ employeeMode = false }: { employeeMode?:
     <Modal show={taskModal} onHide={() => !saving && setTaskModal(false)} centered size="lg"><Form onSubmit={saveTask}><Modal.Header closeButton><Modal.Title>{editingTask ? "Edit task" : taskForm.parent ? "Add subtask" : "Add task"}</Modal.Title></Modal.Header><Modal.Body><Row className="g-3"><Col xs={12}><Form.Group><Form.Label>Task title</Form.Label><Form.Control required minLength={3} value={taskForm.title} onChange={(e) => setTaskForm({ ...taskForm, title: e.target.value })} placeholder="Describe the work clearly" /></Form.Group></Col><Col xs={12}><Form.Group><Form.Label>Description</Form.Label><Form.Control as="textarea" rows={3} value={taskForm.description} onChange={(e) => setTaskForm({ ...taskForm, description: e.target.value })} placeholder="Add context, acceptance criteria, or links." /></Form.Group></Col><Col md={6}><Form.Group><Form.Label>Project</Form.Label><Form.Select required disabled={Boolean(taskForm.parent)} value={taskForm.project} onChange={(e) => setTaskForm({ ...taskForm, project: e.target.value })}><option value="">Choose a project</option>{projects.map((project) => <option key={project.id} value={project.id}>{project.key} · {project.name}</option>)}</Form.Select></Form.Group></Col><Col md={6}><EmployeeAssigneePicker employees={employees} selectedIds={taskForm.assignees} isOpen={assigneePickerOpen} onToggle={() => setAssigneePickerOpen((open) => !open)} onChange={(assignees) => setTaskForm({ ...taskForm, assignees })} /></Col><Col md={4}><Form.Group><Form.Label>Priority</Form.Label><Form.Select value={taskForm.priority} onChange={(e) => setTaskForm({ ...taskForm, priority: e.target.value as Priority })}>{["LOW", "MEDIUM", "HIGH", "URGENT"].map((value) => <option key={value} value={value}>{value}</option>)}</Form.Select></Form.Group></Col><Col md={4}><Form.Group><Form.Label>Status</Form.Label><Form.Select value={taskForm.status} onChange={(e) => setTaskForm({ ...taskForm, status: e.target.value as Status })}>{taskStatuses.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</Form.Select></Form.Group></Col><Col md={4}><Form.Group><Form.Label>Category</Form.Label><Form.Control value={taskForm.project_category} onChange={(e) => setTaskForm({ ...taskForm, project_category: e.target.value })} placeholder="Design" /></Form.Group></Col><Col md={6}><Form.Group><Form.Label>Start date</Form.Label><Form.Control type="date" value={taskForm.start_date} onChange={(e) => setTaskForm({ ...taskForm, start_date: e.target.value })} /></Form.Group></Col><Col md={6}><Form.Group><Form.Label>Due date</Form.Label><Form.Control type="date" value={taskForm.due_date} onChange={(e) => setTaskForm({ ...taskForm, due_date: e.target.value })} /></Form.Group></Col><Col xs={12}><Form.Group><Form.Label>Attachment</Form.Label><Form.Control type="file" onChange={(e) => { const input = e.currentTarget as HTMLInputElement; setTaskForm({ ...taskForm, attachment: input.files?.[0] || null }); }} /><Form.Text>Optional, maximum 10 MB.</Form.Text></Form.Group></Col>{!employeeMode && <Col xs={12}><Form.Group><Form.Label>Manager note</Form.Label><Form.Control as="textarea" rows={2} value={taskForm.admin_notes} onChange={(e) => setTaskForm({ ...taskForm, admin_notes: e.target.value })} /></Form.Group></Col>}</Row></Modal.Body><Modal.Footer><Button variant="light" onClick={() => setTaskModal(false)}>Cancel</Button><Button type="submit" disabled={saving}>{saving ? "Saving…" : editingTask ? "Save changes" : taskForm.parent ? "Add subtask" : "Create task"}</Button></Modal.Footer></Form></Modal>
     <Modal show={Boolean(progressModal)} onHide={() => !saving && setProgressModal(null)} centered><Form onSubmit={saveProgress}><Modal.Header closeButton><Modal.Title>Update task</Modal.Title></Modal.Header><Modal.Body><p className="fw-semibold mb-3">{progressModal?.title}</p><Row className="g-3"><Col md={6}><Form.Group><Form.Label>Priority</Form.Label><Form.Select value={progressPriority} onChange={(e) => setProgressPriority(e.target.value as Priority)}>{taskPriorities.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</Form.Select></Form.Group></Col><Col md={6}><Form.Group><Form.Label>Status</Form.Label><Form.Select value={progressStatus} onChange={(e) => setProgressStatus(e.target.value as Status)}>{taskStatuses.filter((item) => item.value !== "CANCELLED").map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</Form.Select></Form.Group></Col><Col xs={12}><Form.Group><Form.Label>Progress note</Form.Label><Form.Control as="textarea" rows={4} value={progressNote} onChange={(e) => setProgressNote(e.target.value)} placeholder="Share progress, blockers, or completion notes." /></Form.Group></Col></Row></Modal.Body><Modal.Footer><Button variant="light" onClick={() => setProgressModal(null)}>Cancel</Button><Button type="submit" disabled={saving}>{saving ? "Updating…" : "Update task"}</Button></Modal.Footer></Form></Modal>
     <TaskDatePlanner target={datePlannerTarget} month={datePlannerMonth} startDate={taskForm.start_date} dueDate={taskForm.due_date} onClose={() => setDatePlannerTarget(null)} onTargetChange={setDatePlannerTarget} onMonthChange={setDatePlannerMonth} onSelect={(field, value) => { setTaskForm((current) => ({ ...current, [field]: value })); setDatePlannerTarget(null); }} />
-    <style suppressHydrationWarning>{styles}{heroStyles}{taskTableStyles}{detailStyles}{tableEnhancements}{projectColorStyles}{projectActionStyles}{paginationStyles}{categoryRemovalStyles}{datePlannerStyles}</style>
+    <style suppressHydrationWarning>{styles}{heroStyles}{taskTableStyles}{detailStyles}{tableEnhancements}{projectColorStyles}{projectActionStyles}{paginationStyles}{categoryRemovalStyles}{datePlannerStyles}{responsiveStyles}</style>
   </div>;
 }
 
@@ -585,4 +585,56 @@ const categoryRemovalStyles = `
 
 const datePlannerStyles = `
 .task-date-planner{--bs-modal-width:500px}.date-planner-tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:8px;border-bottom:1px solid #e5e7eb}.date-planner-tabs button{display:flex;align-items:center;gap:7px;border:0;border-radius:7px;padding:9px 11px;background:#f1f5f9;color:#64748b;text-align:left}.date-planner-tabs button.is-active{background:#eef2ff;color:#4f46e5;box-shadow:inset 0 0 0 1px #6366f1}.date-planner-content{display:grid;grid-template-columns:46% 54%;min-height:300px}.date-quick-list{padding:10px;border-right:1px solid #e5e7eb}.date-quick-list button{display:flex;justify-content:space-between;width:100%;border:0;background:transparent;padding:8px 4px;color:#334155;text-align:left}.date-quick-list button:hover{color:#4f46e5}.date-quick-list small{color:#94a3b8}.date-calendar{padding:14px}.date-calendar-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}.date-calendar-head button{border:0;background:transparent;color:#64748b}.date-weekdays,.date-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center}.date-weekdays{margin-bottom:6px;color:#94a3b8;font-size:.72rem}.date-grid button{height:30px;border:0;border-radius:50%;background:transparent;color:#334155;font-size:.78rem}.date-grid button:hover,.date-grid button.is-selected{background:#4f46e5;color:#fff}.date-grid button.is-muted{color:#cbd5e1}.date-grid button.is-today{box-shadow:inset 0 0 0 1px #f43f5e}@media(max-width:575px){.task-date-planner{--bs-modal-width:calc(100% - 20px)}.date-planner-content{grid-template-columns:1fr}.date-quick-list{border-right:0;border-bottom:1px solid #e5e7eb}.date-quick-list{display:grid;grid-template-columns:1fr 1fr}.date-calendar{padding:12px}}
+`;
+
+const responsiveStyles = `
+.task-workspace{min-width:0;overflow-x:clip}.task-list-header{gap:16px}.task-table-title,.task-table-title>div,.workspace-task-table td>div{min-width:0}.task-table-title>div{flex-wrap:wrap}.task-table-title strong,.workspace-task-table td{overflow-wrap:anywhere}
+@media(max-width:991.98px){
+  .task-list-table-wrap{overflow-x:visible}
+  .workspace-task-table,body.employee-task-workspace .workspace-task-table{min-width:0!important;width:100%!important;table-layout:auto!important}
+  .workspace-task-table thead{display:none!important}
+  .workspace-task-table,.workspace-task-table tbody,.workspace-task-table tr,.workspace-task-table td{display:block!important;width:100%!important}
+  .workspace-task-table tbody{padding:12px!important;background:#f8fafc!important}
+  .workspace-task-table tr{margin:0 0 12px!important;border:1px solid #e5eaf0!important;border-radius:10px!important;background:#fff!important;box-shadow:0 4px 14px rgba(15,23,42,.06)!important;overflow:hidden!important}
+  .workspace-task-table tr:last-child{margin-bottom:0!important}
+  .workspace-task-table td{display:grid!important;grid-template-columns:minmax(110px,30%) minmax(0,1fr)!important;gap:12px!important;align-items:start!important;border:0!important;border-bottom:1px solid #eef2f6!important;padding:12px 16px!important;text-align:left!important;white-space:normal!important}
+  .workspace-task-table td:last-child{border-bottom:0!important}
+  .workspace-task-table td:before{display:block!important;content:attr(data-label)!important;font-size:.69rem!important;font-weight:750!important;color:#64748b!important;text-transform:uppercase!important;letter-spacing:.04em!important}
+  .workspace-task-row.is-subtask{width:calc(100% - 16px)!important;margin-left:16px!important;border-left:3px solid #cbd5e1!important}
+  .workspace-task-table .task-table-description,.workspace-task-table .task-table-progress{max-width:none!important;white-space:normal!important;overflow:visible!important;text-overflow:clip!important}
+}
+@media(max-width:575.98px){
+  .task-workspace{padding-top:16px!important}
+  .workspace-hero{gap:18px;padding:20px!important}
+  .workspace-hero>div,.workspace-hero>div:last-child{width:100%}
+  .workspace-hero>div:last-child{display:grid!important;grid-template-columns:1fr 1fr}
+  .workspace-hero .btn{justify-content:center;white-space:nowrap}
+  .workspace-metric .card-body{gap:9px;padding:12px}
+  .workspace-metric span{width:36px;height:36px;flex:0 0 36px}
+  .workspace-metric span svg{width:19px;height:19px}
+  .workspace-metric small{font-size:.7rem}
+  .workspace-metric strong{font-size:1.2rem}
+  .workspace-projects-header>div:last-child{width:100%;flex-wrap:wrap}
+  .workspace-projects-toggle{flex:1;justify-content:center}
+  .project-selected{position:static;margin-bottom:8px;width:max-content}
+  .task-list-header{align-items:stretch!important;flex-direction:column;padding:18px 14px 14px!important}
+  .task-list-header .btn{justify-content:center}
+  .task-list-filters{padding:14px!important}
+  .workspace-task-table tbody{padding:8px!important}
+  .workspace-task-table td{grid-template-columns:1fr!important;gap:5px!important;padding:10px 12px!important}
+  .workspace-task-table td:before{font-size:.65rem!important}
+  .workspace-task-row.is-subtask{width:calc(100% - 8px)!important;margin-left:8px!important}
+  .task-table-title{padding-left:0!important}
+  .task-priority-chip,.task-status-chip{min-width:0}
+  .task-list-pagination{padding:12px;width:100%;overflow:hidden}
+  .task-list-pagination .pagination{max-width:100%;gap:2px}
+  .task-list-pagination .page-link{min-width:30px;padding-inline:8px}
+  .task-workspace .modal-footer{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .task-workspace .modal-footer>*{margin:0!important}
+  .subtask-detail-item{margin-left:0!important}
+}
+@media(max-width:380px){
+  .workspace-hero>div:last-child{grid-template-columns:1fr}
+  .workspace-metric .card-body{align-items:flex-start;flex-direction:column}
+}
 `;

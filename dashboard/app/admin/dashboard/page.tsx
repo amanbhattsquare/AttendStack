@@ -377,8 +377,8 @@ const AdminDashboard = () => {
           </Row>
 
           <Card className="border-0 shadow-sm mb-4 admin-task-panel">
-            <Card.Header className="bg-white border-0 py-4 d-flex flex-column flex-xl-row align-items-xl-center justify-content-between gap-3">
-              <div className="d-flex align-items-center gap-3">
+            <Card.Header className="bg-white border-0 py-4 d-flex flex-column flex-xl-row align-items-xl-center justify-content-between gap-3 admin-task-header">
+              <div className="d-flex align-items-center gap-3 admin-task-heading">
                 <div className="rounded bg-primary-subtle text-primary d-flex align-items-center justify-content-center" style={{ width: 44, height: 44 }}>
                   <IconListDetails size={22} />
                 </div>
@@ -387,7 +387,7 @@ const AdminDashboard = () => {
                   <p className="text-secondary small mb-0">Live project workload, ownership, deadlines, and delivery risk across your team.</p>
                 </div>
               </div>
-              <div className="d-flex flex-column flex-sm-row align-items-stretch align-items-sm-center gap-2">
+              <div className="d-flex flex-column flex-sm-row align-items-stretch align-items-sm-center gap-2 admin-task-actions">
                 <div className="task-completion-pill">
                   <span>Completion</span>
                   <strong>{taskCompletionRate}%</strong>
@@ -453,7 +453,7 @@ const AdminDashboard = () => {
                   {recentTasks.map((task) => (
                     <div key={task.id} className="task-dashboard-row">
                       <div className="min-w-0">
-                        <div className="d-flex align-items-center gap-2 min-w-0">
+                        <div className="d-flex align-items-center gap-2 min-w-0 task-dashboard-title-line">
                           <div className="fw-semibold text-dark text-truncate">{task.title}</div>
                           {task.project_key && <span className="dashboard-project-chip" style={{ color: task.project_color || "#4f46e5", borderColor: task.project_color || "#4f46e5" }}>{task.project_key}</span>}
                           {task.due_date && (
@@ -464,7 +464,7 @@ const AdminDashboard = () => {
                           {task.assignee_name || "Unassigned"} {task.assignee_department ? `- ${task.assignee_department}` : ""}{task.subtask_count ? ` · ${task.subtask_count} subtask${task.subtask_count === 1 ? "" : "s"}` : ""}
                         </div>
                       </div>
-                      <div className="d-flex align-items-center gap-2 flex-wrap justify-content-end">
+                      <div className="d-flex align-items-center gap-2 flex-wrap justify-content-end task-dashboard-badges">
                         {task.is_overdue && <Badge bg="danger-subtle" className="text-danger border border-danger-subtle">Overdue</Badge>}
                         <Badge bg={task.priority === "URGENT" || task.priority === "HIGH" ? "warning-subtle" : "info-subtle"} className={task.priority === "URGENT" || task.priority === "HIGH" ? "text-warning" : "text-info"}>
                           {task.priority_label || task.priority}
@@ -681,6 +681,11 @@ const AdminDashboard = () => {
           transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
         }
 
+        .task-dashboard-row > div,
+        .task-dashboard-title-line {
+          min-width: 0;
+        }
+
         .task-dashboard-row:hover {
           border-color: #cbd5e1;
           box-shadow: 0 8px 20px rgba(15, 23, 42, 0.05);
@@ -722,16 +727,67 @@ const AdminDashboard = () => {
         }
 
         @media (max-width: 575.98px) {
+          .admin-task-panel .card-header,
+          .admin-task-panel .card-body {
+            padding-left: 14px !important;
+            padding-right: 14px !important;
+          }
+
+          .admin-task-heading {
+            align-items: flex-start !important;
+          }
+
+          .admin-task-heading > :first-child {
+            flex: 0 0 44px;
+          }
+
+          .admin-task-actions,
           .task-completion-pill {
             width: 100%;
           }
 
           .task-dashboard-row {
+            gap: 10px;
             grid-template-columns: 1fr;
+            padding: 12px;
+          }
+
+          .task-dashboard-title-line {
+            align-items: flex-start !important;
+            flex-wrap: wrap;
+          }
+
+          .task-dashboard-title-line > .fw-semibold {
+            flex: 1 0 100%;
+            white-space: normal !important;
+            overflow-wrap: anywhere;
+          }
+
+          .task-dashboard-badges {
+            justify-content: flex-start !important;
           }
 
           .task-empty-state {
             align-items: flex-start;
+          }
+        }
+
+        @media (max-width: 380px) {
+          .admin-task-heading {
+            gap: 10px !important;
+          }
+
+          .admin-task-heading > :first-child {
+            display: none !important;
+          }
+
+          .task-dashboard-metric {
+            min-height: 82px;
+            padding: 12px;
+          }
+
+          .task-dashboard-metric strong {
+            font-size: 24px;
           }
         }
       `}</style>

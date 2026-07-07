@@ -12,6 +12,11 @@ import re
 
 User = get_user_model()
 
+MB = 1024 * 1024
+PROFILE_PHOTO_MAX_SIZE = 5 * MB
+EMPLOYEE_DOCUMENT_MAX_SIZE = 5 * MB
+EMPLOYEE_REGISTRATION_MAX_UPLOAD_SIZE = 18 * MB
+
 
 def _split_full_name(full_name):
     parts = full_name.strip().split(maxsplit=1)
@@ -277,7 +282,7 @@ class EmployeeSelfRegistrationSerializer(serializers.Serializer):
         return value
 
     def validate_profile_photo(self, value):
-        if value.size > 5 * 1024 * 1024:
+        if value.size > PROFILE_PHOTO_MAX_SIZE:
             raise serializers.ValidationError("Profile photo must be 5 MB or smaller.")
         image_format = getattr(getattr(value, "image", None), "format", "").upper()
         if image_format not in {"JPEG", "PNG", "WEBP"}:
@@ -297,8 +302,8 @@ class EmployeeSelfRegistrationSerializer(serializers.Serializer):
         return value
 
     def _validate_document(self, value, allowed_extensions, label):
-        if value.size > 10 * 1024 * 1024:
-            raise serializers.ValidationError(f"{label} must be 10 MB or smaller.")
+        if value.size > EMPLOYEE_DOCUMENT_MAX_SIZE:
+            raise serializers.ValidationError(f"{label} must be 5 MB or smaller.")
         if not value.name.lower().endswith(allowed_extensions):
             raise serializers.ValidationError(f"Upload a valid {label} file.")
         return value
@@ -322,6 +327,12 @@ class EmployeeSelfRegistrationSerializer(serializers.Serializer):
     def validate(self, attrs):
         if attrs["password"] != attrs["confirm_password"]:
             raise serializers.ValidationError({"confirm_password": "Passwords do not match."})
+        upload_fields = ("profile_photo", "aadhaar_document", "pan_card_document", "cv_document")
+        total_upload_size = sum(getattr(attrs.get(field), "size", 0) for field in upload_fields)
+        if total_upload_size > EMPLOYEE_REGISTRATION_MAX_UPLOAD_SIZE:
+            raise serializers.ValidationError(
+                {"upload_total": "All uploaded files together must be 18 MB or smaller."}
+            )
         return attrs
 
     def create(self, validated_data):

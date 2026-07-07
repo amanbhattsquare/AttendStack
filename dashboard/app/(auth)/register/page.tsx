@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import axios from "axios";
-import { Alert, Badge, Button, Card, Col, Container, Form, InputGroup, Row, Spinner } from "react-bootstrap";
+import { Alert, Badge, Button, Card, Col, Container, Form, Image, InputGroup, Row, Spinner } from "react-bootstrap";
 import {
   IconArrowRight,
   IconBuildingCommunity,
@@ -375,9 +375,13 @@ export default function EmployeeRegistrationPage() {
           <Card className="border-0 shadow-sm rounded-3 overflow-hidden">
             <Card.Body className="p-4 p-md-5">
               <div className="text-center mb-4">
-                <span className={`${success ? "bg-success-subtle text-success" : "bg-primary-subtle text-primary"} rounded-3 p-3 d-inline-flex mb-3`}>
-                  {success ? <IconCircleCheck size={32} /> : <IconUserCheck size={32} />}
-                </span>
+                <Link href="/" aria-label="AttendStack home" className="d-inline-flex mb-3">
+                  <Image
+                    src="/images/brand/logo/logo.png"
+                    alt="AttendStack logo"
+                    style={{ height: 48, width: "auto", objectFit: "contain" }}
+                  />
+                </Link>
                 <h1 className="h3 mb-1">{success ? "Employee Account Created" : "Create Your Employee Account"}</h1>
                 <p className="text-secondary mb-0">
                   {success

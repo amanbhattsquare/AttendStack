@@ -338,8 +338,7 @@ const EmployeeDashboard = () => {
         const errorData = await res.json().catch(() => null);
         const detail = errorData?.detail || "Unable to load your attendance status.";
         if (
-          res.status === 403
-          && typeof detail === "string"
+          typeof detail === "string"
           && (detail.includes("Inactive") || detail.includes("Terminated"))
         ) {
           setToday(null);

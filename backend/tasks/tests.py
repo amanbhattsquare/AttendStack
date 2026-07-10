@@ -85,6 +85,26 @@ class CompanyOwnerWorkspaceTests(APITestCase):
             self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, response.data)
             self.assertIn(blocked_status.title(), str(response.data))
 
+    def test_company_sees_employee_task_from_legacy_unscoped_project(self):
+        legacy_project = Project.objects.create(
+            name="Legacy project",
+            key="LEGACY",
+            created_by=self.owner,
+        )
+        task = Task.objects.create(
+            title="Legacy assigned work",
+            project=legacy_project,
+            assignee=self.employee,
+            assigned_by=self.owner,
+            status="TODO",
+        )
+        task.assignees.add(self.employee)
+
+        response = self.client.get(reverse("tasks:task-list"), {"page_size": 100})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn(str(task.id), {row["id"] for row in response.data["results"]})
+
 
 class CrossDepartmentTaskAssignmentTests(APITestCase):
     def setUp(self):

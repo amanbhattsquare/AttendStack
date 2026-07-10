@@ -215,7 +215,8 @@ class TaskViewSet(WorkspaceAccessMixin, viewsets.ModelViewSet):
                 organization = self._organization_for_user(required=False)
                 queryset = queryset.filter(
                     Q(project__organization=organization) |
-                    Q(project__isnull=True, assignee__organization=organization)
+                    Q(assignee__organization=organization) |
+                    Q(assignees__organization=organization)
                 )
         else:
             employee = self._current_employee()

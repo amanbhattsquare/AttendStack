@@ -117,7 +117,7 @@ export default function TaskWorkspace({ employeeMode = false }: { employeeMode?:
   const [notice, setNotice] = useState("");
   const [query, setQuery] = useState("");
   const [projectFilter, setProjectFilter] = useState("ALL");
-  const [statusFilter, setStatusFilter] = useState<Status | "ALL">("ALL");
+  const [statusFilter, setStatusFilter] = useState<Status | "ALL">("IN_PROGRESS");
   const [priorityFilter, setPriorityFilter] = useState<Priority | "ALL">("ALL");
   const [dashboardFilter, setDashboardFilter] = useState<DashboardTaskFilter | null>(null);
   const [showProjects, setShowProjects] = useState(true);
@@ -208,9 +208,12 @@ export default function TaskWorkspace({ employeeMode = false }: { employeeMode?:
 
   useEffect(() => {
     const value = searchParams.get("task_filter");
+    const requestedStatus = searchParams.get("status")?.toUpperCase();
+    const validStatuses = taskStatuses.map((item) => item.value) as string[];
     const validFilters: DashboardTaskFilter[] = ["open", "active", "overdue", "due-soon", "on-hold", "high-priority"];
     if (!value || !validFilters.includes(value as DashboardTaskFilter)) {
       setDashboardFilter(null);
+      setStatusFilter(requestedStatus && validStatuses.includes(requestedStatus) ? requestedStatus as Status : "IN_PROGRESS");
       return;
     }
     const filter = value as DashboardTaskFilter;
@@ -275,7 +278,7 @@ export default function TaskWorkspace({ employeeMode = false }: { employeeMode?:
   }), [projects, tasks]);
   const visibleTasks = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    return tasks.filter((item) => {
+    const directlyMatching = tasks.filter((item) => {
       const dueInDays = daysUntilTask(item.due_date);
       const matchesDashboardFilter =
         !dashboardFilter ||
@@ -287,13 +290,23 @@ export default function TaskWorkspace({ employeeMode = false }: { employeeMode?:
         (dashboardFilter === "high-priority" && ["URGENT", "HIGH"].includes(item.priority) && activeStatus(item.status));
       return matchesDashboardFilter && (projectFilter === "ALL" || item.project === projectFilter) && (statusFilter === "ALL" || item.status === statusFilter) && (priorityFilter === "ALL" || item.priority === priorityFilter) && (!needle || [item.title, item.description, item.assignee_name, item.assignee_names?.join(" "), item.project_name, item.project_key].filter(Boolean).some((value) => value!.toLowerCase().includes(needle)));
     });
+    const visibleIds = new Set(directlyMatching.map((item) => item.id));
+    const tasksById = new Map(tasks.map((item) => [item.id, item]));
+    directlyMatching.forEach((item) => {
+      let parentId = item.parent;
+      while (parentId) {
+        visibleIds.add(parentId);
+        parentId = tasksById.get(parentId)?.parent || null;
+      }
+    });
+    return tasks.filter((item) => visibleIds.has(item.id));
   }, [tasks, query, projectFilter, statusFilter, priorityFilter, dashboardFilter]);
   const allRootTasks = visibleTasks.filter((item) => !item.parent);
   const totalTaskPages = Math.max(1, Math.ceil(allRootTasks.length / TASKS_PER_PAGE));
   const currentTaskPage = Math.min(taskPage, totalTaskPages);
   const rootTasks = allRootTasks.slice((currentTaskPage - 1) * TASKS_PER_PAGE, currentTaskPage * TASKS_PER_PAGE);
   const pageNumbers = Array.from({ length: totalTaskPages }, (_, index) => index + 1);
-  const allSubtasksByParent = useMemo(() => tasks.filter((item) => item.parent).reduce<Record<string, Task[]>>((groups, item) => { if (item.parent) (groups[item.parent] ||= []).push(item); return groups; }, {}), [tasks]);
+  const allSubtasksByParent = useMemo(() => visibleTasks.filter((item) => item.parent).reduce<Record<string, Task[]>>((groups, item) => { if (item.parent) (groups[item.parent] ||= []).push(item); return groups; }, {}), [visibleTasks]);
   const detailSubtasks = useMemo(() => detailTask ? collectSubtasks(detailTask.id, allSubtasksByParent) : [], [detailTask, allSubtasksByParent]);
   const projectColors = useMemo(() => Object.fromEntries(projects.map((project) => [project.id, project.color])), [projects]);
 

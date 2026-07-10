@@ -221,6 +221,8 @@ const AdminDashboard = () => {
   const pendingLeaves = leaves.filter((leave) => leave.status === "PENDING").length;
   const pendingPayroll = payrolls.filter((payroll) => payroll.status === "PENDING").length;
   const openTasks = tasks.filter((task) => !["COMPLETED", "CLOSED", "CANCELLED"].includes(task.status)).length;
+  const pendingTasks = tasks.filter((task) => task.status === "PENDING").length;
+  const todoTasks = tasks.filter((task) => task.status === "TODO").length;
   const activeTasks = tasks.filter((task) => task.status === "IN_PROGRESS").length;
   const overdueTasks = tasks.filter((task) => task.is_overdue).length;
   const dueSoonTasks = tasks.filter((task) => {
@@ -234,7 +236,7 @@ const AdminDashboard = () => {
   const recentTasks = useMemo(() => {
     const priorityRank = { URGENT: 0, HIGH: 1, MEDIUM: 2, LOW: 3 } as const;
     return [...tasks]
-      .filter((task) => task.status === "IN_PROGRESS")
+      .filter((task) => !["COMPLETED", "CLOSED", "CANCELLED"].includes(task.status))
       .sort((a, b) => {
         const priorityDifference = priorityRank[a.priority] - priorityRank[b.priority];
         if (priorityDifference) return priorityDifference;
@@ -402,6 +404,18 @@ const AdminDashboard = () => {
             </Card.Header>
             <Card.Body className="pt-0">
               <Row className="g-3 mb-4">
+                <Col xs={6} lg={3} xl={2}>
+                  <Link href="/tasks?status=PENDING" className="task-dashboard-metric is-neutral">
+                    <span>Pending</span>
+                    <strong>{pendingTasks}</strong>
+                  </Link>
+                </Col>
+                <Col xs={6} lg={3} xl={2}>
+                  <Link href="/tasks?status=TODO" className="task-dashboard-metric is-neutral">
+                    <span>To Do</span>
+                    <strong>{todoTasks}</strong>
+                  </Link>
+                </Col>
                 <Col xs={6} lg={3} xl={2}>
                   <Link href="/tasks?task_filter=open" className="task-dashboard-metric is-neutral">
                     <span>Open Tasks</span>

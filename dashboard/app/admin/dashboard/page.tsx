@@ -220,15 +220,10 @@ const AdminDashboard = () => {
     : 0;
   const pendingLeaves = leaves.filter((leave) => leave.status === "PENDING").length;
   const pendingPayroll = payrolls.filter((payroll) => payroll.status === "PENDING").length;
-  const openTasks = tasks.filter((task) => !["COMPLETED", "CLOSED", "CANCELLED"].includes(task.status)).length;
   const pendingTasks = tasks.filter((task) => task.status === "PENDING").length;
   const todoTasks = tasks.filter((task) => task.status === "TODO").length;
   const activeTasks = tasks.filter((task) => task.status === "IN_PROGRESS").length;
   const overdueTasks = tasks.filter((task) => task.is_overdue).length;
-  const dueSoonTasks = tasks.filter((task) => {
-    const days = daysUntil(task.due_date);
-    return days !== null && days >= 0 && days <= 3 && !["COMPLETED", "CLOSED", "CANCELLED"].includes(task.status);
-  }).length;
   const onHoldTasks = tasks.filter((task) => task.status === "ON_HOLD").length;
   const urgentTasks = tasks.filter((task) => ["URGENT", "HIGH"].includes(task.priority) && !["COMPLETED", "CLOSED", "CANCELLED"].includes(task.status)).length;
   const completedTasks = tasks.filter((task) => ["COMPLETED", "CLOSED"].includes(task.status)).length;
@@ -417,12 +412,6 @@ const AdminDashboard = () => {
                   </Link>
                 </Col>
                 <Col xs={6} lg={3} xl={2}>
-                  <Link href="/tasks?task_filter=open" className="task-dashboard-metric is-neutral">
-                    <span>Open Tasks</span>
-                    <strong>{openTasks}</strong>
-                  </Link>
-                </Col>
-                <Col xs={6} lg={3} xl={2}>
                   <Link href="/tasks?task_filter=active" className="task-dashboard-metric is-primary">
                     <span>Active</span>
                     <strong>{activeTasks}</strong>
@@ -432,12 +421,6 @@ const AdminDashboard = () => {
                   <Link href="/tasks?task_filter=overdue" className="task-dashboard-metric is-danger">
                     <span>Overdue</span>
                     <strong>{overdueTasks}</strong>
-                  </Link>
-                </Col>
-                <Col xs={6} lg={3} xl={2}>
-                  <Link href="/tasks?task_filter=due-soon" className="task-dashboard-metric is-warning">
-                    <span>Due Soon</span>
-                    <strong>{dueSoonTasks}</strong>
                   </Link>
                 </Col>
                 <Col xs={6} lg={3} xl={2}>

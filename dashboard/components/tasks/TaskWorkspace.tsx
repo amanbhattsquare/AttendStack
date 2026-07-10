@@ -358,7 +358,20 @@ export default function TaskWorkspace({ employeeMode = false }: { employeeMode?:
       if (taskForm.attachment) payload.append("attachment", taskForm.attachment);
       const response = await fetch(editingTask ? `${apiRoot}/tasks/${editingTask.id}/` : `${apiRoot}/tasks/`, { method: editingTask ? "PATCH" : "POST", headers: headers(), body: payload });
       if (!response.ok) throw new Error(await errorFrom(response));
-      setTaskModal(false); setNotice(editingTask ? "Task updated." : taskForm.parent ? "Subtask added." : "Task added to the project."); await load();
+      const savedTask = await response.json() as Task;
+      setTasks((current) => {
+        const withoutSavedTask = current.filter((task) => task.id !== savedTask.id);
+        return [savedTask, ...withoutSavedTask];
+      });
+      setQuery("");
+      setDashboardFilter(null);
+      setProjectFilter(savedTask.project || taskForm.project || "ALL");
+      setStatusFilter(savedTask.status);
+      setPriorityFilter("ALL");
+      setTaskPage(1);
+      setTaskModal(false);
+      setNotice(editingTask ? "Task updated." : taskForm.parent ? "Subtask added." : "Task added to the project.");
+      await load();
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to save task."); } finally { setSaving(false); }
   };
   const deleteProject = async (project: Project) => {

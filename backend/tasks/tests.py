@@ -3,7 +3,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from employees.models import Employee
+from employees.models import Employee, EmployeeStatus
 from organizations.models import Organization
 from .models import Project, Task
 
@@ -59,6 +59,31 @@ class CompanyOwnerWorkspaceTests(APITestCase):
         task = Task.objects.get(pk=task_response.data["id"])
         self.assertEqual(task.assignee, self.employee)
         self.assertEqual(task.assigned_by, self.owner)
+
+    def test_cannot_assign_task_to_inactive_or_terminated_employee(self):
+        project = Project.objects.create(
+            organization=self.organization,
+            name="Restricted assignment",
+            key="RESTRICT",
+            created_by=self.owner,
+        )
+
+        for blocked_status in (EmployeeStatus.INACTIVE, EmployeeStatus.TERMINATED):
+            self.employee.status = blocked_status
+            self.employee.save(update_fields=["status", "updated_at"])
+            response = self.client.post(
+                reverse("tasks:task-list"),
+                {
+                    "title": "Must not be assigned",
+                    "project": str(project.id),
+                    "assignee": str(self.employee.id),
+                    "assignees": [str(self.employee.id)],
+                    "status": "TODO",
+                },
+                format="json",
+            )
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, response.data)
+            self.assertIn(blocked_status.title(), str(response.data))
 
 
 class CrossDepartmentTaskAssignmentTests(APITestCase):

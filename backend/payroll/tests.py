@@ -5,7 +5,7 @@ from unittest.mock import patch
 from django.test import TestCase
 
 from attendance.models import AttendanceRecord, AttendanceStatus, LeaveRequest, LeaveStatus
-from employees.models import Employee
+from employees.models import Employee, EmployeeStatus
 from holidays.models import Holiday
 
 from .services import calculate_attendance_payroll
@@ -111,3 +111,26 @@ class PayrollCalculationTests(TestCase):
         self.assertEqual(payroll["attendance_summary"]["absent"], 0)
         self.assertEqual(payroll["basic_salary"], Decimal("5161.29"))
         self.assertEqual(payroll["payable_salary"], Decimal("5161.29"))
+
+    def test_inactive_employee_is_paid_through_effective_date_only(self):
+        employee = create_employee()
+        employee.status = EmployeeStatus.INACTIVE
+        employee._status_effective_date = date(2026, 5, 16)
+        employee.save(update_fields=["status", "updated_at"])
+
+        payroll = calculate_attendance_payroll(employee, 5, 2026)
+
+        self.assertEqual(payroll["period_end"], date(2026, 5, 16))
+        self.assertEqual(payroll["eligible_days"], 16)
+        self.assertEqual(payroll["basic_salary"], Decimal("5161.29"))
+
+    def test_employee_inactive_before_month_has_no_payable_days(self):
+        employee = create_employee(joining_date=date(2026, 4, 1))
+        employee.status = EmployeeStatus.TERMINATED
+        employee._status_effective_date = date(2026, 4, 20)
+        employee.save(update_fields=["status", "updated_at"])
+
+        payroll = calculate_attendance_payroll(employee, 5, 2026)
+
+        self.assertEqual(payroll["eligible_days"], 0)
+        self.assertEqual(payroll["basic_salary"], Decimal("0.00"))

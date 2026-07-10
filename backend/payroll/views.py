@@ -6,7 +6,7 @@ from attendance.permissions import IsAdminOrReadOnly
 from employees.models import Employee
 from .models import Payroll, PayrollStatus
 from .serializers import PayrollSerializer
-from .services import build_employee_payroll_summary, calculate_attendance_payroll, payroll_period_end
+from .services import build_employee_payroll_summary, calculate_attendance_payroll, payable_employment_dates, payroll_period_end
 
 class PayrollViewSet(viewsets.ModelViewSet):
     queryset = Payroll.objects.select_related("employee").all()
@@ -57,16 +57,17 @@ class PayrollViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        active_employees = Employee.objects.attendance_eligible_on(
-            payroll_period_end(month, year)
-        ).filter(
+        employees = Employee.objects.filter(
             joining_date__lte=payroll_period_end(month, year),
         )
         generated_count = 0
         updated_count = 0
         skipped_count = 0
 
-        for emp in active_employees:
+        for emp in employees:
+            if not payable_employment_dates(emp, month, year):
+                skipped_count += 1
+                continue
             existing = Payroll.objects.filter(employee=emp, month=month, year=year).first()
 
             # Recalculate all stored amounts from the single attendance payroll service.
@@ -121,9 +122,7 @@ class PayrollViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        employees = Employee.objects.attendance_eligible_on(
-            payroll_period_end(month, year)
-        ).filter(
+        employees = Employee.objects.filter(
             joining_date__lte=payroll_period_end(month, year),
         ).order_by("full_name")
         if search:
@@ -137,4 +136,8 @@ class PayrollViewSet(viewsets.ModelViewSet):
         if user.is_authenticated and user.role not in ["SUPER_ADMIN", "HR"] and not user.is_staff:
             employees = employees.filter(email__iexact=user.email)
 
-        return Response([build_employee_payroll_summary(employee, month, year, request) for employee in employees])
+        return Response([
+            build_employee_payroll_summary(employee, month, year, request)
+            for employee in employees
+            if payable_employment_dates(employee, month, year)
+        ])

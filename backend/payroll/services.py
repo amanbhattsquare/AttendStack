@@ -1,5 +1,5 @@
 import calendar
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 
 from django.utils import timezone
@@ -7,6 +7,7 @@ from django.utils import timezone
 from attendance.models import AttendanceRecord, AttendanceStatus, LeaveStatus, LeaveType
 from attendance.eligibility import attendance_eligible_records
 from attendance.services import auto_mark_calendar_days
+from employees.models import ATTENDANCE_ELIGIBLE_STATUSES
 
 
 MONEY = Decimal("0.01")
@@ -25,6 +26,48 @@ def payroll_period_end(month: int, year: int) -> date:
     return month_end
 
 
+def payable_employment_dates(employee, month: int, year: int) -> list[date]:
+    """Return payable dates from the employee's effective-dated status history.
+
+    A transition to Inactive or Terminated takes effect immediately for
+    attendance, while its effective date remains the employee's final payable
+    day. This supports final-payroll proration without permitting attendance
+    after separation.
+    """
+    month_start = date(year, month, 1)
+    period_end = payroll_period_end(month, year)
+    first_day = max(month_start, employee.joining_date)
+    if first_day > period_end:
+        return []
+
+    history = list(
+        employee.status_history.filter(effective_date__lte=period_end)
+        .order_by("effective_date", "created_at", "pk")
+    )
+    final_payable_transition_dates = set()
+    previous_status = None
+    for entry in history:
+        if previous_status in ATTENDANCE_ELIGIBLE_STATUSES and entry.status not in ATTENDANCE_ELIGIBLE_STATUSES:
+            final_payable_transition_dates.add(entry.effective_date)
+        previous_status = entry.status
+
+    payable_dates = []
+    status_for_day = employee.status
+    next_history_index = 0
+    while next_history_index < len(history) and history[next_history_index].effective_date <= first_day:
+        status_for_day = history[next_history_index].status
+        next_history_index += 1
+    current = first_day
+    while current <= period_end:
+        while next_history_index < len(history) and history[next_history_index].effective_date <= current:
+            status_for_day = history[next_history_index].status
+            next_history_index += 1
+        if status_for_day in ATTENDANCE_ELIGIBLE_STATUSES or current in final_payable_transition_dates:
+            payable_dates.append(current)
+        current += timedelta(days=1)
+    return payable_dates
+
+
 def calculate_attendance_payroll(employee, month: int, year: int, allowances=0, manual_deductions=0) -> dict:
     auto_mark_calendar_days(month, year)
 
@@ -32,10 +75,10 @@ def calculate_attendance_payroll(employee, month: int, year: int, allowances=0, 
     allowances = money(Decimal(str(allowances or 0)))
     manual_deductions = money(Decimal(str(manual_deductions or 0)))
     days_in_month = calendar.monthrange(year, month)[1]
-    period_end = payroll_period_end(month, year)
-    month_start = date(year, month, 1)
-    period_start = max(month_start, employee.joining_date)
-    eligible_days = max((period_end - period_start).days + 1, 0) if period_start <= period_end else 0
+    payable_dates = payable_employment_dates(employee, month, year)
+    period_start = payable_dates[0] if payable_dates else None
+    period_end = payable_dates[-1] if payable_dates else None
+    eligible_days = len(payable_dates)
     per_day_salary = monthly_salary / Decimal(str(days_in_month))
     basic_salary = money(per_day_salary * Decimal(str(eligible_days)))
 
@@ -62,8 +105,7 @@ def calculate_attendance_payroll(employee, month: int, year: int, allowances=0, 
         employee=employee,
         date__year=year,
         date__month=month,
-        date__gte=period_start,
-        date__lte=period_end,
+        date__in=payable_dates,
     )
 
     deduction_details = {}

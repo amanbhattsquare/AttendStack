@@ -9,7 +9,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from accounts.models import UserRole
-from employees.models import Employee
+from employees.models import ATTENDANCE_ELIGIBLE_STATUSES, Employee
 from organizations.models import Organization
 from .models import Project, Task, TaskStatus
 from .serializers import (
@@ -78,6 +78,12 @@ class WorkspaceAccessMixin:
             raise PermissionDenied("Set up a company workspace before assigning employees from a company workspace.")
         if employee.organization_id != organization.id:
             raise PermissionDenied("You can only assign work within your organization.")
+
+    def _ensure_work_eligible(self, employee):
+        if employee.status not in ATTENDANCE_ELIGIBLE_STATUSES:
+            raise PermissionDenied(
+                "Project tasks are unavailable while your employment status is Inactive or Terminated."
+            )
 
     def _validate_project_scope(self, project):
         if self.request.user.is_superuser:
@@ -263,6 +269,7 @@ class TaskViewSet(WorkspaceAccessMixin, viewsets.ModelViewSet):
             self._validate_parent_access(parent, employee)
         else:
             employee = self._current_employee()
+            self._ensure_work_eligible(employee)
             self._validate_parent_access(parent, employee)
             requested_assignees = serializer.validated_data.get("assignees") or [serializer.validated_data.get("assignee", employee)]
             for assignee in requested_assignees:
@@ -278,6 +285,7 @@ class TaskViewSet(WorkspaceAccessMixin, viewsets.ModelViewSet):
         task = serializer.instance
         if not self._is_admin_or_hr(self.request.user):
             employee = self._current_employee()
+            self._ensure_work_eligible(employee)
             assignees = serializer.validated_data.get("assignees") or [serializer.validated_data.get("assignee", task.assignee)]
             for assignee in assignees:
                 self._validate_employee_scope(assignee)
@@ -299,6 +307,7 @@ class TaskViewSet(WorkspaceAccessMixin, viewsets.ModelViewSet):
         user = request.user
         if not self._is_admin_or_hr(user):
             employee = self._current_employee()
+            self._ensure_work_eligible(employee)
             if task.assignee_id != employee.id and not task.assignees.filter(id=employee.id).exists():
                 raise PermissionDenied("You can update only your assigned tasks.")
             if task.status == TaskStatus.CANCELLED:

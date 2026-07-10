@@ -189,6 +189,7 @@ const EmployeeDashboard = () => {
   const [mounted, setMounted] = useState(false);
   const [today, setToday] = useState<any>(null);
   const [todayLoadError, setTodayLoadError] = useState("");
+  const [attendanceBlocked, setAttendanceBlocked] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [actionLoading, setActionLoading] = useState<"check-in" | "check-out" | null>(null);
   const [punchError, setPunchError] = useState("");
@@ -335,14 +336,27 @@ const EmployeeDashboard = () => {
       });
       if (!res.ok) {
         const errorData = await res.json().catch(() => null);
-        throw new Error(errorData?.detail || "Unable to load your attendance status.");
+        const detail = errorData?.detail || "Unable to load your attendance status.";
+        if (
+          res.status === 403
+          && typeof detail === "string"
+          && (detail.includes("Inactive") || detail.includes("Terminated"))
+        ) {
+          setToday(null);
+          setAttendanceBlocked(true);
+          setTodayLoadError(detail);
+          return;
+        }
+        throw new Error(detail);
       }
 
       const data = await res.json();
+      setAttendanceBlocked(false);
       setToday(data);
     } catch (err) {
       console.error("Error loading today attendance:", err);
       setToday(null);
+      setAttendanceBlocked(false);
       setTodayLoadError(err instanceof Error ? err.message : "Unable to load your attendance status.");
     }
   };
@@ -691,8 +705,11 @@ const EmployeeDashboard = () => {
                     )}
                   </div>
                 ) : todayLoadError ? (
-                  <Alert variant="warning" className="w-100 mb-0 text-start small">
-                    <strong>Attendance unavailable:</strong> {todayLoadError}
+                  <Alert variant={attendanceBlocked ? "secondary" : "warning"} className="w-100 mb-0 text-start small">
+                    <strong>{attendanceBlocked ? "Attendance access disabled" : "Attendance unavailable"}:</strong>{" "}
+                    {attendanceBlocked
+                      ? "Your employment status is Inactive or Terminated. Check-in and check-out are disabled. Please contact HR if this status needs to be reviewed."
+                      : todayLoadError}
                   </Alert>
                 ) : (
                   <div className="text-center w-100 py-3">

@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from employees.models import Employee
+from employees.models import ATTENDANCE_ELIGIBLE_STATUSES, Employee
 from .models import Project, ProjectStatus, Task, TaskPriority, TaskStatus
 
 
@@ -49,6 +49,7 @@ class ProjectSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         start_date = attrs.get("start_date", getattr(self.instance, "start_date", None))
         due_date = attrs.get("due_date", getattr(self.instance, "due_date", None))
+
         if start_date and due_date and due_date < start_date:
             raise serializers.ValidationError({"due_date": "Project due date cannot be before the start date."})
         return attrs
@@ -247,6 +248,21 @@ class TaskSerializer(serializers.ModelSerializer):
         parent = attrs.get("parent", getattr(self.instance, "parent", None))
         start_date = attrs.get("start_date", getattr(self.instance, "start_date", None))
         due_date = attrs.get("due_date", getattr(self.instance, "due_date", None))
+
+        employees_to_validate = attrs.get("assignees") or ([attrs.get("assignee", assignee)] if attrs.get("assignee", assignee) else [])
+        blocked = [
+            employee.full_name
+            for employee in employees_to_validate
+            if employee.status not in ATTENDANCE_ELIGIBLE_STATUSES
+        ]
+        if blocked:
+            raise serializers.ValidationError({
+                "assignees": (
+                    "Tasks cannot be assigned to Inactive or Terminated employees: "
+                    + ", ".join(blocked)
+                    + "."
+                )
+            })
 
         if self.instance is None and project is None:
             raise serializers.ValidationError({"project": "Choose a project before creating a task."})

@@ -3,7 +3,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { Badge, Button, Card, Col, Row, Table, Form } from "react-bootstrap";
 import { IconLogin2, IconLogout2, IconRefresh, IconShieldLock, IconMapPin, IconInfoCircle } from "@tabler/icons-react";
+import Swal from "sweetalert2";
 import CustomPagination from "../../../../components/shared/CustomPagination";
+import {
+  getCurrentPosition,
+  getGeolocationPermissionState,
+  isGeolocationPermissionDenied,
+  isGeolocationUnavailable,
+  toAttendanceLocationPayload,
+} from "../../../../helper/locationPermission";
 
 type AttendanceRecord = {
   id: number;
@@ -153,18 +161,33 @@ const MyAttendanceClient = () => {
     }
   };
 
-  const getCurrentPosition = (): Promise<GeolocationPosition> => {
-    return new Promise((resolve, reject) => {
-      if (!navigator.geolocation) {
-        reject(new Error("Geolocation is not supported by your browser."));
-        return;
-      }
-      navigator.geolocation.getCurrentPosition(resolve, reject, {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 0,
-      });
+  const showLocationEnablePopup = async (reason: "blocked" | "unavailable" | "prompt") => {
+    const title = reason === "prompt" ? "Allow location access" : "Enable location access";
+    const text =
+      reason === "blocked"
+        ? "Location is blocked for this site. Open the browser lock/site settings, allow Location, then come back and retry."
+        : reason === "unavailable"
+          ? "Your device location service looks disabled or unavailable. Turn on Location/GPS in system settings, then retry."
+          : "Your browser will show a location permission popup. Please choose Allow to mark attendance.";
+
+    const result = await Swal.fire({
+      icon: "warning",
+      title,
+      html: `<div style="text-align:left">
+        <p>${text}</p>
+        <ol style="margin:0 0 0 18px;padding:0">
+          <li>Click the lock icon near the address bar.</li>
+          <li>Set Location to Allow.</li>
+          <li>Refresh or retry attendance after changing it.</li>
+        </ol>
+      </div>`,
+      showCancelButton: true,
+      confirmButtonText: reason === "prompt" ? "Show location popup" : "I enabled it, retry",
+      cancelButtonText: "Cancel",
+      confirmButtonColor: "#0d6efd",
     });
+
+    return result.isConfirmed;
   };
 
   /**
@@ -174,23 +197,34 @@ const MyAttendanceClient = () => {
    */
   const getLocationIfRequired = async (): Promise<{ latitude: number; longitude: number; accuracy?: number; timestamp?: number } | null> => {
     if (!securitySettings.geofencingEnabled) return null;
+
+    const permissionState = await getGeolocationPermissionState();
+    if (permissionState === "denied") {
+      const shouldRetry = await showLocationEnablePopup("blocked");
+      if (!shouldRetry) {
+        throw new Error("Location permission is required to mark attendance.");
+      }
+    } else if (permissionState === "prompt") {
+      const shouldPrompt = await showLocationEnablePopup("prompt");
+      if (!shouldPrompt) {
+        throw new Error("Location permission is required to mark attendance.");
+      }
+    }
+
     try {
       const position = await getCurrentPosition();
-      return {
-        latitude: position.coords.latitude,
-        longitude: position.coords.longitude,
-        accuracy: position.coords.accuracy, // meters
-        timestamp: position.timestamp || Date.now(),
-      };
+      return toAttendanceLocationPayload(position);
     } catch (geoError) {
       if (securitySettings.ipRestrictionEnabled) {
         return null;
       }
-      // TypeScript environments may not have the `GeolocationPositionError` type at runtime.
-      // Use a defensive check on `.code` where `1` corresponds to PERMISSION_DENIED.
-      const geoCode = (geoError as any)?.code;
-      if (geoCode === 1) {
-        throw new Error("Location permission denied. Geofencing is active — please enable location access in your browser settings and try again.");
+      if (isGeolocationPermissionDenied(geoError)) {
+        await showLocationEnablePopup("blocked");
+        throw new Error("Location permission denied. Geofencing is active. Please enable location access in your browser settings and try again.");
+      }
+      if (isGeolocationUnavailable(geoError)) {
+        await showLocationEnablePopup("unavailable");
+        throw new Error("Could not get your GPS location. Please enable device location services and try again.");
       }
       throw new Error("Could not get your GPS location. Please enable location services and try again.");
     }

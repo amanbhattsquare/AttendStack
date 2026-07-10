@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import Swal from "sweetalert2";
 import {
   IconBeach,
   IconCalendarCheck,
@@ -25,6 +26,13 @@ import {
 } from "@tabler/icons-react";
 import { useCurrentEmployee } from "./useCurrentEmployee";
 import { Spinner, Alert, Badge, Card, Button, Row, Col } from "react-bootstrap";
+import {
+  getCurrentPosition,
+  getGeolocationPermissionState,
+  isGeolocationPermissionDenied,
+  isGeolocationUnavailable,
+  toAttendanceLocationPayload,
+} from "../../../helper/locationPermission";
 
 const formatDate = (value?: string | null) => {
   if (!value) return "Not provided";
@@ -146,29 +154,33 @@ const formatTimeLabel = (value?: string | null) => {
   }).format(new Date(value));
 };
 
-const requestLocationPermission = async () => {
-  if (navigator.permissions) {
-    const permission = await navigator.permissions.query({ name: "geolocation" });
-    if (permission.state === "granted") {
-      return true;
-    } else if (permission.state === "prompt") {
-      // The browser will ask the user, so we can proceed
-      return true;
-    }
-    // Don't return false here, let the getCurrentPosition call trigger the prompt
-  }
-  // If permissions API is not supported, we'll just try to get the location
-  return true;
-};
+const showLocationEnablePopup = async (reason: "blocked" | "unavailable" | "prompt") => {
+  const title = reason === "prompt" ? "Allow location access" : "Enable location access";
+  const text =
+    reason === "blocked"
+      ? "Location is blocked for this site. Open the browser lock/site settings, allow Location, then come back and retry."
+      : reason === "unavailable"
+        ? "Your device location service looks disabled or unavailable. Turn on Location/GPS in system settings, then retry."
+        : "Your browser will show a location permission popup. Please choose Allow to mark attendance.";
 
-const getCurrentPosition = (): Promise<GeolocationPosition> => {
-  return new Promise((resolve, reject) => {
-    navigator.geolocation.getCurrentPosition(resolve, reject, {
-      enableHighAccuracy: true,
-      timeout: 10000,
-      maximumAge: 0,
-    });
+  const result = await Swal.fire({
+    icon: "warning",
+    title,
+    html: `<div style="text-align:left">
+      <p>${text}</p>
+      <ol style="margin:0 0 0 18px;padding:0">
+        <li>Click the lock icon near the address bar.</li>
+        <li>Set Location to Allow.</li>
+        <li>Refresh or retry attendance after changing it.</li>
+      </ol>
+    </div>`,
+    showCancelButton: true,
+    confirmButtonText: reason === "prompt" ? "Show location popup" : "I enabled it, retry",
+    cancelButtonText: "Cancel",
+    confirmButtonColor: "#0d6efd",
   });
+
+  return result.isConfirmed;
 };
 
 const EmployeeDashboard = () => {
@@ -416,20 +428,32 @@ const EmployeeDashboard = () => {
 
     try {
       let locationData = {};
-      if (action === "check-in") {
-        const hasPermission = await requestLocationPermission();
-        if (!hasPermission) {
-          throw new Error("Location permission is required to check in.");
+      const shouldCollectLocation = action === "check-in" || settings?.geofencing_enabled;
+      if (shouldCollectLocation) {
+        const permissionState = await getGeolocationPermissionState();
+        if (permissionState === "denied") {
+          const shouldRetry = await showLocationEnablePopup("blocked");
+          if (!shouldRetry) {
+            throw new Error("Location permission is required to mark attendance.");
+          }
+        } else if (permissionState === "prompt") {
+          const shouldPrompt = await showLocationEnablePopup("prompt");
+          if (!shouldPrompt) {
+            throw new Error("Location permission is required to mark attendance.");
+          }
         }
+
         try {
           const position = await getCurrentPosition();
-          locationData = {
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-          };
+          locationData = toAttendanceLocationPayload(position);
         } catch (geoError) {
-          if (geoError instanceof GeolocationPositionError && geoError.code === geoError.PERMISSION_DENIED) {
+          if (isGeolocationPermissionDenied(geoError)) {
+            await showLocationEnablePopup("blocked");
             throw new Error("Location permission denied. Please enable it in your browser settings.");
+          }
+          if (isGeolocationUnavailable(geoError)) {
+            await showLocationEnablePopup("unavailable");
+            throw new Error("Could not get your location. Please enable device location services and try again.");
           }
           throw new Error("Could not get your location. Please enable location services and try again.");
         }

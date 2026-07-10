@@ -91,7 +91,7 @@ const DashboardLayout: React.FC<DashboardProps> = ({ children }) => {
             {children}
           </div>
           <div className='custom-container py-3'>
-            <span className='me-1'>© 2026 AttendStack. A <a href="https://bhattsquare.com" target="_blank" rel="noopener noreferrer">Bhatt Square</a> Project.</span>
+            <span className='me-1'>© 2026 AttendStack. A <a href="https://bhattsquare.com" target="_blank" rel="noopener noreferrer">Bhatt Square</a> Project. <span className='text-secondary ms-2'>Version 2.5.3</span></span>
           </div>
         </div>
       </div>

@@ -25,7 +25,9 @@ from .serializers import (
 class TaskPagination(PageNumberPagination):
     page_size = 20
     page_size_query_param = "page_size"
-    max_page_size = 100
+    # The workspace performs client-side project/status filtering and therefore
+    # needs the complete company workload for medium-sized organizations.
+    max_page_size = 500
 
 
 class WorkspaceAccessMixin:

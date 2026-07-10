@@ -182,7 +182,7 @@ const AdminDashboard = () => {
         axios.get(`${API_URL}/api/v1/attendance/?date_from=${weekStart.toISOString().slice(0, 10)}`, authConfig()),
         axios.get(`${API_URL}/api/v1/attendance/leaves/`, authConfig()),
         axios.get(`${API_URL}/api/v1/payroll/?month=${month}&year=${year}`, authConfig()),
-        axios.get(`${API_URL}/api/v1/tasks/?page_size=100`, authConfig()),
+        axios.get(`${API_URL}/api/v1/tasks/?page_size=500`, authConfig()),
       ]);
 
       setEmployees(toArray(employeesRes.data));

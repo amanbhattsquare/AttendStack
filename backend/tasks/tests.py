@@ -105,6 +105,30 @@ class CompanyOwnerWorkspaceTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn(str(task.id), {row["id"] for row in response.data["results"]})
 
+    def test_workspace_can_load_more_than_one_hundred_tasks(self):
+        project = Project.objects.create(
+            organization=self.organization,
+            name="Large delivery",
+            key="LARGE",
+            created_by=self.owner,
+        )
+        Task.objects.bulk_create([
+            Task(
+                title=f"Work item {index}",
+                project=project,
+                assignee=self.employee,
+                assigned_by=self.owner,
+                status="TODO",
+            )
+            for index in range(125)
+        ])
+
+        response = self.client.get(reverse("tasks:task-list"), {"page_size": 500})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 125)
+        self.assertEqual(len(response.data["results"]), 125)
+
 
 class CrossDepartmentTaskAssignmentTests(APITestCase):
     def setUp(self):

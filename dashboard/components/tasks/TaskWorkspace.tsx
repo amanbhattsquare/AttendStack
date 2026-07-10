@@ -248,7 +248,7 @@ export default function TaskWorkspace({ employeeMode = false }: { employeeMode?:
   const load = async () => {
     setLoading(true); setError("");
     try {
-      const requests = [fetch(`${projectsApi}?page_size=100`, { headers: headers() }), fetch(`${apiRoot}/tasks/?page_size=100`, { headers: headers() }), fetch(`${apiRoot}/employees/?page_size=100`, { headers: headers() })];
+      const requests = [fetch(`${projectsApi}?page_size=100`, { headers: headers() }), fetch(`${apiRoot}/tasks/?page_size=500`, { headers: headers() }), fetch(`${apiRoot}/employees/?page_size=100`, { headers: headers() })];
       const responses = await Promise.all(requests);
       if (!responses[1].ok) throw new Error(await errorFrom(responses[1]));
       if (responses[0].ok) {

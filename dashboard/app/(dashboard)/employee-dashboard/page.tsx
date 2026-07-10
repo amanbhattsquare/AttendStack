@@ -311,7 +311,7 @@ const EmployeeDashboard = () => {
     if (!token) return;
 
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/tasks/?page_size=100`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/tasks/?page_size=500`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {

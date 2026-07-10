@@ -156,6 +156,7 @@ class ProjectViewSet(WorkspaceAccessMixin, viewsets.ModelViewSet):
         else:
             # Employees can start shared projects, but cannot make another person the owner.
             owner = self._current_employee()
+            self._ensure_work_eligible(owner)
             organization = owner.organization
         if Project.objects.filter(organization=organization, key=serializer.validated_data["key"]).exists():
             raise ValidationError({"key": "This project key is already in use in your organization."})
@@ -165,6 +166,8 @@ class ProjectViewSet(WorkspaceAccessMixin, viewsets.ModelViewSet):
         project = serializer.instance
         if not self._is_admin_or_hr(self.request.user) and project.created_by_id != self.request.user.id:
             raise PermissionDenied("You can edit only projects you created.")
+        if not self._is_admin_or_hr(self.request.user):
+            self._ensure_work_eligible(self._current_employee())
         if not self._is_admin_or_hr(self.request.user) and "owner" in serializer.validated_data:
             raise PermissionDenied("Employees cannot change the project owner.")
         owner = serializer.validated_data.get("owner")
@@ -180,6 +183,8 @@ class ProjectViewSet(WorkspaceAccessMixin, viewsets.ModelViewSet):
         project = self.get_object()
         if not self._is_admin_or_hr(request.user) and project.created_by_id != request.user.id:
             raise PermissionDenied("You can delete only projects you created.")
+        if not self._is_admin_or_hr(request.user):
+            self._ensure_work_eligible(self._current_employee())
         return super().destroy(request, *args, **kwargs)
 
     @action(detail=False, methods=["get"], url_path="choices")

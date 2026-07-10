@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { Card, Button, Table, Badge, Modal, Form, Row, Col, Alert, Spinner } from "react-bootstrap";
 import { IconCalendarPlus, IconCalendarEvent, IconMessage, IconInfoCircle, IconClock, IconCircleCheck, IconCircleX, IconEdit, IconTrash, IconHeart, IconUser } from "@tabler/icons-react";
 import Swal from "sweetalert2";
+import { useCurrentEmployee } from "../useCurrentEmployee";
 
 interface LeaveRequest {
   id: number;
@@ -76,6 +77,7 @@ const apiError = (payload: unknown, fallback: string) => {
 };
 
 const EmployeeLeavesClient = () => {
+  const { employee } = useCurrentEmployee();
   const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
@@ -386,6 +388,7 @@ const EmployeeLeavesClient = () => {
   const totalRequested = leaves.length;
   const approvedLeaves = leaves.filter(l => l.status === "APPROVED").length;
   const pendingLeaves = leaves.filter(l => l.status === "PENDING").length;
+  const leaveRequestsDisabled = employee?.status === "INACTIVE" || employee?.status === "TERMINATED";
 
   return (
     <div className="container-fluid px-0 py-4" style={{ minHeight: "85vh" }}>
@@ -401,6 +404,8 @@ const EmployeeLeavesClient = () => {
           <Button
             variant="primary"
             onClick={() => setShowModal(true)}
+            disabled={leaveRequestsDisabled}
+            title={leaveRequestsDisabled ? "Leave requests are disabled for inactive or terminated employees." : undefined}
             className="d-flex align-items-center gap-2 px-4 py-2.5 rounded-3 fw-semibold shadow-sm"
           >
             <IconCalendarPlus size={20} strokeWidth={2} />
@@ -408,6 +413,13 @@ const EmployeeLeavesClient = () => {
           </Button>
         </Card.Body>
       </Card>
+
+      {leaveRequestsDisabled && (
+        <Alert variant="secondary" className="border-0 shadow-sm mb-4">
+          <strong>Leave requests disabled:</strong> Your employment status is {employee?.status_label || employee?.status}.
+          You can review previous requests, but you cannot submit, edit, or delete requests. Contact HR if this status needs correction.
+        </Alert>
+      )}
 
       {/* Leave Balance Overview */}
       {leaveSettings && (
@@ -598,7 +610,7 @@ const EmployeeLeavesClient = () => {
                           )}
                         </td>
                         <td className="px-4 py-3.5 text-end">
-                          {leave.status === 'PENDING' && (
+                          {leave.status === 'PENDING' && !leaveRequestsDisabled && (
                             <div className="d-flex justify-content-end gap-2">
                               <Button variant="outline-secondary" size="sm" onClick={() => handleEdit(leave)}>
                                 <IconEdit size={16} />

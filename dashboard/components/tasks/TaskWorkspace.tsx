@@ -139,6 +139,8 @@ export default function TaskWorkspace({ employeeMode = false }: { employeeMode?:
   const [currentUserRole, setCurrentUserRole] = useState("");
   const [datePlannerTarget, setDatePlannerTarget] = useState<"start_date" | "due_date" | null>(null);
   const [datePlannerMonth, setDatePlannerMonth] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+  const isFormerEmployee = employeeMode && Boolean(currentEmployee && ["INACTIVE", "TERMINATED"].includes(currentEmployee.status));
+  const workActionsDisabled = employeeMode && (!currentEmployee || isFormerEmployee);
 
   useEffect(() => {
     if (!error) return;
@@ -296,6 +298,7 @@ export default function TaskWorkspace({ employeeMode = false }: { employeeMode?:
   const projectColors = useMemo(() => Object.fromEntries(projects.map((project) => [project.id, project.color])), [projects]);
 
   const openProject = (project?: Project) => {
+    if (workActionsDisabled) return;
     setEditingProject(project || null);
     setProjectForm(project ? { name: project.name, key: project.key, description: project.description || "", status: project.status, owner: project.owner || "", department: project.department || "", start_date: project.start_date || "", due_date: project.due_date || "", color: project.color || "#4f46e5" } : emptyProject);
     setProjectModal(true);
@@ -316,6 +319,7 @@ export default function TaskWorkspace({ employeeMode = false }: { employeeMode?:
     }, 0);
   };
   const openTask = (task?: Task, parent?: Task) => {
+    if (workActionsDisabled) return;
     setEditingTask(task || null);
     setAssigneePickerOpen(false);
     setTaskForm(task ? { title: task.title, description: task.description || "", project: task.project || "", parent: task.parent || "", assignees: task.assignees?.length ? task.assignees : task.assignee ? [task.assignee] : [], priority: task.priority, status: task.status, start_date: task.start_date || "", due_date: task.due_date || "", department: task.department || "", project_category: task.project_category || "", admin_notes: task.admin_notes || "", attachment: null } : { ...emptyTask, project: parent?.project || (projectFilter === "ALL" ? "" : projectFilter), parent: parent?.id || "", assignees: employeeMode && currentEmployee ? [currentEmployee.id] : [], department: parent?.department || "" });
@@ -345,6 +349,7 @@ export default function TaskWorkspace({ employeeMode = false }: { employeeMode?:
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to save task."); } finally { setSaving(false); }
   };
   const deleteProject = async (project: Project) => {
+    if (workActionsDisabled) return;
     const taskWarning = project.task_count ? ` This will also permanently delete its ${project.task_count} task${project.task_count === 1 ? "" : "s"}.` : "";
     const result = await Swal.fire({ icon: "warning", title: "Delete this project?", text: `“${project.name}” cannot be restored after deletion.${taskWarning}`, showCancelButton: true, confirmButtonText: "Delete project", confirmButtonColor: "#dc3545" });
     if (!result.isConfirmed) return;
@@ -357,6 +362,7 @@ export default function TaskWorkspace({ employeeMode = false }: { employeeMode?:
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to delete project."); } finally { setSaving(false); }
   };
   const deleteTask = async (task: Task) => {
+    if (workActionsDisabled) return;
     const subtaskWarning = task.subtask_count ? ` This will also permanently delete its ${task.subtask_count} subtask${task.subtask_count === 1 ? "" : "s"}.` : "";
     const result = await Swal.fire({ icon: "warning", title: "Delete this task?", text: `“${task.title}” cannot be restored after deletion.${subtaskWarning}`, showCancelButton: true, confirmButtonText: "Delete task", confirmButtonColor: "#dc3545" });
     if (!result.isConfirmed) return;
@@ -369,6 +375,7 @@ export default function TaskWorkspace({ employeeMode = false }: { employeeMode?:
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to delete task."); } finally { setSaving(false); }
   };
   const openProgress = (task: Task) => {
+    if (workActionsDisabled) return;
     setProgressModal(task);
     setProgressStatus(task.status === "CANCELLED" ? "TODO" : task.status);
     setProgressPriority(task.priority);
@@ -392,8 +399,9 @@ export default function TaskWorkspace({ employeeMode = false }: { employeeMode?:
   return <div className="container-fluid px-0 py-4 task-workspace">
     <div className="workspace-hero mb-4">
       <div><div className="workspace-eyebrow"><IconTarget size={16} /> WORKSPACE</div><h2>{employeeMode ? "My work" : "Project workspace"}</h2><p>{employeeMode ? "Create, organize, and deliver your work in shared projects." : "Plan projects, delegate work, and keep every delivery visible."}</p></div>
-      <div className="d-flex flex-wrap gap-2"><Button variant="outline-primary" onClick={() => openProject()}><IconFolderPlus size={17} /> New project</Button><Button variant="primary" onClick={() => openTask()} disabled={!projects.length}><IconPlus size={18} /> New task</Button></div>
+      <div className="d-flex flex-wrap gap-2"><Button variant="outline-primary" onClick={() => openProject()} disabled={workActionsDisabled}><IconFolderPlus size={17} /> New project</Button><Button variant="primary" onClick={() => openTask()} disabled={!projects.length || workActionsDisabled}><IconPlus size={18} /> New task</Button></div>
     </div>
+    {isFormerEmployee && <div className="alert alert-secondary border-0 shadow-sm mb-4"><strong>Task actions disabled:</strong> Your employment status is {currentEmployee?.status === "INACTIVE" ? "Inactive" : "Terminated"}. You can review existing projects and tasks, but you cannot create, edit, delete, or update work. Contact HR if this status needs correction.</div>}
     <Row className="g-3 mb-4">
       {[["Projects", metrics.projects, <IconTarget key="i" />], ["Open work", metrics.active, <IconClock key="i" />], ["Overdue", metrics.overdue, <IconAlertTriangle key="i" />], ["Completed", metrics.completed, <IconCircleCheck key="i" />]].map(([label, value, icon]) => <Col key={String(label)} xs={6} md={3}><Card className="border-0 shadow-sm workspace-metric"><Card.Body><span>{icon as React.ReactNode}</span><div><small>{label}</small><strong>{String(value)}</strong></div></Card.Body></Card></Col>)}
     </Row>
@@ -406,7 +414,7 @@ export default function TaskWorkspace({ employeeMode = false }: { employeeMode?:
             <h5 className="fw-bold mb-1">Task list</h5>
             <small className="text-secondary">Click the subtask count to view nested subtasks, or click a row for details.</small>
           </div>
-          <Button size="sm" onClick={() => openTask()} disabled={!projects.length}><IconPlus size={16} /> Add task</Button>
+          <Button size="sm" onClick={() => openTask()} disabled={!projects.length || workActionsDisabled}><IconPlus size={16} /> Add task</Button>
         </Card.Header>
         <Card.Body className="task-list-filters border-top">
           {dashboardFilter && <div className="dashboard-filter-chip mb-3"><span>Dashboard filter</span><strong>{dashboardTaskFilterLabels[dashboardFilter]}</strong><button type="button" onClick={resetFilters} aria-label="Clear dashboard filter"><IconX size={14} /></button></div>}
@@ -483,7 +491,7 @@ export default function TaskWorkspace({ employeeMode = false }: { employeeMode?:
     <Modal show={taskModal} onHide={() => !saving && setTaskModal(false)} centered size="lg"><Form onSubmit={saveTask}><Modal.Header closeButton><Modal.Title>{editingTask ? "Edit task" : taskForm.parent ? "Add subtask" : "Add task"}</Modal.Title></Modal.Header><Modal.Body><Row className="g-3"><Col xs={12}><Form.Group><Form.Label>Task title</Form.Label><Form.Control required minLength={3} value={taskForm.title} onChange={(e) => setTaskForm({ ...taskForm, title: e.target.value })} placeholder="Describe the work clearly" /></Form.Group></Col><Col xs={12}><Form.Group><Form.Label>Description</Form.Label><Form.Control as="textarea" rows={3} value={taskForm.description} onChange={(e) => setTaskForm({ ...taskForm, description: e.target.value })} placeholder="Add context, acceptance criteria, or links." /></Form.Group></Col><Col md={6}><Form.Group><Form.Label>Project</Form.Label><Form.Select required disabled={Boolean(taskForm.parent)} value={taskForm.project} onChange={(e) => setTaskForm({ ...taskForm, project: e.target.value })}><option value="">Choose a project</option>{projects.map((project) => <option key={project.id} value={project.id}>{project.key} · {project.name}</option>)}</Form.Select></Form.Group></Col><Col md={6}><EmployeeAssigneePicker employees={employees} selectedIds={taskForm.assignees} isOpen={assigneePickerOpen} onToggle={() => setAssigneePickerOpen((open) => !open)} onChange={(assignees) => setTaskForm({ ...taskForm, assignees })} /></Col><Col md={4}><Form.Group><Form.Label>Priority</Form.Label><Form.Select value={taskForm.priority} onChange={(e) => setTaskForm({ ...taskForm, priority: e.target.value as Priority })}>{["LOW", "MEDIUM", "HIGH", "URGENT"].map((value) => <option key={value} value={value}>{value}</option>)}</Form.Select></Form.Group></Col><Col md={4}><Form.Group><Form.Label>Status</Form.Label><Form.Select value={taskForm.status} onChange={(e) => setTaskForm({ ...taskForm, status: e.target.value as Status })}>{taskStatuses.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</Form.Select></Form.Group></Col><Col md={4}><Form.Group><Form.Label>Category</Form.Label><Form.Control value={taskForm.project_category} onChange={(e) => setTaskForm({ ...taskForm, project_category: e.target.value })} placeholder="Design" /></Form.Group></Col><Col md={6}><Form.Group><Form.Label>Start date</Form.Label><Form.Control type="date" value={taskForm.start_date} onChange={(e) => setTaskForm({ ...taskForm, start_date: e.target.value })} /></Form.Group></Col><Col md={6}><Form.Group><Form.Label>Due date</Form.Label><Form.Control type="date" value={taskForm.due_date} onChange={(e) => setTaskForm({ ...taskForm, due_date: e.target.value })} /></Form.Group></Col><Col xs={12}><Form.Group><Form.Label>Attachment</Form.Label><Form.Control type="file" onChange={(e) => { const input = e.currentTarget as HTMLInputElement; setTaskForm({ ...taskForm, attachment: input.files?.[0] || null }); }} /><Form.Text>Optional, maximum 10 MB.</Form.Text></Form.Group></Col>{!employeeMode && <Col xs={12}><Form.Group><Form.Label>Manager note</Form.Label><Form.Control as="textarea" rows={2} value={taskForm.admin_notes} onChange={(e) => setTaskForm({ ...taskForm, admin_notes: e.target.value })} /></Form.Group></Col>}</Row></Modal.Body><Modal.Footer><Button variant="light" onClick={() => setTaskModal(false)}>Cancel</Button><Button type="submit" disabled={saving}>{saving ? "Saving…" : editingTask ? "Save changes" : taskForm.parent ? "Add subtask" : "Create task"}</Button></Modal.Footer></Form></Modal>
     <Modal show={Boolean(progressModal)} onHide={() => !saving && setProgressModal(null)} centered><Form onSubmit={saveProgress}><Modal.Header closeButton><Modal.Title>Update task</Modal.Title></Modal.Header><Modal.Body><p className="fw-semibold mb-3">{progressModal?.title}</p><Row className="g-3"><Col md={6}><Form.Group><Form.Label>Priority</Form.Label><Form.Select value={progressPriority} onChange={(e) => setProgressPriority(e.target.value as Priority)}>{taskPriorities.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</Form.Select></Form.Group></Col><Col md={6}><Form.Group><Form.Label>Status</Form.Label><Form.Select value={progressStatus} onChange={(e) => setProgressStatus(e.target.value as Status)}>{taskStatuses.filter((item) => item.value !== "CANCELLED").map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</Form.Select></Form.Group></Col><Col xs={12}><Form.Group><Form.Label>Progress note</Form.Label><Form.Control as="textarea" rows={4} value={progressNote} onChange={(e) => setProgressNote(e.target.value)} placeholder="Share progress, blockers, or completion notes." /></Form.Group></Col></Row></Modal.Body><Modal.Footer><Button variant="light" onClick={() => setProgressModal(null)}>Cancel</Button><Button type="submit" disabled={saving}>{saving ? "Updating…" : "Update task"}</Button></Modal.Footer></Form></Modal>
     <TaskDatePlanner target={datePlannerTarget} month={datePlannerMonth} startDate={taskForm.start_date} dueDate={taskForm.due_date} onClose={() => setDatePlannerTarget(null)} onTargetChange={setDatePlannerTarget} onMonthChange={setDatePlannerMonth} onSelect={(field, value) => { setTaskForm((current) => ({ ...current, [field]: value })); setDatePlannerTarget(null); }} />
-    <style suppressHydrationWarning>{styles}{heroStyles}{taskTableStyles}{detailStyles}{tableEnhancements}{projectColorStyles}{projectActionStyles}{paginationStyles}{categoryRemovalStyles}{datePlannerStyles}{responsiveStyles}</style>
+    <style suppressHydrationWarning>{styles}{heroStyles}{taskTableStyles}{detailStyles}{tableEnhancements}{projectColorStyles}{projectActionStyles}{paginationStyles}{categoryRemovalStyles}{datePlannerStyles}{responsiveStyles}{isFormerEmployee ? readOnlyStyles : ""}</style>
   </div>;
 }
 
@@ -637,4 +645,9 @@ const responsiveStyles = `
   .workspace-hero>div:last-child{grid-template-columns:1fr}
   .workspace-metric .card-body{align-items:flex-start;flex-direction:column}
 }
+`;
+
+const readOnlyStyles = `
+.project-action-button{pointer-events:none!important;opacity:.45!important}
+.task-workspace~.modal .modal-footer .btn:not(:first-child){display:none!important}
 `;

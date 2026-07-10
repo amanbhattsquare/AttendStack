@@ -548,6 +548,12 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
             raise ValidationError({"detail": "No employee profile is linked to this user account."})
         return employee
 
+    def _ensure_leave_eligible(self, employee):
+        if employee.status_on(timezone.localdate()) not in ATTENDANCE_ELIGIBLE_STATUSES:
+            raise PermissionDenied(
+                "Leave requests are unavailable while your employment status is Inactive or Terminated."
+            )
+
     @action(detail=False, methods=["get"], url_path="types")
     def get_leave_types(self, request):
         """
@@ -579,6 +585,7 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
             raise ValidationError({"leave_type": "Half-day leave is available only for Casual or Sick leave."})
 
         employee = self._current_employee()
+        self._ensure_leave_eligible(employee)
         excluded_request = None
         exclude_id = request.query_params.get("exclude_id")
         if exclude_id:
@@ -765,6 +772,9 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         if employee is None:
             raise ValidationError({"employee": "Choose an employee for this leave request."})
 
+        if not self._is_admin_or_hr(user):
+            self._ensure_leave_eligible(employee)
+
         with transaction.atomic():
             employee = Employee.objects.select_for_update().get(pk=employee.pk)
             self._validate_monthly_policy(serializer, employee)
@@ -796,6 +806,7 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
 
             # If user is Employee, they cannot update status or admin_notes.
             if not self._is_admin_or_hr(user):
+                self._ensure_leave_eligible(employee)
                 forbidden_fields = {"employee", "status", "admin_notes"}
                 if forbidden_fields.intersection(self.request.data.keys()):
                     raise PermissionDenied("Employees can only edit leave dates, type, and reason.")
@@ -815,6 +826,7 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         user = self.request.user
         if not self._is_admin_or_hr(user):
             employee = self._current_employee()
+            self._ensure_leave_eligible(employee)
             if instance.employee_id != employee.id:
                 raise PermissionDenied("You can only delete your own leave requests.")
             if instance.status != LeaveStatus.PENDING:

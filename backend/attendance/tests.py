@@ -466,6 +466,22 @@ class MonthlyLeaveLimitApiTests(APITestCase):
         self.assertIn("monthly limit exceeded", response.data["detail"].lower())
         self.assertEqual(LeaveRequest.objects.filter(employee=self.employee).count(), 1)
 
+    def test_inactive_or_terminated_employee_cannot_create_leave_request(self):
+        for employee_status in (EmployeeStatus.INACTIVE, EmployeeStatus.TERMINATED):
+            self.employee.status = employee_status
+            self.employee.save(update_fields=["status", "updated_at"])
+            response = self.client.post(
+                reverse("attendance:leaves-list"),
+                {
+                    "start_date": "2026-06-11",
+                    "end_date": "2026-06-11",
+                    "leave_type": "CASUAL",
+                    "reason": "Must be blocked",
+                },
+            )
+            self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+            self.assertIn("Inactive or Terminated", response.data["detail"])
+
 
 class GeofenceBypassTests(APITestCase):
     def setUp(self):

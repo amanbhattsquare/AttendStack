@@ -166,3 +166,34 @@ class CrossDepartmentTaskAssignmentTests(APITestCase):
         task = Task.objects.get(pk=task_response.data["id"])
         self.assertEqual(task.assignee, self.assignee)
         self.assertEqual(task.assigned_by, self.assigner_user)
+
+    def test_inactive_employee_workspace_is_read_only(self):
+        project = Project.objects.create(
+            organization=self.organization,
+            name="Existing project",
+            key="EXISTING",
+            owner=self.assigner,
+            created_by=self.assigner_user,
+        )
+        self.assigner.status = EmployeeStatus.INACTIVE
+        self.assigner.save(update_fields=["status", "updated_at"])
+
+        project_response = self.client.post(
+            reverse("tasks:project-list"),
+            {"name": "Blocked project", "key": "BLOCKED", "status": "ACTIVE"},
+            format="json",
+        )
+        task_response = self.client.post(
+            reverse("tasks:task-list"),
+            {
+                "title": "Blocked task",
+                "project": str(project.id),
+                "assignee": str(self.assignee.id),
+                "assignees": [str(self.assignee.id)],
+                "status": "TODO",
+            },
+            format="json",
+        )
+
+        self.assertEqual(project_response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(task_response.status_code, status.HTTP_403_FORBIDDEN)

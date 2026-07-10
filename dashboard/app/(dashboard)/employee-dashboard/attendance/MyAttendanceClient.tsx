@@ -66,6 +66,7 @@ const getStatusBadge = (status: string) => {
     case "LEAVE": return "danger";
     case "PAID_LEAVE": return "primary";
     case "HOLIDAY": return "success";
+    case "SUNDAY_PAID": return "primary";
     case "SUNDAY_UNPAID": return "dark";
     default:
       return "light";
@@ -80,6 +81,7 @@ const attendanceStatuses = [
   { value: "LEAVE", label: "Leave" },
   { value: "PAID_LEAVE", label: "Paid Leave" },
   { value: "HOLIDAY", label: "Holiday" },
+  { value: "SUNDAY_PAID", label: "Sunday" },
   { value: "SUNDAY_UNPAID", label: "Sunday Unpaid" },
 ];
 
@@ -94,6 +96,7 @@ const MyAttendanceClient = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<"check-in" | "check-out" | null>(null);
   const [error, setError] = useState<any>(null);
+  const [attendanceBlockedMessage, setAttendanceBlockedMessage] = useState("");
   const [success, setSuccess] = useState("");
   const [securitySettings, setSecuritySettings] = useState<SecuritySettings>({
     ipRestrictionEnabled: false,
@@ -106,6 +109,7 @@ const MyAttendanceClient = () => {
   const loadAttendance = async () => {
     setIsLoading(true);
     setError("");
+    setAttendanceBlockedMessage("");
 
     try {
       const today = new Date();
@@ -120,10 +124,23 @@ const MyAttendanceClient = () => {
         fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/settings/`, { headers: authHeaders() }),
       ]);
 
-      if (!todayResponse.ok) throw new Error("Unable to load today's attendance summary.");
+      if (!todayResponse.ok) {
+        const todayError = await todayResponse.json().catch(() => null);
+        const detail = todayError?.detail || "Unable to load today's attendance summary.";
+        const isExpectedStatusRestriction =
+          typeof detail === "string"
+          && (detail.includes("Inactive") || detail.includes("Terminated") || detail.includes("On Leave"));
+        if (isExpectedStatusRestriction) {
+          setToday(null);
+          setAttendanceBlockedMessage(detail);
+        } else {
+          throw new Error(detail);
+        }
+      } else {
+        setToday((await todayResponse.json()) as TodayAttendance);
+      }
       if (!recordsResponse.ok) throw new Error("Unable to load your attendance history.");
 
-      setToday((await todayResponse.json()) as TodayAttendance);
       const recordsData = await recordsResponse.json();
       const allRecords = Array.isArray(recordsData) ? recordsData : recordsData.results || [];
       setRecords(allRecords);
@@ -358,6 +375,17 @@ const MyAttendanceClient = () => {
                 )}
               </div>
             )}
+          </div>
+        </div>
+      )}
+      {attendanceBlockedMessage && (
+        <div className="alert alert-secondary d-flex align-items-start gap-2 mb-4 shadow-sm border-0">
+          <IconShieldLock size={22} className="flex-shrink-0 mt-1" />
+          <div>
+            <div className="fw-bold">Attendance actions disabled</div>
+            <div className="small mt-1">
+              {attendanceBlockedMessage} Your historical attendance remains available below. Contact HR if your employment status needs correction.
+            </div>
           </div>
         </div>
       )}

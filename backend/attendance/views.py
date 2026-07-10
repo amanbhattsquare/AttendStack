@@ -146,12 +146,15 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
             return None
         return super().paginate_queryset(queryset)
 
-    def _current_employee(self):
+    def _current_employee(self, require_working_status=True):
         employee = Employee.objects.filter(email__iexact=self.request.user.email).first()
         if employee is None and self.request.user.employee_id:
             employee = Employee.objects.filter(employee_id=self.request.user.employee_id).first()
         if employee is None:
             raise NotFound("No employee profile is linked to this login account.")
+        if not require_working_status:
+            return employee
+
         today = timezone.localdate()
         employment_status = employee.status_on(today)
         if employment_status not in ATTENDANCE_ELIGIBLE_STATUSES:
@@ -219,7 +222,9 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"], url_path="me")
     def me(self, request):
-        employee = self._current_employee()
+        # Employment-status restrictions apply to punching attendance, not to
+        # read-only access to the employee's own historical records.
+        employee = self._current_employee(require_working_status=False)
         queryset = self.get_queryset().filter(employee=employee)
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)

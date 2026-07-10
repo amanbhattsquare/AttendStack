@@ -43,6 +43,7 @@ const badgeClass = (status: string) => {
     case "LEAVE": return "danger";
     case "PAID_LEAVE": return "primary";
     case "HOLIDAY": return "success";
+    case "SUNDAY_PAID": return "primary";
     case "SUNDAY_UNPAID": return "secondary";
     default:
       return "light";
@@ -57,6 +58,7 @@ const attendanceStatuses = [
   { value: "LEAVE", label: "Leave" },
   { value: "PAID_LEAVE", label: "Paid Leave" },
   { value: "HOLIDAY", label: "Holiday" },
+  { value: "SUNDAY_PAID", label: "Sunday" },
   { value: "SUNDAY_UNPAID", label: "Sunday Unpaid" },
 ];
 

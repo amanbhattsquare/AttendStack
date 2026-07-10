@@ -422,6 +422,32 @@ class AttendanceVisibilityApiTests(APITestCase):
             ["2026-05-09"],
         )
 
+    def test_inactive_employee_can_view_historical_attendance_report(self):
+        from django.contrib.auth import get_user_model
+
+        AttendanceRecord.objects.create(
+            employee=self.employee,
+            date=date(2026, 5, 9),
+            status=AttendanceStatus.PRESENT,
+        )
+        self.employee.status = EmployeeStatus.INACTIVE
+        self.employee._status_effective_date = date(2026, 5, 10)
+        self.employee.save(update_fields=["status", "updated_at"])
+        user = get_user_model().objects.create_user(
+            email=self.employee.email,
+            password="StrongPass123!",
+            employee_id=self.employee.employee_id,
+        )
+        self.client.force_authenticate(user)
+
+        response = self.client.get(
+            reverse("attendance:attendance-me"),
+            {"date_from": "2026-05-01", "date_to": "2026-05-31"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual([record["date"] for record in response.data], ["2026-05-09"])
+
 
 class MonthlyLeaveLimitApiTests(APITestCase):
     def setUp(self):

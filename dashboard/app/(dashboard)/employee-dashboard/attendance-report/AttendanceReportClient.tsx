@@ -38,6 +38,7 @@ const getStatusBadge = (status: string) => {
     case "LEAVE": return "danger";
     case "PAID_LEAVE": return "primary";
     case "HOLIDAY": return "success";
+    case "SUNDAY_PAID": return "primary";
     case "SUNDAY_UNPAID": return "secondary";
     default:
       return "light";
@@ -62,7 +63,10 @@ const AttendanceReportClient = () => {
     try {
       const params = new URLSearchParams({ date_from: dateFrom, date_to: dateTo });
       const response = await fetch(`${API_URL}?${params.toString()}`, { headers: authHeaders() });
-      if (!response.ok) throw new Error("Unable to load attendance report.");
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        throw new Error(errorData?.detail || "Unable to load attendance report.");
+      }
       setRecords((await response.json()) as AttendanceRecord[]);
       setCurrentPage(1);
     } catch (loadError) {

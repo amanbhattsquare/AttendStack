@@ -99,7 +99,7 @@ const getStatusBadge = (status: string) => {
     case "LEAVE": return "danger";
     case "PAID_LEAVE": return "primary";
     case "HOLIDAY": return "success";
-    case "SUNDAY_PAID": return "primary";
+    case "SUNDAY_PAID": return "dark";
     case "SUNDAY_UNPAID": return "secondary";
     default: return "light";
   }

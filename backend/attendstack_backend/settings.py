@@ -13,7 +13,17 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # SECURITY
 # ──────────────────────────────────────────────────────────────────────────────
 SECRET_KEY = config("SECRET_KEY", default="unsafe-secret-key")
-DEBUG = config("DEBUG", default=True, cast=bool)
+# Some deployment platforms use environment labels such as ``release`` for
+# DEBUG.  python-decouple's strict bool cast raises ValueError for those values
+# and prevents Django/Gunicorn from starting, which surfaces as a 502 from the
+# reverse proxy.  Only explicit truthy values should enable debug mode; all
+# deployment labels and other values safely keep it disabled.
+DEBUG = str(config("DEBUG", default="true")).strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
 ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="localhost,127.0.0.1").split(",")
 
 # ──────────────────────────────────────────────────────────────────────────────

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { Card, Button, Table, Badge, Modal, Form, Row, Col, Alert, Spinner } from "react-bootstrap";
-import { IconCalendarPlus, IconCalendarEvent, IconMessage, IconInfoCircle, IconClock, IconCircleCheck, IconCircleX, IconEdit, IconTrash, IconHeart, IconUser } from "@tabler/icons-react";
+import { IconCalendarPlus, IconCalendarEvent, IconMessage, IconInfoCircle, IconClock, IconCircleCheck, IconCircleX, IconEdit, IconTrash, IconHeart, IconUser, IconEye, IconPaperclip } from "@tabler/icons-react";
 import Swal from "sweetalert2";
 import { useCurrentEmployee } from "../useCurrentEmployee";
 
@@ -96,6 +96,7 @@ const EmployeeLeavesClient = () => {
   const [leaveTypes, setLeaveTypes] = useState<{ value: string; label: string }[]>(DEFAULT_LEAVE_TYPES);
   const [leavePreview, setLeavePreview] = useState<LeavePreview | null>(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const [viewingLeave, setViewingLeave] = useState<LeaveRequest | null>(null);
 
   const fetchLeaves = async () => {
     setIsLoading(true);
@@ -610,16 +611,27 @@ const EmployeeLeavesClient = () => {
                           )}
                         </td>
                         <td className="px-4 py-3.5 text-end">
-                          {leave.status === 'PENDING' && !leaveRequestsDisabled && (
-                            <div className="d-flex justify-content-end gap-2">
-                              <Button variant="outline-secondary" size="sm" onClick={() => handleEdit(leave)}>
-                                <IconEdit size={16} />
-                              </Button>
-                              <Button variant="outline-danger" size="sm" onClick={() => handleDelete(leave.id)}>
-                                <IconTrash size={16} />
-                              </Button>
-                            </div>
-                          )}
+                          <div className="d-flex justify-content-end gap-2">
+                            <Button
+                              variant="outline-primary"
+                              size="sm"
+                              onClick={() => setViewingLeave(leave)}
+                              title="View leave application"
+                              aria-label="View leave application"
+                            >
+                              <IconEye size={16} />
+                            </Button>
+                            {leave.status === 'PENDING' && !leaveRequestsDisabled && (
+                              <>
+                                <Button variant="outline-secondary" size="sm" onClick={() => handleEdit(leave)}>
+                                  <IconEdit size={16} />
+                                </Button>
+                                <Button variant="outline-danger" size="sm" onClick={() => handleDelete(leave.id)}>
+                                  <IconTrash size={16} />
+                                </Button>
+                              </>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -630,6 +642,66 @@ const EmployeeLeavesClient = () => {
           )}
         </Card.Body>
       </Card>
+
+      <Modal show={Boolean(viewingLeave)} onHide={() => setViewingLeave(null)} centered size="lg">
+        <Modal.Header closeButton className="px-4 py-3">
+          <Modal.Title className="fw-bold text-dark">Leave Application Details</Modal.Title>
+        </Modal.Header>
+        {viewingLeave && (
+          <Modal.Body className="px-4 py-4">
+            <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-4">
+              <div className="d-flex align-items-center gap-2">
+                {getLeaveTypeBadge(viewingLeave.leave_type)}
+                {viewingLeave.is_half_day && <Badge bg="secondary-subtle" className="text-secondary-emphasis">Half Day</Badge>}
+              </div>
+              {getStatusBadge(viewingLeave.status)}
+            </div>
+
+            <Row className="g-4">
+              <Col xs={12} md={6}>
+                <p className="small text-secondary fw-semibold mb-1">Start Date</p>
+                <p className="text-dark mb-0">{new Date(`${viewingLeave.start_date}T00:00:00`).toLocaleDateString("en-IN", { day: "2-digit", month: "long", year: "numeric" })}</p>
+              </Col>
+              <Col xs={12} md={6}>
+                <p className="small text-secondary fw-semibold mb-1">End Date</p>
+                <p className="text-dark mb-0">{new Date(`${viewingLeave.end_date}T00:00:00`).toLocaleDateString("en-IN", { day: "2-digit", month: "long", year: "numeric" })}</p>
+              </Col>
+              <Col xs={12} md={6}>
+                <p className="small text-secondary fw-semibold mb-1">Duration</p>
+                <p className="text-dark mb-0">{viewingLeave.is_half_day ? 0.5 : calculateDays(viewingLeave.start_date, viewingLeave.end_date)} day{(viewingLeave.is_half_day ? 0.5 : calculateDays(viewingLeave.start_date, viewingLeave.end_date)) === 1 ? "" : "s"}</p>
+              </Col>
+              <Col xs={12} md={6}>
+                <p className="small text-secondary fw-semibold mb-1">Applied On</p>
+                <p className="text-dark mb-0">{new Date(viewingLeave.created_at).toLocaleString("en-IN", { day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" })}</p>
+              </Col>
+              <Col xs={12}>
+                <p className="small text-secondary fw-semibold mb-1">Reason</p>
+                <p className="text-dark mb-0 text-break" style={{ whiteSpace: "pre-wrap" }}>{viewingLeave.reason}</p>
+              </Col>
+              <Col xs={12}>
+                <p className="small text-secondary fw-semibold mb-1">HR Remarks</p>
+                <p className={viewingLeave.admin_notes ? "text-dark mb-0 text-break" : "text-muted mb-0"} style={{ whiteSpace: "pre-wrap" }}>
+                  {viewingLeave.admin_notes || "No remarks yet"}
+                </p>
+              </Col>
+              <Col xs={12}>
+                <p className="small text-secondary fw-semibold mb-2">Attachment</p>
+                {viewingLeave.attachment ? (
+                  <Button as="a" href={viewingLeave.attachment} target="_blank" rel="noreferrer" variant="outline-primary" size="sm" className="d-inline-flex align-items-center gap-2">
+                    <IconPaperclip size={16} />
+                    View Attachment
+                  </Button>
+                ) : (
+                  <p className="text-muted mb-0">No attachment submitted</p>
+                )}
+              </Col>
+            </Row>
+          </Modal.Body>
+        )}
+        <Modal.Footer className="px-4 py-3">
+          <Button variant="secondary" onClick={() => setViewingLeave(null)}>Close</Button>
+        </Modal.Footer>
+      </Modal>
 
       {/* Floating Apply Modal */}
       <Modal show={showModal} onHide={resetFormAndCloseModal} centered className="border-0 shadow-lg" size="lg">

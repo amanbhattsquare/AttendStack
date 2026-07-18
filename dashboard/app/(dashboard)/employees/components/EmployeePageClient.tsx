@@ -14,6 +14,7 @@ import {
   IconSearch,
   IconTrash,
   IconUserCheck,
+  IconCalendarStats,
 } from "@tabler/icons-react";
 import { Alert, Button, Dropdown, Form, Modal } from "react-bootstrap";
 import Link from "next/link";
@@ -629,6 +630,9 @@ const EmployeePageClient = () => {
                           </Dropdown.Item>
                           <Dropdown.Item onClick={() => handleEdit(employee)} className="d-flex align-items-center gap-2">
                             <IconEdit size={16} /> Edit Employee
+                          </Dropdown.Item>
+                          <Dropdown.Item onClick={() => router.push(`/employees/${employee.id}#leave-entitlement`)} className="d-flex align-items-center gap-2">
+                            <IconCalendarStats size={16} /> Manage Leave Entitlement
                           </Dropdown.Item>
                           <Dropdown.Item onClick={() => openStatusModal(employee)} className="d-flex align-items-center gap-2">
                             <IconUserCheck size={16} /> Change Status

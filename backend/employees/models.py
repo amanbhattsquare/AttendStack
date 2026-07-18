@@ -1,6 +1,7 @@
 import uuid
 
 from django.core.validators import RegexValidator
+from django.core.validators import MinValueValidator, MaxValueValidator
 from django.db import models, transaction
 from django.db.models.functions import Coalesce
 from django.utils import timezone
@@ -107,6 +108,16 @@ class Employee(models.Model):
     )
 
     annual_salary = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
+    casual_leave_days_override = models.DecimalField(
+        max_digits=5, decimal_places=1, blank=True, null=True,
+        validators=[MinValueValidator(0), MaxValueValidator(365)],
+        help_text="Optional annual Casual/PL entitlement. Blank uses company policy.",
+    )
+    sick_leave_days_override = models.DecimalField(
+        max_digits=5, decimal_places=1, blank=True, null=True,
+        validators=[MinValueValidator(0), MaxValueValidator(365)],
+        help_text="Optional annual Sick Leave entitlement. Blank uses company policy.",
+    )
     pay_frequency = models.CharField(
         max_length=20,
         choices=PayFrequency.choices,

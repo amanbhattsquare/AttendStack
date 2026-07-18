@@ -18,6 +18,8 @@ import {
   IconUser,
   IconUsers,
   IconWallet,
+  IconCalendarStats,
+  IconEdit,
 } from "@tabler/icons-react";
 
 type Employee = {
@@ -67,6 +69,22 @@ type EmployeeProfileClientProps = {
     id?: string;
     avatar?: string;
   };
+};
+
+type LeavePolicy = {
+  year: number;
+  joining_date: string;
+  is_prorated: boolean;
+  eligible_months: number;
+  casual_leave_days_override: string | null;
+  sick_leave_days_override: string | null;
+  company_casual_leave_days: number;
+  company_sick_leave_days: number;
+  balances: Array<{ leave_type: string; label: string; entitlement: number; used: number; remaining: number }>;
+  leave_requests: Array<{
+    id: number; leave_type_label: string; start_date: string; end_date: string;
+    is_half_day: boolean; reason: string; status: string; status_label: string;
+  }>;
 };
 
 const API_URL = `${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/employees/`;
@@ -151,6 +169,12 @@ const EmployeeProfileClient = ({ employeeId, employee: legacyEmployee }: Employe
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
+  const [leavePolicy, setLeavePolicy] = useState<LeavePolicy | null>(null);
+  const [isEditingLeavePolicy, setIsEditingLeavePolicy] = useState(false);
+  const [casualOverride, setCasualOverride] = useState("");
+  const [sickOverride, setSickOverride] = useState("");
+  const [isSavingLeavePolicy, setIsSavingLeavePolicy] = useState(false);
+  const [leavePolicyError, setLeavePolicyError] = useState("");
 
   useEffect(() => {
     const loadEmployee = async () => {
@@ -178,6 +202,15 @@ const EmployeeProfileClient = ({ employeeId, employee: legacyEmployee }: Employe
         }
 
         setEmployee((await response.json()) as Employee);
+        const leaveResponse = await fetch(`${API_URL}${resolvedEmployeeId}/leave-policy/`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        });
+        if (leaveResponse.ok) {
+          const policy = (await leaveResponse.json()) as LeavePolicy;
+          setLeavePolicy(policy);
+          setCasualOverride(policy.casual_leave_days_override ?? "");
+          setSickOverride(policy.sick_leave_days_override ?? "");
+        }
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : "Unable to load employee profile.");
       } finally {
@@ -187,6 +220,32 @@ const EmployeeProfileClient = ({ employeeId, employee: legacyEmployee }: Employe
 
     loadEmployee();
   }, [resolvedEmployeeId]);
+
+  const saveLeavePolicy = async () => {
+    setIsSavingLeavePolicy(true);
+    setLeavePolicyError("");
+    try {
+      const token = localStorage.getItem("authToken");
+      const response = await fetch(`${API_URL}${resolvedEmployeeId}/leave-policy/`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({
+          casual_leave_days_override: casualOverride === "" ? null : Number(casualOverride),
+          sick_leave_days_override: sickOverride === "" ? null : Number(sickOverride),
+        }),
+      });
+      if (!response.ok) throw new Error("Unable to update employee leave entitlement.");
+      const policy = (await response.json()) as LeavePolicy;
+      setLeavePolicy(policy);
+      setCasualOverride(policy.casual_leave_days_override ?? "");
+      setSickOverride(policy.sick_leave_days_override ?? "");
+      setIsEditingLeavePolicy(false);
+    } catch (saveError) {
+      setLeavePolicyError(saveError instanceof Error ? saveError.message : "Unable to update leave entitlement.");
+    } finally {
+      setIsSavingLeavePolicy(false);
+    }
+  };
 
   const sections = useMemo(() => {
     if (!employee) return [];
@@ -369,6 +428,76 @@ const EmployeeProfileClient = ({ employeeId, employee: legacyEmployee }: Employe
       {sections.map((section) => (
         <InfoSection key={section.title} {...section} />
       ))}
+
+      {leavePolicy && (
+        <section className="employee-profile-section" id="leave-entitlement">
+          <div className="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-4">
+            <div>
+              <h5 className="mb-1">Paid Leave Entitlement</h5>
+              <p className="text-secondary mb-0">
+                {leavePolicy.year} balances based on company policy
+                {leavePolicy.is_prorated ? `, prorated across ${leavePolicy.eligible_months} eligible months from the joining month.` : "."}
+              </p>
+            </div>
+            <button className="btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-2" onClick={() => setIsEditingLeavePolicy(!isEditingLeavePolicy)}>
+              <IconEdit size={16} /> {isEditingLeavePolicy ? "Cancel" : "Edit Entitlement"}
+            </button>
+          </div>
+
+          {isEditingLeavePolicy && (
+            <div className="row g-3 align-items-end border-bottom pb-4 mb-4">
+              {leavePolicyError && <div className="col-12"><div className="alert alert-danger mb-0">{leavePolicyError}</div></div>}
+              <div className="col-md-5">
+                <label className="form-label small fw-semibold">Annual Casual / PL Override</label>
+                <input type="number" min="0" max="365" step="0.5" className="form-control" value={casualOverride} onChange={(event) => setCasualOverride(event.target.value)} placeholder={`Company default: ${leavePolicy.company_casual_leave_days}`} />
+                <div className="form-text">Leave blank to follow company policy.</div>
+              </div>
+              <div className="col-md-5">
+                <label className="form-label small fw-semibold">Annual Sick Leave Override</label>
+                <input type="number" min="0" max="365" step="0.5" className="form-control" value={sickOverride} onChange={(event) => setSickOverride(event.target.value)} placeholder={`Company default: ${leavePolicy.company_sick_leave_days}`} />
+                <div className="form-text">Leave blank to follow company policy.</div>
+              </div>
+              <div className="col-md-2">
+                <button className="btn btn-primary w-100" onClick={saveLeavePolicy} disabled={isSavingLeavePolicy}>
+                  {isSavingLeavePolicy ? "Saving..." : "Save"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="row g-3 mb-4">
+            {leavePolicy.balances.map((balance) => (
+              <div className="col-sm-6 col-xl-4" key={balance.leave_type}>
+                <div className="employee-info-item">
+                  <div className="employee-info-icon"><IconCalendarStats size={18} /></div>
+                  <div>
+                    <div className="employee-info-label">{balance.label}</div>
+                    <div className="employee-info-value">{balance.remaining} of {balance.entitlement} days remaining</div>
+                    <div className="small text-secondary">{balance.used} days used</div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <h6 className="mb-3">Leave Applications</h6>
+          <div className="table-responsive">
+            <table className="table table-hover align-middle mb-0">
+              <thead className="table-light"><tr><th>Type</th><th>Period</th><th>Reason</th><th>Status</th></tr></thead>
+              <tbody>
+                {leavePolicy.leave_requests.length ? leavePolicy.leave_requests.map((leave) => (
+                  <tr key={leave.id}>
+                    <td>{leave.leave_type_label}{leave.is_half_day ? " (Half day)" : ""}</td>
+                    <td>{formatDate(leave.start_date)} - {formatDate(leave.end_date)}</td>
+                    <td className="text-break" style={{ maxWidth: 360 }}>{leave.reason}</td>
+                    <td><span className={`badge ${leave.status === "APPROVED" ? "bg-success-subtle text-success" : leave.status === "REJECTED" ? "bg-danger-subtle text-danger" : "bg-warning-subtle text-warning"}`}>{leave.status_label}</span></td>
+                  </tr>
+                )) : <tr><td colSpan={4} className="text-center text-secondary py-4">No leave applications found.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
 
       <style jsx global>{`
         .employee-profile-header,

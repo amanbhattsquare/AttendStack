@@ -1,7 +1,7 @@
 import calendar
 from collections import defaultdict
 from datetime import date, timedelta
-from decimal import Decimal
+from decimal import Decimal, ROUND_DOWN
 
 from django.db import transaction
 
@@ -34,10 +34,34 @@ MONTHLY_LEAVE_LIMIT_FIELDS = {
 }
 
 
-def leave_allocation(settings: SystemSettings, leave_type: str) -> Decimal:
-    """Return the configured annual allowance for one supported leave type."""
+def leave_allocation(
+    settings: SystemSettings,
+    leave_type: str,
+    employee: Employee | None = None,
+    year: int | None = None,
+) -> Decimal:
+    """Return annual entitlement, including employee override and first-year proration."""
     field_name = LEAVE_ALLOCATION_FIELDS.get(leave_type)
-    return Decimal(str(max(getattr(settings, field_name, 0), 0))) if field_name else Decimal("0")
+    if not field_name:
+        return Decimal("0")
+
+    override_field = {
+        LeaveType.CASUAL: "casual_leave_days_override",
+        LeaveType.SICK: "sick_leave_days_override",
+    }.get(leave_type)
+    override = getattr(employee, override_field, None) if employee and override_field else None
+    annual = Decimal(str(override if override is not None else max(getattr(settings, field_name, 0), 0)))
+
+    if not employee or year is None or employee.joining_date.year < year:
+        return annual
+    if employee.joining_date.year > year:
+        return Decimal("0")
+
+    eligible_months = 13 - employee.joining_date.month
+    # Leave is consumed in half-day units, so keep prorated entitlements usable and deterministic.
+    return (annual * Decimal(eligible_months) / Decimal("12") * Decimal("2")).quantize(
+        Decimal("1"), rounding=ROUND_DOWN
+    ) / Decimal("2")
 
 
 def monthly_leave_limit(settings: SystemSettings, leave_type: str) -> Decimal | None:
@@ -142,7 +166,7 @@ def _rebalance_yearly_paid_leaves(employee: Employee, year: int) -> None:
     settings = SystemSettings.get_settings()
 
     for leave_type in LEAVE_ALLOCATION_FIELDS:
-        paid_allowance = leave_allocation(settings, leave_type)
+        paid_allowance = leave_allocation(settings, leave_type, employee, year)
         paid_used = Decimal("0")
         leave_records = AttendanceRecord.objects.select_related("leave_request").filter(
             employee=employee,

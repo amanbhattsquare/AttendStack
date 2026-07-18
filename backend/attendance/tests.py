@@ -12,7 +12,32 @@ from settings.models import SystemSettings
 from .models import AttendanceRecord, AttendanceStatus, LeaveRequest, LeaveStatus
 from .eligibility import attendance_eligible_records
 from .serializers import AttendanceRecordSerializer, LeaveRequestSerializer
-from .services import auto_mark_calendar_days, sync_leave_request_attendance
+from .services import auto_mark_calendar_days, leave_allocation, sync_leave_request_attendance
+
+
+class EmployeeLeaveAllocationTests(TestCase):
+    def setUp(self):
+        self.settings = SystemSettings.get_settings()
+        self.settings.casual_leave_days = 12
+        self.settings.sick_leave_days = 12
+        self.settings.save()
+
+    def test_first_year_entitlement_starts_from_joining_month(self):
+        employee = create_employee()
+        employee.joining_date = date(2026, 6, 15)
+        employee.save(update_fields=["joining_date"])
+
+        self.assertEqual(leave_allocation(self.settings, "CASUAL", employee, 2026), 7)
+        self.assertEqual(leave_allocation(self.settings, "SICK", employee, 2026), 7)
+        self.assertEqual(leave_allocation(self.settings, "CASUAL", employee, 2027), 12)
+
+    def test_employee_override_is_prorated_in_first_year(self):
+        employee = create_employee()
+        employee.joining_date = date(2026, 7, 1)
+        employee.casual_leave_days_override = 18
+        employee.save(update_fields=["joining_date", "casual_leave_days_override"])
+
+        self.assertEqual(leave_allocation(self.settings, "CASUAL", employee, 2026), 9)
 
 
 def create_employee(email="employee@example.com", employee_id="EMP-TEST-001", aadhaar_number="123456789012"):

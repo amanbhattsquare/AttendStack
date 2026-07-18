@@ -4,11 +4,13 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.exceptions import NotFound
+from rest_framework import serializers
 
 from accounts.permissions import IsAdminOrHR
 from accounts.models import UserRole
 from django.contrib.auth import get_user_model
 from django.db.models import Case, Exists, IntegerField, OuterRef, Value, When
+from django.utils import timezone
 
 from organizations.models import Organization
 from .models import Employee, EmployeeStatus
@@ -139,6 +141,69 @@ class EmployeeViewSet(viewsets.ModelViewSet):
 
         serializer = EmployeeSerializer(employee, context={"request": request})
         return Response(serializer.data)
+
+    @action(detail=True, methods=["get", "patch"], url_path="leave-policy")
+    def leave_policy(self, request, pk=None):
+        """Admin view of an employee's entitlement, balances, overrides, and leave history."""
+        employee = self.get_object()
+
+        if request.method == "PATCH":
+            class LeaveOverrideSerializer(serializers.ModelSerializer):
+                class Meta:
+                    model = Employee
+                    fields = ("casual_leave_days_override", "sick_leave_days_override")
+
+            serializer = LeaveOverrideSerializer(employee, data=request.data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+
+            from attendance.services import rebalance_paid_leave_attendance
+            rebalance_paid_leave_attendance()
+            employee.refresh_from_db()
+
+        from attendance.models import AttendanceRecord, LeaveRequest, LeaveStatus, LeaveType
+        from attendance.serializers import LeaveRequestSerializer
+        from attendance.services import leave_allocation, leave_units
+        from settings.models import SystemSettings
+
+        year = timezone.localdate().year
+        settings = SystemSettings.get_settings()
+        records = AttendanceRecord.objects.select_related("leave_request").filter(
+            employee=employee,
+            date__year=year,
+            is_paid=True,
+            leave_request__status=LeaveStatus.APPROVED,
+        )
+        used_by_type = {}
+        for record in records:
+            leave_type = record.leave_request.leave_type
+            used_by_type[leave_type] = used_by_type.get(leave_type, 0) + leave_units(record.leave_request)
+
+        balances = []
+        for leave_type, label in LeaveType.choices:
+            entitlement = leave_allocation(settings, leave_type, employee, year)
+            used = used_by_type.get(leave_type, 0)
+            balances.append({
+                "leave_type": leave_type,
+                "label": label,
+                "entitlement": float(entitlement),
+                "used": float(used),
+                "remaining": float(max(entitlement - used, 0)),
+            })
+
+        requests = LeaveRequest.objects.filter(employee=employee).order_by("-created_at")
+        return Response({
+            "year": year,
+            "joining_date": employee.joining_date,
+            "is_prorated": employee.joining_date.year == year,
+            "eligible_months": 13 - employee.joining_date.month if employee.joining_date.year == year else 12,
+            "casual_leave_days_override": employee.casual_leave_days_override,
+            "sick_leave_days_override": employee.sick_leave_days_override,
+            "company_casual_leave_days": settings.casual_leave_days,
+            "company_sick_leave_days": settings.sick_leave_days,
+            "balances": balances,
+            "leave_requests": LeaveRequestSerializer(requests, many=True, context={"request": request}).data,
+        })
 
     @action(detail=True, methods=["post"], url_path="create-password")
     def create_password(self, request, pk=None):

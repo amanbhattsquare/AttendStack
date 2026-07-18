@@ -179,6 +179,8 @@ class EmployeeSerializer(serializers.ModelSerializer):
             "status",
             "status_label",
             "annual_salary",
+            "casual_leave_days_override",
+            "sick_leave_days_override",
             "pay_frequency",
             "pay_frequency_label",
             "bank_name",

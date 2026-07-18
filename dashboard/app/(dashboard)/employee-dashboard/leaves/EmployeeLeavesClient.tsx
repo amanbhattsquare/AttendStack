@@ -57,6 +57,13 @@ interface LeavePreview {
   note: string;
 }
 
+interface LeaveBalanceSummary {
+  year: number;
+  is_prorated: boolean;
+  eligible_months: number;
+  balances: Array<{ leave_type: string; label: string; entitlement: number; used: number; remaining: number }>;
+}
+
 const DEFAULT_LEAVE_TYPES = [
   { value: "CASUAL", label: "Casual Leave" },
   { value: "SICK", label: "Sick Leave" },
@@ -97,6 +104,7 @@ const EmployeeLeavesClient = () => {
   const [leavePreview, setLeavePreview] = useState<LeavePreview | null>(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [viewingLeave, setViewingLeave] = useState<LeaveRequest | null>(null);
+  const [balanceSummary, setBalanceSummary] = useState<LeaveBalanceSummary | null>(null);
 
   const fetchLeaves = async () => {
     setIsLoading(true);
@@ -144,6 +152,7 @@ const EmployeeLeavesClient = () => {
   useEffect(() => {
     fetchLeaves();
     fetchLeaveTypes();
+    fetchLeaveBalance();
   }, []);
 
   useEffect(() => {
@@ -218,6 +227,7 @@ const EmployeeLeavesClient = () => {
 
         Swal.fire("Deleted!", "Your leave request has been deleted.", "success");
         fetchLeaves();
+        fetchLeaveBalance();
       } catch (err) {
         Swal.fire("Error!", err instanceof Error ? err.message : "An unknown error occurred.", "error");
       }
@@ -277,6 +287,7 @@ const EmployeeLeavesClient = () => {
       resetFormAndCloseModal();
       
       await fetchLeaves();
+      await fetchLeaveBalance();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error submitting request.");
     } finally {
@@ -365,6 +376,19 @@ const EmployeeLeavesClient = () => {
     return Math.max(allowance - used, 0);
   };
 
+  const fetchLeaveBalance = async () => {
+    const token = localStorage.getItem("authToken");
+    if (!token) return;
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/attendance/leaves/balance/`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) setBalanceSummary(await res.json());
+    } catch {
+      setBalanceSummary(null);
+    }
+  };
+
   const currentMonthUsage = (type: string) => {
     const today = new Date();
     return leaves
@@ -390,6 +414,7 @@ const EmployeeLeavesClient = () => {
   const approvedLeaves = leaves.filter(l => l.status === "APPROVED").length;
   const pendingLeaves = leaves.filter(l => l.status === "PENDING").length;
   const leaveRequestsDisabled = employee?.status === "INACTIVE" || employee?.status === "TERMINATED";
+  const authoritativeBalance = (type: string) => balanceSummary?.balances.find((item) => item.leave_type === type);
 
   return (
     <div className="container-fluid px-0 py-4" style={{ minHeight: "85vh" }}>
@@ -437,7 +462,7 @@ const EmployeeLeavesClient = () => {
                 <div className="d-flex align-items-center justify-content-between p-3 bg-danger-subtle rounded-3">
                   <div>
                     <p className="text-danger small fw-semibold mb-1">Sick Leave</p>
-                    <p className="text-danger mb-0"><strong>{leaveBalance("SICK", leaveSettings.sick_leave_days)}</strong> / {leaveSettings.sick_leave_days} days left</p>
+                    <p className="text-danger mb-0"><strong>{authoritativeBalance("SICK")?.remaining ?? leaveBalance("SICK", leaveSettings.sick_leave_days)}</strong> / {authoritativeBalance("SICK")?.entitlement ?? leaveSettings.sick_leave_days} days left</p>
                     <small className="text-secondary d-block mt-1">{currentMonthUsage("SICK")} / {leaveSettings.sick_leave_monthly_limit ?? 7} requested this month</small>
                   </div>
                   <IconHeart size={24} className="text-danger" />
@@ -447,7 +472,7 @@ const EmployeeLeavesClient = () => {
                 <div className="d-flex align-items-center justify-content-between p-3 bg-info-subtle rounded-3">
                   <div>
                     <p className="text-info small fw-semibold mb-1">Casual Leave</p>
-                    <p className="text-info mb-0"><strong>{leaveBalance("CASUAL", leaveSettings.casual_leave_days)}</strong> / {leaveSettings.casual_leave_days} days left</p>
+                    <p className="text-info mb-0"><strong>{authoritativeBalance("CASUAL")?.remaining ?? leaveBalance("CASUAL", leaveSettings.casual_leave_days)}</strong> / {authoritativeBalance("CASUAL")?.entitlement ?? leaveSettings.casual_leave_days} days left</p>
                     <small className="text-secondary d-block mt-1">{currentMonthUsage("CASUAL")} / {leaveSettings.casual_leave_monthly_limit ?? 3} requested this month</small>
                   </div>
                   <IconUser size={24} className="text-info" />
@@ -493,6 +518,7 @@ const EmployeeLeavesClient = () => {
             </Row>
             <Alert variant="light" className="border mt-4 mb-0 small">
               <strong>Monthly request policy:</strong> Casual Leave is limited to {leaveSettings.casual_leave_monthly_limit ?? 3} days and Sick Leave to {leaveSettings.sick_leave_monthly_limit ?? 7} days per calendar month. Pending requests reserve the balance.
+              {balanceSummary?.is_prorated && <> Your {balanceSummary.year} entitlement is prorated across {balanceSummary.eligible_months} eligible month{balanceSummary.eligible_months === 1 ? "" : "s"} from your joining month.</>}
             </Alert>
           </Card.Body>
         </Card>

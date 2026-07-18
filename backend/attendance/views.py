@@ -569,6 +569,37 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
             for choice in LeaveType.choices
         ])
 
+    @action(detail=False, methods=["get"], url_path="balance")
+    def balance(self, request):
+        """Return the authenticated employee's authoritative prorated leave balance."""
+        employee = self._current_employee()
+        year = timezone.localdate().year
+        settings = SystemSettings.get_settings()
+        paid_records = AttendanceRecord.objects.select_related("leave_request").filter(
+            employee=employee, date__year=year, is_paid=True,
+            leave_request__status=LeaveStatus.APPROVED,
+        )
+        used_by_type = {}
+        for record in paid_records:
+            leave_type = record.leave_request.leave_type
+            used_by_type[leave_type] = used_by_type.get(leave_type, Decimal("0")) + leave_units(record.leave_request)
+
+        balances = []
+        for leave_type, label in LeaveType.choices:
+            entitlement = leave_allocation(settings, leave_type, employee, year)
+            used = used_by_type.get(leave_type, Decimal("0"))
+            balances.append({
+                "leave_type": leave_type, "label": label,
+                "entitlement": float(entitlement), "used": float(used),
+                "remaining": float(max(entitlement - used, Decimal("0"))),
+            })
+        return Response({
+            "year": year,
+            "is_prorated": employee.joining_date.year == year,
+            "eligible_months": 13 - employee.joining_date.month if employee.joining_date.year == year else 12,
+            "balances": balances,
+        })
+
     @action(detail=False, methods=["get"], url_path="preview")
     def preview(self, request):
         """Return a non-persisted paid-leave and payroll impact estimate for an employee."""
@@ -596,7 +627,10 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         if exclude_id:
             excluded_request = LeaveRequest.objects.filter(pk=exclude_id, employee=employee).first()
         settings = SystemSettings.get_settings()
-        annual_allowance = leave_allocation(settings, leave_type)
+        allowances_by_year = {
+            year: leave_allocation(settings, leave_type, employee, year)
+            for year in {start_date.year, end_date.year}
+        }
         monthly_snapshot = monthly_leave_limit_snapshot(
             employee,
             start_date,
@@ -629,12 +663,12 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         deduction = Decimal("0")
         selected_years = {leave_date.year for leave_date in selected_dates}
         available_before = sum(
-            max(annual_allowance - used_by_year.get(year, Decimal("0")), Decimal("0"))
+            max(allowances_by_year[year] - used_by_year.get(year, Decimal("0")), Decimal("0"))
             for year in selected_years
         )
         for leave_date in selected_dates:
             used = used_by_year.get(leave_date.year, Decimal("0"))
-            if used + units_per_day <= annual_allowance:
+            if used + units_per_day <= allowances_by_year[leave_date.year]:
                 paid_days += units_per_day
                 used_by_year[leave_date.year] = used + units_per_day
             else:

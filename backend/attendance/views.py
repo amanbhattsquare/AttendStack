@@ -29,6 +29,7 @@ from .permissions import IsAdminOrReadOnly
 from .serializers import AttendanceRecordSerializer, TodayAttendanceSerializer, LeaveRequestSerializer
 from .services import (
     auto_mark_calendar_days,
+    earned_leave_allocation,
     leave_allocation,
     leave_units,
     monthly_leave_limit_error,
@@ -586,7 +587,7 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
 
         balances = []
         for leave_type, label in LeaveType.choices:
-            entitlement = leave_allocation(settings, leave_type, employee, year)
+            entitlement = earned_leave_allocation(settings, leave_type, employee, timezone.localdate())
             used = used_by_type.get(leave_type, Decimal("0"))
             balances.append({
                 "leave_type": leave_type, "label": label,
@@ -627,10 +628,6 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         if exclude_id:
             excluded_request = LeaveRequest.objects.filter(pk=exclude_id, employee=employee).first()
         settings = SystemSettings.get_settings()
-        allowances_by_year = {
-            year: leave_allocation(settings, leave_type, employee, year)
-            for year in {start_date.year, end_date.year}
-        }
         monthly_snapshot = monthly_leave_limit_snapshot(
             employee,
             start_date,
@@ -663,12 +660,17 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         deduction = Decimal("0")
         selected_years = {leave_date.year for leave_date in selected_dates}
         available_before = sum(
-            max(allowances_by_year[year] - used_by_year.get(year, Decimal("0")), Decimal("0"))
+            max(
+                earned_leave_allocation(settings, leave_type, employee, start_date if year == start_date.year else date(year, 1, 1))
+                - used_by_year.get(year, Decimal("0")),
+                Decimal("0"),
+            )
             for year in selected_years
         )
         for leave_date in selected_dates:
             used = used_by_year.get(leave_date.year, Decimal("0"))
-            if used + units_per_day <= allowances_by_year[leave_date.year]:
+            earned = earned_leave_allocation(settings, leave_type, employee, leave_date)
+            if used + units_per_day <= earned:
                 paid_days += units_per_day
                 used_by_year[leave_date.year] = used + units_per_day
             else:
@@ -703,7 +705,7 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
             "monthly_periods": monthly_periods,
             "monthly_limit_exceeded": bool(monthly_snapshot["violations"]),
             "monthly_limit_message": monthly_policy_error,
-            "note": "Estimate only. Pending and approved requests count toward monthly limits. Approved leave is paid from its annual leave-type balance; any excess is unpaid.",
+            "note": "Estimate only. Casual and Sick Leave are paid only from credits earned through the request month; unused credits accumulate during the calendar year. Future credits cannot be used in advance.",
         })
 
     def get_queryset(self):

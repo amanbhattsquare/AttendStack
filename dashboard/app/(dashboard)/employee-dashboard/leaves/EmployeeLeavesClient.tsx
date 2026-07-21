@@ -462,7 +462,7 @@ const EmployeeLeavesClient = () => {
                 <div className="d-flex align-items-center justify-content-between p-3 bg-danger-subtle rounded-3">
                   <div>
                     <p className="text-danger small fw-semibold mb-1">Sick Leave</p>
-                    <p className="text-danger mb-0"><strong>{authoritativeBalance("SICK")?.remaining ?? leaveBalance("SICK", leaveSettings.sick_leave_days)}</strong> / {authoritativeBalance("SICK")?.entitlement ?? leaveSettings.sick_leave_days} days left</p>
+                    <p className="text-danger mb-0"><strong>{authoritativeBalance("SICK")?.remaining ?? leaveBalance("SICK", leaveSettings.sick_leave_days)}</strong> / {authoritativeBalance("SICK")?.entitlement ?? leaveSettings.sick_leave_days} earned days left</p>
                     <small className="text-secondary d-block mt-1">{currentMonthUsage("SICK")} / {leaveSettings.sick_leave_monthly_limit ?? 7} requested this month</small>
                   </div>
                   <IconHeart size={24} className="text-danger" />
@@ -472,7 +472,7 @@ const EmployeeLeavesClient = () => {
                 <div className="d-flex align-items-center justify-content-between p-3 bg-info-subtle rounded-3">
                   <div>
                     <p className="text-info small fw-semibold mb-1">Casual Leave</p>
-                    <p className="text-info mb-0"><strong>{authoritativeBalance("CASUAL")?.remaining ?? leaveBalance("CASUAL", leaveSettings.casual_leave_days)}</strong> / {authoritativeBalance("CASUAL")?.entitlement ?? leaveSettings.casual_leave_days} days left</p>
+                    <p className="text-info mb-0"><strong>{authoritativeBalance("CASUAL")?.remaining ?? leaveBalance("CASUAL", leaveSettings.casual_leave_days)}</strong> / {authoritativeBalance("CASUAL")?.entitlement ?? leaveSettings.casual_leave_days} earned days left</p>
                     <small className="text-secondary d-block mt-1">{currentMonthUsage("CASUAL")} / {leaveSettings.casual_leave_monthly_limit ?? 3} requested this month</small>
                   </div>
                   <IconUser size={24} className="text-info" />
@@ -517,8 +517,7 @@ const EmployeeLeavesClient = () => {
               ))}
             </Row>
             <Alert variant="light" className="border mt-4 mb-0 small">
-              <strong>Monthly request policy:</strong> Casual Leave is limited to {leaveSettings.casual_leave_monthly_limit ?? 3} days and Sick Leave to {leaveSettings.sick_leave_monthly_limit ?? 7} days per calendar month. Pending requests reserve the balance.
-              {balanceSummary?.is_prorated && <> Your {balanceSummary.year} entitlement is prorated across {balanceSummary.eligible_months} eligible month{balanceSummary.eligible_months === 1 ? "" : "s"} from your joining month.</>}
+              <strong>Earned leave policy:</strong> Casual and Sick Leave accrue monthly from your joining month. Unused credits accumulate within the calendar year, and future credits cannot be used in advance. Monthly request limits remain {leaveSettings.casual_leave_monthly_limit ?? 3} Casual and {leaveSettings.sick_leave_monthly_limit ?? 7} Sick Leave days.
             </Alert>
           </Card.Body>
         </Card>
@@ -796,7 +795,7 @@ const EmployeeLeavesClient = () => {
                           </div>
                         ))}
                         {leavePreview.monthly_limit_message && <div className="small text-danger fw-semibold mb-2">{leavePreview.monthly_limit_message}</div>}
-                        <div className="d-flex justify-content-between small"><span>Annual paid balance available</span><strong className="text-success">{leavePreview.paid_leave_available} days</strong></div>
+                        <div className="d-flex justify-content-between small"><span>Earned paid balance available</span><strong className="text-success">{leavePreview.paid_leave_available} days</strong></div>
                         <div className="d-flex justify-content-between small mt-1"><span>Paid leave used</span><strong>{leavePreview.paid_leave_used} days</strong></div>
                         <div className="d-flex justify-content-between small mt-1"><span>Unpaid leave</span><strong className={leavePreview.unpaid_leave_days ? "text-danger" : "text-success"}>{leavePreview.unpaid_leave_days} days</strong></div>
                         <div className="d-flex justify-content-between small mt-1"><span>Estimated salary deduction</span><strong className={leavePreview.unpaid_leave_days ? "text-danger" : "text-success"}>₹{Number(leavePreview.estimated_salary_deduction).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></div>

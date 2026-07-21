@@ -64,6 +64,43 @@ def leave_allocation(
     ) / Decimal("2")
 
 
+def earned_leave_allocation(
+    settings: SystemSettings,
+    leave_type: str,
+    employee: Employee,
+    as_of_date: date,
+) -> Decimal:
+    """Return leave earned by a date; Casual and Sick Leave accrue monthly.
+
+    The joining month is the first credited month. This prevents employees from
+    spending future months' entitlement while allowing unused credits to build
+    up through the calendar year.
+    """
+    annual_entitlement = leave_allocation(settings, leave_type, employee, as_of_date.year)
+    if leave_type not in {LeaveType.CASUAL, LeaveType.SICK}:
+        return annual_entitlement
+    if as_of_date < employee.joining_date:
+        return Decimal("0")
+
+    first_eligible_month = employee.joining_date.month if employee.joining_date.year == as_of_date.year else 1
+    credited_months = as_of_date.month - first_eligible_month + 1
+    if credited_months <= 0:
+        return Decimal("0")
+
+    # Accrue from the underlying annual policy so a 12-day policy earns one
+    # day per month and employee overrides follow the same schedule.
+    field_name = LEAVE_ALLOCATION_FIELDS[leave_type]
+    override_field = {
+        LeaveType.CASUAL: "casual_leave_days_override",
+        LeaveType.SICK: "sick_leave_days_override",
+    }[leave_type]
+    override = getattr(employee, override_field, None)
+    annual_policy = Decimal(str(override if override is not None else max(getattr(settings, field_name, 0), 0)))
+    earned = annual_policy * Decimal(credited_months) / Decimal("12")
+    earned = (earned * Decimal("2")).quantize(Decimal("1"), rounding=ROUND_DOWN) / Decimal("2")
+    return min(earned, annual_entitlement)
+
+
 def monthly_leave_limit(settings: SystemSettings, leave_type: str) -> Decimal | None:
     """Return the request cap for a leave type, or None when it has no monthly cap."""
     field_name = MONTHLY_LEAVE_LIMIT_FIELDS.get(leave_type)
@@ -166,7 +203,6 @@ def _rebalance_yearly_paid_leaves(employee: Employee, year: int) -> None:
     settings = SystemSettings.get_settings()
 
     for leave_type in LEAVE_ALLOCATION_FIELDS:
-        paid_allowance = leave_allocation(settings, leave_type, employee, year)
         paid_used = Decimal("0")
         leave_records = AttendanceRecord.objects.select_related("leave_request").filter(
             employee=employee,
@@ -178,6 +214,7 @@ def _rebalance_yearly_paid_leaves(employee: Employee, year: int) -> None:
         for record in leave_records:
             request = record.leave_request
             units = leave_units(request)
+            paid_allowance = earned_leave_allocation(settings, leave_type, employee, record.date)
             should_be_paid = paid_used + units <= paid_allowance
             if should_be_paid:
                 paid_used += units

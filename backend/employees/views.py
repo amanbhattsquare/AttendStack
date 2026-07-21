@@ -163,7 +163,7 @@ class EmployeeViewSet(viewsets.ModelViewSet):
 
         from attendance.models import AttendanceRecord, LeaveRequest, LeaveStatus, LeaveType
         from attendance.serializers import LeaveRequestSerializer
-        from attendance.services import leave_allocation, leave_units
+        from attendance.services import earned_leave_allocation, leave_units
         from settings.models import SystemSettings
 
         year = timezone.localdate().year
@@ -181,7 +181,7 @@ class EmployeeViewSet(viewsets.ModelViewSet):
 
         balances = []
         for leave_type, label in LeaveType.choices:
-            entitlement = leave_allocation(settings, leave_type, employee, year)
+            entitlement = earned_leave_allocation(settings, leave_type, employee, timezone.localdate())
             used = used_by_type.get(leave_type, 0)
             balances.append({
                 "leave_type": leave_type,

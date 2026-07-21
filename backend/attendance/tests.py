@@ -12,7 +12,7 @@ from settings.models import SystemSettings
 from .models import AttendanceRecord, AttendanceStatus, LeaveRequest, LeaveStatus
 from .eligibility import attendance_eligible_records
 from .serializers import AttendanceRecordSerializer, LeaveRequestSerializer
-from .services import auto_mark_calendar_days, leave_allocation, sync_leave_request_attendance
+from .services import auto_mark_calendar_days, earned_leave_allocation, leave_allocation, sync_leave_request_attendance
 
 
 class EmployeeLeaveAllocationTests(TestCase):
@@ -38,6 +38,15 @@ class EmployeeLeaveAllocationTests(TestCase):
         employee.save(update_fields=["joining_date", "casual_leave_days_override"])
 
         self.assertEqual(leave_allocation(self.settings, "CASUAL", employee, 2026), 9)
+
+    def test_regular_leave_is_earned_monthly_and_unused_credit_accumulates(self):
+        employee = create_employee()
+        employee.joining_date = date(2026, 6, 15)
+        employee.save(update_fields=["joining_date"])
+
+        self.assertEqual(earned_leave_allocation(self.settings, "CASUAL", employee, date(2026, 6, 15)), 1)
+        self.assertEqual(earned_leave_allocation(self.settings, "CASUAL", employee, date(2026, 7, 1)), 2)
+        self.assertEqual(earned_leave_allocation(self.settings, "CASUAL", employee, date(2026, 5, 31)), 0)
 
 
 def create_employee(email="employee@example.com", employee_id="EMP-TEST-001", aadhaar_number="123456789012"):
@@ -186,8 +195,11 @@ class LeaveAttendanceSyncTests(TestCase):
     def setUp(self):
         self.employee = create_employee()
         settings = SystemSettings.get_settings()
-        settings.casual_leave_days = 1
-        settings.sick_leave_days = 2
+        # Policies are annual totals but regular leave is credited monthly.
+        # By May, a 3-day Casual policy has earned 1 day; a 12-day Sick
+        # policy has earned 2 days by February.
+        settings.casual_leave_days = 3
+        settings.sick_leave_days = 12
         settings.save()
 
     def test_approved_leave_marks_each_date_and_respects_its_type_allowance(self):
@@ -273,6 +285,25 @@ class LeaveAttendanceSyncTests(TestCase):
                 (date(2026, 2, 2), AttendanceStatus.PAID_LEAVE, True),
                 (date(2026, 2, 3), AttendanceStatus.PAID_LEAVE, True),
             ],
+        )
+
+    def test_new_joiner_cannot_use_future_months_paid_leave_in_advance(self):
+        self.employee.joining_date = date(2026, 7, 1)
+        self.employee.save(update_fields=["joining_date"])
+        leave_request = LeaveRequest.objects.create(
+            employee=self.employee,
+            start_date=date(2026, 7, 6),
+            end_date=date(2026, 7, 7),
+            reason="Two days in joining month",
+            leave_type="SICK",
+            status=LeaveStatus.APPROVED,
+        )
+
+        sync_leave_request_attendance(leave_request)
+
+        self.assertEqual(
+            list(AttendanceRecord.objects.filter(employee=self.employee).order_by("date").values_list("status", "is_paid")),
+            [(AttendanceStatus.PAID_LEAVE, True), (AttendanceStatus.LEAVE, False)],
         )
 
     def test_leave_approval_recalculates_an_existing_payroll(self):
@@ -382,7 +413,7 @@ class EmploymentStartAttendanceTests(TestCase):
 
     def test_half_day_casual_leave_uses_half_of_the_paid_balance(self):
         settings = SystemSettings.get_settings()
-        settings.casual_leave_days = 1
+        settings.casual_leave_days = 3  # Earns 0.5 day by February.
         settings.save()
 
         leave_request = LeaveRequest.objects.create(

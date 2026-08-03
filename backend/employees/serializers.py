@@ -36,6 +36,8 @@ class EmployeeProfileSerializer(serializers.ModelSerializer):
             "address",
             "profile_photo",
             "profile_photo_url",
+            "aadhaar_number",
+            "tax_id",
             "aadhaar_document",
             "aadhaar_document_url",
             "pan_card_document",
@@ -52,6 +54,22 @@ class EmployeeProfileSerializer(serializers.ModelSerializer):
         value = value.strip()
         if not value:
             raise serializers.ValidationError("Enter a valid name.")
+        return value
+
+    def validate_aadhaar_number(self, value):
+        value = value.strip()
+        if not value:
+            return value
+        if not re.fullmatch(r"^[0-9]{12}$", value):
+            raise serializers.ValidationError("Enter a valid 12-digit Aadhaar number.")
+        return value
+
+    def validate_tax_id(self, value):
+        value = value.strip().upper()
+        if not value:
+            return value
+        if len(value) < 6:
+            raise serializers.ValidationError("Enter a valid PAN or tax ID.")
         return value
 
     def get_profile_photo_url(self, obj):

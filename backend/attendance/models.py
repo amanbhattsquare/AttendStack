@@ -142,8 +142,20 @@ class AttendanceRecord(models.Model):
             microsecond=0
         )
         
-        # Set status to LATE if check-in is after cutoff, else PRESENT
-        self.status = AttendanceStatus.LATE if local_check_in > late_cutoff else AttendanceStatus.PRESENT
+        # Determine whether the employee is late or should be marked as half day.
+        scheduled_shift_start = local_check_in.replace(
+            hour=settings.shift_start_time.hour,
+            minute=settings.shift_start_time.minute,
+            second=settings.shift_start_time.second,
+            microsecond=0,
+        )
+        late_half_day_cutoff = scheduled_shift_start + timedelta(hours=3)
+
+        if local_check_in >= late_half_day_cutoff:
+            self.status = AttendanceStatus.HALF_DAY
+            self.is_paid = False
+        else:
+            self.status = AttendanceStatus.LATE if local_check_in > late_cutoff else AttendanceStatus.PRESENT
 
         approved_half_day_leave = (
             self.leave_request_id

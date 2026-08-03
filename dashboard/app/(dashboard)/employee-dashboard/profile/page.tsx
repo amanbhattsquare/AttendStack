@@ -23,6 +23,8 @@ type PersonalInfoForm = {
   phone: string;
   dateOfBirth: string;
   address: string;
+  aadhaarNumber: string;
+  taxId: string;
   emergencyContactName: string;
   emergencyContactRelationship: string;
   emergencyContactPhone: string;
@@ -33,6 +35,8 @@ const emptyPersonalInfoForm: PersonalInfoForm = {
   phone: "",
   dateOfBirth: "",
   address: "",
+  aadhaarNumber: "",
+  taxId: "",
   emergencyContactName: "",
   emergencyContactRelationship: "",
   emergencyContactPhone: "",
@@ -140,6 +144,8 @@ const ProfilePage = () => {
       phone: employee.phone || "",
       dateOfBirth: employee.date_of_birth || "",
       address: employee.address || "",
+      aadhaarNumber: employee.aadhaar_number || "",
+      taxId: employee.tax_id || "",
       emergencyContactName: employee.emergency_contact_name || "",
       emergencyContactRelationship: employee.emergency_contact_relationship || "",
       emergencyContactPhone: employee.emergency_contact_phone || "",
@@ -189,6 +195,16 @@ const ProfilePage = () => {
       return;
     }
 
+    if (personalForm.aadhaarNumber && !/^[0-9]{12}$/.test(personalForm.aadhaarNumber.trim())) {
+      setProfileSaveError("Enter a valid 12-digit Aadhaar number.");
+      return;
+    }
+
+    if (personalForm.taxId && personalForm.taxId.trim().length < 6) {
+      setProfileSaveError("Enter a valid PAN or tax ID.");
+      return;
+    }
+
     if (
       personalForm.emergencyContactPhone &&
       !/^\+?[0-9]{10,15}$/.test(personalForm.emergencyContactPhone.trim())
@@ -207,6 +223,8 @@ const ProfilePage = () => {
       body.append("phone", personalForm.phone.trim());
       body.append("date_of_birth", personalForm.dateOfBirth);
       body.append("address", personalForm.address.trim());
+      body.append("aadhaar_number", personalForm.aadhaarNumber.trim());
+      body.append("tax_id", personalForm.taxId.trim());
       body.append("emergency_contact_name", personalForm.emergencyContactName.trim());
       body.append("emergency_contact_relationship", personalForm.emergencyContactRelationship.trim());
       body.append("emergency_contact_phone", personalForm.emergencyContactPhone.trim());
@@ -467,6 +485,30 @@ const ProfilePage = () => {
                     onChange={(event) => updatePersonalField("phone", event.target.value)}
                     maxLength={15}
                     required
+                  />
+                </Form.Group>
+              </Col>
+              <Col xs={12} md={6}>
+                <Form.Group controlId="employeeAadhaarNumber">
+                  <Form.Label className="fw-semibold">Aadhaar Number</Form.Label>
+                  <Form.Control
+                    type="text"
+                    value={personalForm.aadhaarNumber}
+                    onChange={(event) => updatePersonalField("aadhaarNumber", event.target.value.replace(/\D/g, "").slice(0, 12))}
+                    maxLength={12}
+                    placeholder="12-digit Aadhaar number"
+                  />
+                </Form.Group>
+              </Col>
+              <Col xs={12} md={6}>
+                <Form.Group controlId="employeeTaxId">
+                  <Form.Label className="fw-semibold">Tax ID / PAN Number</Form.Label>
+                  <Form.Control
+                    type="text"
+                    value={personalForm.taxId}
+                    onChange={(event) => updatePersonalField("taxId", event.target.value.toUpperCase())}
+                    maxLength={20}
+                    placeholder="ABCDE1234F"
                   />
                 </Form.Group>
               </Col>

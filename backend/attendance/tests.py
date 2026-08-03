@@ -190,6 +190,15 @@ class EarlyCheckoutStatusTests(TestCase):
 
         self.assertEqual(record.status, AttendanceStatus.PRESENT)
 
+    def test_late_checkin_after_three_hours_marks_half_day(self):
+        record = AttendanceRecord.objects.create(
+            employee=self.employee,
+            date=date(2026, 5, 4),
+            check_in=self._local_datetime(13, 0),
+        )
+
+        self.assertEqual(record.status, AttendanceStatus.HALF_DAY)
+
 
 class LeaveAttendanceSyncTests(TestCase):
     def setUp(self):

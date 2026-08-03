@@ -116,9 +116,9 @@ export default function Home() {
                   Employee login
                   <IconArrowRight size={19} strokeWidth={2} />
                 </Link>
-                <Link href="/register-organization" className={styles.secondaryButton}>
+                {/* <Link href="/register-organization" className={styles.secondaryButton}>
                   Set up your company
-                </Link>
+                </Link> */}
               </div>
               <div className={styles.heroPoints}>
                 <span>

@@ -798,7 +798,7 @@ const EmployeeLeavesClient = () => {
                         <div className="d-flex justify-content-between small"><span>Earned paid balance available</span><strong className="text-success">{leavePreview.paid_leave_available} days</strong></div>
                         <div className="d-flex justify-content-between small mt-1"><span>Paid leave used</span><strong>{leavePreview.paid_leave_used} days</strong></div>
                         <div className="d-flex justify-content-between small mt-1"><span>Unpaid leave</span><strong className={leavePreview.unpaid_leave_days ? "text-danger" : "text-success"}>{leavePreview.unpaid_leave_days} days</strong></div>
-                        <div className="d-flex justify-content-between small mt-1"><span>Estimated salary deduction</span><strong className={leavePreview.unpaid_leave_days ? "text-danger" : "text-success"}>₹{Number(leavePreview.estimated_salary_deduction).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></div>
+                        {/* Estimated salary deduction hidden per request */}
                         <small className="d-block text-secondary mt-2">{leavePreview.note}</small>
                       </div>
                     )}

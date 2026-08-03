@@ -40,10 +40,6 @@ sudo nginx -t
 
 
 
-
-
-
-
 # Check Django status
 sudo systemctl status attendstack-backend
 

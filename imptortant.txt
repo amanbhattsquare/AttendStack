@@ -76,7 +76,7 @@ sudo systemctl status attendstack-backend
 aman.bhattsquare@gmail.com
 
 
-
+git rm --cached backend/.env
 
 
 ++

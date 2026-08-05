@@ -789,41 +789,7 @@ const EmployeeDashboard = () => {
             </Col>
           </Row>
 
-          {nextTasks.length === 0 ? (
-            <div className="employee-task-empty">
-              <IconFlag size={28} className="text-primary" />
-              <div>
-                <div className="fw-bold text-dark">No active tasks assigned</div>
-                <div className="text-secondary small">You are clear right now. New assignments will appear here automatically.</div>
-              </div>
-            </div>
-          ) : (
-            <><div className="employee-task-list">
-              {nextTasks.map((task) => (
-                <div key={task.id} className="employee-task-row">
-                  <div className="min-w-0">
-                    <div className="d-flex align-items-center gap-2 min-w-0">
-                      <div className="fw-semibold text-dark text-truncate">{task.title}</div>
-                      {task.project_key && <span className="dashboard-project-chip" style={{ color: task.project_color || "#4f46e5", borderColor: task.project_color || "#4f46e5" }}>{task.project_key}</span>}
-                      {task.due_date && <span className="employee-task-due-chip">{formatDate(task.due_date)}</span>}
-                    </div>
-                    <div className="small text-secondary mt-1">
-                      {task.due_date ? `Due in ${daysUntil(task.due_date) ?? "--"} day${daysUntil(task.due_date) === 1 ? "" : "s"}` : "No due date"}{task.subtask_count ? ` · ${task.subtask_count} subtask${task.subtask_count === 1 ? "" : "s"}` : ""}
-                    </div>
-                  </div>
-                  <div className="d-flex gap-2 flex-wrap justify-content-end">
-                    {task.is_overdue && <Badge bg="danger-subtle" className="text-danger border border-danger-subtle">Overdue</Badge>}
-                    <Badge bg={task.priority === "URGENT" || task.priority === "HIGH" ? "warning-subtle" : "info-subtle"} className={task.priority === "URGENT" || task.priority === "HIGH" ? "text-warning" : "text-info"}>
-                      {task.priority_label || task.priority}
-                    </Badge>
-                    <Badge className={taskStatusClass(task.status)}>
-                      {task.status_label || task.status}
-                    </Badge>
-                  </div>
-                </div>
-              ))}
-            </div><div className="text-center mt-3"><Link href="/employee-dashboard/tasks" className="btn btn-outline-primary btn-sm px-4">Show all tasks</Link></div></>
-          )}
+         
         </Card.Body>
       </Card>
 

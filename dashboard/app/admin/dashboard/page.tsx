@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState ,  } from "react";
+import { useRouter } from "next/navigation";
 import axios from "axios";
 import dynamic from "next/dynamic";
 import Link from "next/link";
@@ -83,12 +84,17 @@ type ActivityItem = {
 };
 
 const API_URL = process.env.NEXT_PUBLIC_API_ENDPOINT;
-
+ 
 const authConfig = () => {
   const token = typeof window !== "undefined" ? localStorage.getItem("authToken") : null;
+  
+  if (!token) {
+    return { headers: {} };
+  }
+
   return {
     headers: {
-      Authorization: token ? `Bearer ${token}` : "",
+      Authorization: `Bearer ${token}`,
     },
   };
 };
@@ -165,6 +171,19 @@ const AdminDashboard = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
 
+  const router = useRouter();
+
+  useEffect(() => {
+    const token = localStorage.getItem("authToken");
+
+    if (!token) {
+      router.replace("/");
+      return;
+    }
+
+    loadDashboard();
+  }, [router]);
+
   const loadDashboard = async () => {
     setIsLoading(true);
     setError("");
@@ -191,8 +210,14 @@ const AdminDashboard = () => {
       setLeaves(toArray(leavesRes.data));
       setPayrolls(toArray(payrollRes.data));
       setTasks(toArray(tasksRes.data));
-    } catch (loadError) {
+    } catch (loadError: any) {
       console.error("Failed to load admin dashboard.", loadError);
+      // If we get a 401 Unauthorized, clear the token and redirect to login
+      if (loadError.response?.status === 401) {
+        localStorage.removeItem("authToken");
+        router.replace("/");
+        return;
+      }
       setError("Unable to load live dashboard data. Please refresh or sign in again.");
     } finally {
       setIsLoading(false);
@@ -200,7 +225,6 @@ const AdminDashboard = () => {
   };
 
   useEffect(() => {
-    loadDashboard();
     const interval = window.setInterval(loadDashboard, 60000);
     return () => window.clearInterval(interval);
   }, []);

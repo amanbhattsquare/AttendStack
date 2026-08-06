@@ -1,4 +1,5 @@
 import json
+from django.core.serializers.json import DjangoJSONEncoder
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from .models import Conversation, ConversationMember
@@ -68,17 +69,17 @@ class ChatConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps({
             'type': 'new_message',
             'message': message
-        }))
+        }, cls=DjangoJSONEncoder))
 
     async def chat_typing(self, event):
         # Don't send back to the user who is typing
-        if event['user_id'] != self.user.id:
+        if str(event['user_id']) != str(self.user.id):
             await self.send(text_data=json.dumps({
                 'type': 'typing',
                 'user_id': event['user_id'],
                 'username': event['username'],
                 'is_typing': event['is_typing']
-            }))
+            }, cls=DjangoJSONEncoder))
 
     @database_sync_to_async
     def check_membership(self, conversation_id, user_id):

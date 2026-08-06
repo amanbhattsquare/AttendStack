@@ -167,11 +167,14 @@ class ConversationViewSet(viewsets.ModelViewSet):
         try:
             channel_layer = get_channel_layer()
             if channel_layer:
+                from django.core.serializers.json import DjangoJSONEncoder
+                import json
+                clean_msg_data = json.loads(json.dumps(msg_data, cls=DjangoJSONEncoder))
                 async_to_sync(channel_layer.group_send)(
                     f"chat_{conversation.id}",
                     {
                         "type": "chat.message",
-                        "message": msg_data
+                        "message": clean_msg_data
                     }
                 )
         except Exception as e:

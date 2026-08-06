@@ -291,7 +291,7 @@ CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = "Asia/Kolkata"
 
 # ──────────────────────────────────────────────────────────────────────────────
-# CHANNELS & REAL-TIME WEBSOCKETS (REDIS WITH RESP2 PROTOCOL COMPATIBILITY)
+# CHANNELS & REAL-TIME WEBSOCKETS (REDIS WITH RESP2 & NO HEALTHCHECK TIMEOUTS)
 # ──────────────────────────────────────────────────────────────────────────────
 ASGI_APPLICATION = "attendstack_backend.asgi.application"
 
@@ -304,7 +304,7 @@ if USE_REDIS:
         "default": {
             "BACKEND": "channels_redis.core.RedisChannelLayer",
             "CONFIG": {
-                "hosts": [f"redis://{REDIS_HOST}:{REDIS_PORT}/0?protocol=2"],
+                "hosts": [f"redis://{REDIS_HOST}:{REDIS_PORT}/0?protocol=2&socket_timeout=10&health_check_interval=0"],
             },
         },
     }

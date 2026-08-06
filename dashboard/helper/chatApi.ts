@@ -110,40 +110,74 @@ export const markConversationAsRead = async (conversationId: string): Promise<vo
   await apiClient.post(`/api/v1/chat/conversations/${conversationId}/read/`);
 };
 
+export interface ChatWebSocketController {
+  ws: WebSocket | null;
+  close: () => void;
+}
+
 export const connectChatWebSocket = (
   conversationId: string,
   onMessage: (data: any) => void,
   onError?: (err: Event) => void
-): WebSocket | null => {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
-  if (!token) return null;
+): ChatWebSocketController => {
+  let isClosedManually = false;
+  let activeWs: WebSocket | null = null;
+  let reconnectTimeout: any = null;
 
-  const rawBackend = (process.env.NEXT_PUBLIC_API_ENDPOINT || 'http://127.0.0.1:8000').trim();
-  const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  
-  let host = '127.0.0.1:8000';
-  try {
-    const urlObj = new URL(rawBackend);
-    host = urlObj.host;
-  } catch (e) {
-    host = window.location.host;
-  }
+  const connect = () => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
+    if (!token || isClosedManually) return;
 
-  const wsUrl = `${wsProtocol}//${host}/ws/chat/${conversationId}/?token=${token}`;
-  const ws = new WebSocket(wsUrl);
-
-  ws.onmessage = (event) => {
+    const rawBackend = (process.env.NEXT_PUBLIC_API_ENDPOINT || 'http://127.0.0.1:8000').trim();
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    
+    let host = '127.0.0.1:8000';
     try {
-      const data = JSON.parse(event.data);
-      onMessage(data);
-    } catch (err) {
-      console.error('Failed to parse WS message:', err);
+      const urlObj = new URL(rawBackend);
+      host = urlObj.host;
+    } catch (e) {
+      host = window.location.host;
     }
+
+    const wsUrl = `${wsProtocol}//${host}/ws/chat/${conversationId}/?token=${encodeURIComponent(token)}`;
+    const ws = new WebSocket(wsUrl);
+    activeWs = ws;
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        onMessage(data);
+      } catch (err) {
+        console.error('Failed to parse WS message:', err);
+      }
+    };
+
+    if (onError) {
+      ws.onerror = onError;
+    }
+
+    ws.onclose = (event) => {
+      if (!isClosedManually && event.code !== 1000 && event.code !== 4001 && event.code !== 4003) {
+        // Attempt auto-reconnect after 2s if closed unexpectedly
+        reconnectTimeout = setTimeout(() => {
+          connect();
+        }, 2000);
+      }
+    };
   };
 
-  if (onError) {
-    ws.onerror = onError;
-  }
+  connect();
 
-  return ws;
+  return {
+    get ws() {
+      return activeWs;
+    },
+    close: () => {
+      isClosedManually = true;
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+      if (activeWs) {
+        activeWs.close(1000, "Component unmounted");
+      }
+    },
+  };
 };

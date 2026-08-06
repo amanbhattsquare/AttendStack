@@ -1,5 +1,5 @@
 "use client"
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { usePathname, useRouter } from 'next/navigation';
 
 //import custom components
@@ -33,7 +33,19 @@ const getTokenExpiryMs = (token: string) => {
 const DashboardLayout: React.FC<DashboardProps> = ({ children }) => {
   const pathname = usePathname();
   const router = useRouter();
-  const isEmployee = pathname.startsWith("/employee-dashboard");
+  const [userRole, setUserRole] = useState<string | null>(null);
+
+  useEffect(() => {
+    const storedUser = localStorage.getItem("user");
+    if (storedUser) {
+      try {
+        const u = JSON.parse(storedUser);
+        setUserRole(u?.role || null);
+      } catch {}
+    }
+  }, []);
+
+  const isEmployeeSidebar = userRole === "EMPLOYEE" || pathname.startsWith("/employee-dashboard");
 
   useEffect(() => {
     const token = localStorage.getItem("authToken");
@@ -61,7 +73,8 @@ const DashboardLayout: React.FC<DashboardProps> = ({ children }) => {
 
     try {
       const user = JSON.parse(storedUser);
-      if (user?.role === "EMPLOYEE" && !pathname.startsWith("/employee-dashboard")) {
+      const isSharedRoute = pathname.startsWith("/chat");
+      if (user?.role === "EMPLOYEE" && !pathname.startsWith("/employee-dashboard") && !isSharedRoute) {
         router.replace("/employee-dashboard");
       }
       if (user?.role !== "EMPLOYEE" && pathname.startsWith("/employee-dashboard")) {
@@ -84,7 +97,7 @@ const DashboardLayout: React.FC<DashboardProps> = ({ children }) => {
   return (
     <BrandingProvider>
       <div>
-        <Sidebar hideLogo={false} containerId='miniSidebar' currentPath={pathname} isEmployee={isEmployee} />
+        <Sidebar hideLogo={false} containerId='miniSidebar' currentPath={pathname} isEmployee={isEmployeeSidebar} />
         <div id='content' className='position-relative h-100 d-flex flex-column'>
           <Header />
           <div className='custom-container' style={{ flex: '1 0 auto' }}>

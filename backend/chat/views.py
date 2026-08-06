@@ -163,16 +163,20 @@ class ConversationViewSet(viewsets.ModelViewSet):
 
         msg_data = MessageSerializer(message, context={'request': request}).data
 
-        # Broadcast via Channel Layer to room group
-        channel_layer = get_channel_layer()
-        if channel_layer:
-            async_to_sync(channel_layer.group_send)(
-                f"chat_{conversation.id}",
-                {
-                    "type": "chat.message",
-                    "message": msg_data
-                }
-            )
+        # Broadcast via Channel Layer to room group safely
+        try:
+            channel_layer = get_channel_layer()
+            if channel_layer:
+                async_to_sync(channel_layer.group_send)(
+                    f"chat_{conversation.id}",
+                    {
+                        "type": "chat.message",
+                        "message": msg_data
+                    }
+                )
+        except Exception as e:
+            import logging
+            logging.warning(f"Failed to broadcast WS message: {e}")
 
         return Response(msg_data, status=status.HTTP_201_CREATED)
 

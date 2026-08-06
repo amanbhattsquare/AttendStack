@@ -59,7 +59,7 @@ LOCAL_APPS = [
     "chat",
 ]
 
-INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
+INSTALLED_APPS = ["daphne"] + DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 
 # ──────────────────────────────────────────────────────────────────────────────
 # MIDDLEWARE
@@ -291,21 +291,29 @@ CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = "Asia/Kolkata"
 
 # ──────────────────────────────────────────────────────────────────────────────
-# CHANNELS & REAL-TIME WEBSOCKETS (REDIS)
+# CHANNELS & REAL-TIME WEBSOCKETS (REDIS WITH RESP2 PROTOCOL COMPATIBILITY)
 # ──────────────────────────────────────────────────────────────────────────────
 ASGI_APPLICATION = "attendstack_backend.asgi.application"
 
 REDIS_HOST = config("REDIS_HOST", default="127.0.0.1")
 REDIS_PORT = config("REDIS_PORT", default=6379, cast=int)
+USE_REDIS = config("USE_REDIS", default=True, cast=bool)
 
-CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels_redis.core.RedisChannelLayer",
-        "CONFIG": {
-            "hosts": [(REDIS_HOST, REDIS_PORT)],
+if USE_REDIS:
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels_redis.core.RedisChannelLayer",
+            "CONFIG": {
+                "hosts": [f"redis://{REDIS_HOST}:{REDIS_PORT}/0?protocol=2"],
+            },
         },
-    },
-}
+    }
+else:
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels.layers.InMemoryChannelLayer",
+        },
+    }
 
 # ──────────────────────────────────────────────────────────────────────────────
 # MEDIA FILES (LOCAL DEV & S3 READY)

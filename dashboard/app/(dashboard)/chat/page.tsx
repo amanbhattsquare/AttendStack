@@ -77,7 +77,7 @@ export default function ChatPage() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const wsRef = useRef<WebSocket | null>(null);
+  const wsRef = useRef<any>(null);
 
   // Load current user from stored user object or JWT token
   useEffect(() => {
@@ -161,7 +161,7 @@ export default function ChatPage() {
       wsRef.current.close();
     }
 
-    const ws = connectChatWebSocket(activeConversation.id, (data) => {
+    const controller = connectChatWebSocket(activeConversation.id, (data) => {
       if (data.type === "new_message") {
         setMessages((prev) => {
           if (prev.some((m) => m.id === data.message.id)) return prev;
@@ -186,10 +186,10 @@ export default function ChatPage() {
       }
     });
 
-    wsRef.current = ws;
+    wsRef.current = controller;
 
     return () => {
-      if (ws) ws.close();
+      if (controller) controller.close();
     };
   }, [activeConversation?.id]);
 

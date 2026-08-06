@@ -19,20 +19,30 @@ class ChatConsumer(AsyncWebsocketConsumer):
             await self.close(code=4003)
             return
 
-        # Join room group
-        await self.channel_layer.group_add(
-            self.room_group_name,
-            self.channel_name
-        )
-
+        # Accept WebSocket connection first to complete handshake safely
         await self.accept()
+
+        # Join room group safely
+        try:
+            if self.channel_layer:
+                await self.channel_layer.group_add(
+                    self.room_group_name,
+                    self.channel_name
+                )
+        except Exception as e:
+            import logging
+            logging.warning(f"Failed to add to channel group {self.room_group_name}: {e}")
 
     async def disconnect(self, close_code):
         if hasattr(self, 'room_group_name'):
-            await self.channel_layer.group_discard(
-                self.room_group_name,
-                self.channel_name
-            )
+            try:
+                if self.channel_layer:
+                    await self.channel_layer.group_discard(
+                        self.room_group_name,
+                        self.channel_name
+                    )
+            except Exception:
+                pass
 
     async def receive(self, text_data):
         try:

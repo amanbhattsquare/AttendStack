@@ -17,6 +17,7 @@ import {
   IconCalendarTime,
   IconSettings,
   IconBook,
+  IconMessage,
 } from "@tabler/icons-react";
 
 //import custom type
@@ -82,6 +83,12 @@ export const DashboardMenu: MenuItemType[] = [
     title: "Projects & Tasks",
     link: "/tasks",
     icon: <IconListDetails size={20} strokeWidth={1.5} />,
+  },
+  {
+    id: uuid(),
+    title: "Chat & Messages",
+    link: "/chat",
+    icon: <IconMessage size={20} strokeWidth={1.5} />,
   },
   {
     id: uuid(),

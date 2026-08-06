@@ -10,6 +10,7 @@ import {
   IconWallet,
   IconCalendarTime,
   IconListDetails,
+  IconMessage,
 } from "@tabler/icons-react";
 
 //import custom type
@@ -63,6 +64,12 @@ export const EmployeeDashboardMenu: MenuItemType[] = [
     title: "My Projects & Tasks",
     link: "/employee-dashboard/tasks",
     icon: <IconListDetails size={18} strokeWidth={1.5} />,
+  },
+  {
+    id: uuid(),
+    title: "Chat & Messages",
+    link: "/chat",
+    icon: <IconMessage size={18} strokeWidth={1.5} />,
   },
   {
     id: uuid(),

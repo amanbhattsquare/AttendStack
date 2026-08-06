@@ -44,6 +44,7 @@ THIRD_PARTY_APPS = [
     "rest_framework_simplejwt.token_blacklist",
     "corsheaders",
     "drf_spectacular",
+    "channels",
 ]
 
 LOCAL_APPS = [
@@ -55,6 +56,7 @@ LOCAL_APPS = [
     "payroll",
     "settings",
     "tasks",
+    "chat",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -287,3 +289,26 @@ CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = "Asia/Kolkata"
+
+# ──────────────────────────────────────────────────────────────────────────────
+# CHANNELS & REAL-TIME WEBSOCKETS (REDIS)
+# ──────────────────────────────────────────────────────────────────────────────
+ASGI_APPLICATION = "attendstack_backend.asgi.application"
+
+REDIS_HOST = config("REDIS_HOST", default="127.0.0.1")
+REDIS_PORT = config("REDIS_PORT", default=6379, cast=int)
+
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [(REDIS_HOST, REDIS_PORT)],
+        },
+    },
+}
+
+# ──────────────────────────────────────────────────────────────────────────────
+# MEDIA FILES (LOCAL DEV & S3 READY)
+# ──────────────────────────────────────────────────────────────────────────────
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"

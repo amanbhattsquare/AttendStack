@@ -421,12 +421,14 @@ export default function ChatPage() {
       }
 
       const isMe = String(msg.sender?.id) === String(currentUserId);
+      const timeStr = formatMessageTime(msg.created_at);
+
       elements.push(
         <div
           key={msg.id}
           className={`chat-message-row ${isMe ? "sent" : "received"}`}
         >
-          {/* Avatar for received messages */}
+          {/* Tiny avatar for received */}
           {!isMe && (
             <div
               className="chat-msg-avatar"
@@ -437,16 +439,22 @@ export default function ChatPage() {
           )}
 
           <div className={`chat-bubble ${isMe ? "bubble-sent" : "bubble-received"}`}>
-            {/* Sender name for group chats */}
+            {/* Sender name in group chats */}
             {!isMe && activeConversation?.type === "GROUP" && (
-              <div className="chat-sender-name">
+              <span className="chat-sender-name">
                 {msg.sender?.name || msg.sender?.email}
-              </div>
+              </span>
             )}
 
-            {/* Text Content */}
+            {/* Text + inline timestamp */}
             {msg.content && (
-              <p className="chat-text">{msg.content}</p>
+              <div className="chat-text-wrap">
+                <span className="chat-text">{msg.content}</span>
+                <span className="chat-meta-inline">
+                  <span className="chat-time">{timeStr}</span>
+                  {isMe && <CheckCheck size={12} className="chat-read-icon" />}
+                </span>
+              </div>
             )}
 
             {/* Attachments */}
@@ -463,7 +471,7 @@ export default function ChatPage() {
                           src={att.file_url}
                           alt="attachment"
                           className="w-100"
-                          style={{ maxHeight: "220px", objectFit: "cover", borderRadius: "8px", cursor: "pointer" }}
+                          style={{ maxHeight: "180px", objectFit: "cover", borderRadius: "6px", cursor: "pointer" }}
                         />
                       </div>
                     );
@@ -472,7 +480,7 @@ export default function ChatPage() {
                   if (isVid) {
                     return (
                       <div key={att.id} className="chat-att-video">
-                        <video controls className="w-100" style={{ maxHeight: "240px", borderRadius: "8px" }}>
+                        <video controls className="w-100" style={{ maxHeight: "200px", borderRadius: "6px" }}>
                           <source src={att.file_url} type={att.file_type || "video/mp4"} />
                         </video>
                       </div>
@@ -487,7 +495,7 @@ export default function ChatPage() {
                       rel="noreferrer"
                       className="chat-att-file"
                     >
-                      <FileText size={18} />
+                      <FileText size={16} />
                       <div className="chat-att-file-info">
                         <span className="chat-att-file-name">Attachment</span>
                         <small>{(att.file_size / (1024 * 1024)).toFixed(2)} MB</small>
@@ -498,11 +506,13 @@ export default function ChatPage() {
               </div>
             )}
 
-            {/* Timestamp + Status */}
-            <div className="chat-meta">
-              <span className="chat-time">{formatMessageTime(msg.created_at)}</span>
-              {isMe && <CheckCheck size={14} className="chat-read-icon" />}
-            </div>
+            {/* Fallback timestamp if no text content (attachment-only msgs) */}
+            {!msg.content && (
+              <div className="chat-meta-block">
+                <span className="chat-time">{timeStr}</span>
+                {isMe && <CheckCheck size={12} className="chat-read-icon" />}
+              </div>
+            )}
           </div>
         </div>
       );
@@ -1367,11 +1377,12 @@ export default function ChatPage() {
         }
 
         /* Message rows */
+        /* Message rows — tight spacing */
         .chat-message-row {
           display: flex;
-          margin-bottom: 6px;
+          margin-bottom: 3px;
           align-items: flex-end;
-          gap: 8px;
+          gap: 6px;
         }
 
         .chat-message-row.sent {
@@ -1382,25 +1393,27 @@ export default function ChatPage() {
           justify-content: flex-start;
         }
 
+        /* Tiny avatar */
         .chat-msg-avatar {
-          width: 30px;
-          height: 30px;
+          width: 26px;
+          height: 26px;
           border-radius: 50%;
           display: flex;
           align-items: center;
           justify-content: center;
           color: white;
           font-weight: 700;
-          font-size: 12px;
+          font-size: 11px;
           flex-shrink: 0;
+          margin-bottom: 1px;
         }
 
-        /* Bubbles */
+        /* Compact bubbles */
         .chat-bubble {
-          max-width: 65%;
-          min-width: 100px;
-          padding: 10px 14px;
-          border-radius: 16px;
+          max-width: 60%;
+          min-width: 80px;
+          padding: 6px 10px;
+          border-radius: 14px;
           position: relative;
           word-wrap: break-word;
         }
@@ -1408,46 +1421,85 @@ export default function ChatPage() {
         .bubble-sent {
           background: #6366f1;
           color: #fff;
-          border-bottom-right-radius: 4px;
+          border-bottom-right-radius: 3px;
         }
 
         .bubble-received {
           background: #fff;
           color: #1e293b;
-          border: 1px solid #e5e7eb;
-          border-bottom-left-radius: 4px;
+          border: 1px solid #e9ecef;
+          border-bottom-left-radius: 3px;
         }
 
         .chat-sender-name {
-          font-size: 11px;
+          font-size: 10.5px;
           font-weight: 700;
           color: #6366f1;
-          margin-bottom: 4px;
+          display: block;
+          margin-bottom: 1px;
+          line-height: 1.2;
+        }
+
+        /* Text + inline time in same flow */
+        .chat-text-wrap {
+          display: inline;
         }
 
         .chat-text {
           margin: 0;
-          font-size: 13.5px;
-          line-height: 1.45;
+          font-size: 13px;
+          line-height: 1.4;
           white-space: pre-wrap;
           word-break: break-word;
+          display: inline;
         }
 
+        .chat-meta-inline {
+          display: inline-flex;
+          align-items: center;
+          gap: 3px;
+          float: right;
+          margin-left: 8px;
+          margin-top: 4px;
+          white-space: nowrap;
+        }
+
+        /* Fallback meta for attachment-only messages */
+        .chat-meta-block {
+          display: flex;
+          align-items: center;
+          justify-content: flex-end;
+          gap: 3px;
+          margin-top: 2px;
+        }
+
+        .chat-time {
+          font-size: 10px;
+          opacity: 0.55;
+          line-height: 1;
+        }
+
+        .chat-read-icon {
+          opacity: 0.55;
+          flex-shrink: 0;
+        }
+
+        /* Attachments */
         .chat-attachments {
-          margin-top: 8px;
+          margin-top: 4px;
           display: flex;
           flex-direction: column;
-          gap: 6px;
+          gap: 4px;
         }
 
         .chat-att-file {
           display: flex;
           align-items: center;
-          gap: 8px;
-          padding: 8px 10px;
-          border-radius: 8px;
+          gap: 6px;
+          padding: 5px 8px;
+          border-radius: 6px;
           text-decoration: none;
-          font-size: 12px;
+          font-size: 11px;
           transition: opacity 0.15s;
         }
 
@@ -1469,24 +1521,7 @@ export default function ChatPage() {
 
         .chat-att-file-name {
           font-weight: 600;
-          font-size: 12px;
-        }
-
-        .chat-meta {
-          display: flex;
-          align-items: center;
-          justify-content: flex-end;
-          gap: 4px;
-          margin-top: 4px;
-        }
-
-        .chat-time {
-          font-size: 10px;
-          opacity: 0.65;
-        }
-
-        .bubble-sent .chat-read-icon {
-          opacity: 0.65;
+          font-size: 11px;
         }
 
         /* Typing indicator */

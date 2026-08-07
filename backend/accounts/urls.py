@@ -15,6 +15,7 @@ from .views import (
     OrganizationRegistrationView,
     RequestPasswordResetOTPView,
     ResetPasswordWithOTPView,
+    SimplyJobEmployeeOnboardingView,
     UserProfileView,
 )
 
@@ -45,6 +46,7 @@ urlpatterns = [
 
     # Admin
     path("admin/create-hr/", CreateHRView.as_view(), name="create_hr"),
+    path("integrations/simplyjob/onboard/", SimplyJobEmployeeOnboardingView.as_view(), name="simplyjob_onboard"),
 
     # Health Check
     path("", HealthCheckView.as_view(), name="health_check"),

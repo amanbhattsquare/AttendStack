@@ -3,11 +3,16 @@ accounts – views
 Login, profile, and user management views
 """
 
+import hashlib
+import hmac
 from datetime import timedelta
+from urllib.parse import urlencode
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from rest_framework import generics, status, permissions
+from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView
@@ -20,12 +25,14 @@ from .serializers import (
     CustomTokenObtainPairSerializer,
     RequestPasswordResetOTPSerializer,
     ResetPasswordWithOTPSerializer,
+    SimplyJobEmployeeOnboardingSerializer,
     EmployeeSelfRegistrationSerializer,
     OrganizationRegistrationSerializer,
     UserProfileSerializer,
     UserUpdateSerializer,
 )
 from .services import request_password_reset_otp, reset_password_with_otp
+from employees.services import sync_employee_from_simplyjob
 
 User = get_user_model()
 
@@ -274,6 +281,60 @@ class CreateHRView(generics.CreateAPIView):
         }
         headers = self.get_success_headers(serializer.data)
         return Response(response_data, status=status.HTTP_201_CREATED, headers=headers)
+
+
+class SimplyJobEmployeeOnboardingView(APIView):
+    authentication_classes = []
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        secret = getattr(settings, "SIMPLYJOB_ONBOARDING_SECRET", "").strip()
+        if not secret:
+            raise AuthenticationFailed("Onboarding secret is not configured.")
+
+        raw_body = request.body or b""
+        signature = str(request.headers.get("X-SimplyJob-Signature", "")).strip()
+        expected_signature = hmac.new(secret.encode("utf-8"), raw_body, hashlib.sha256).hexdigest()
+        if not signature or not hmac.compare_digest(signature, expected_signature):
+            raise AuthenticationFailed("Invalid onboarding signature.")
+
+        serializer = SimplyJobEmployeeOnboardingSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        organization, employee, user, temporary_password = sync_employee_from_simplyjob(
+            company_data=serializer.validated_data,
+            employee_data=serializer.validated_data,
+        )
+        join_base = getattr(settings, "ATTENDSTACK_APP_URL", "").strip().rstrip("/")
+        join_url = ""
+        if join_base:
+            query = urlencode({"email": employee.email})
+            join_url = f"{join_base}/sign-in?{query}"
+
+        return Response(
+            {
+                "detail": "Employee synced successfully.",
+                "organization": {
+                    "id": organization.id,
+                    "name": organization.name,
+                    "invite_code": organization.invite_code,
+                },
+                "employee": {
+                    "id": str(employee.id),
+                    "employee_id": employee.employee_id,
+                    "full_name": employee.full_name,
+                    "email": employee.email,
+                    "status": employee.status,
+                    "joining_date": employee.joining_date,
+                },
+                "user": {
+                    "id": str(user.id) if user else None,
+                    "email": user.email if user else employee.email,
+                    "temporary_password": temporary_password,
+                },
+                "join_url": join_url,
+            },
+            status=status.HTTP_201_CREATED if temporary_password else status.HTTP_200_OK,
+        )
 
 
 class HealthCheckView(APIView):

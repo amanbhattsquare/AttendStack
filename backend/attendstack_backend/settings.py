@@ -13,6 +13,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # SECURITY
 # ──────────────────────────────────────────────────────────────────────────────
 SECRET_KEY = config("SECRET_KEY", default="unsafe-secret-key")
+SIMPLYJOB_ONBOARDING_SECRET = config("SIMPLYJOB_ONBOARDING_SECRET", default="")
+ATTENDSTACK_APP_URL = config("ATTENDSTACK_APP_URL", default="http://localhost:3000")
 # Some deployment platforms use environment labels such as ``release`` for
 # DEBUG.  python-decouple's strict bool cast raises ValueError for those values
 # and prevents Django/Gunicorn from starting, which surfaces as a 502 from the

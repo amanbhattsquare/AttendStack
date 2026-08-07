@@ -172,6 +172,29 @@ class CreateHRSerializer(serializers.ModelSerializer):
         return user
 
 
+class SimplyJobEmployeeOnboardingSerializer(serializers.Serializer):
+    source_company_id = serializers.CharField(max_length=64)
+    company_name = serializers.CharField(max_length=255)
+    owner_email = serializers.EmailField(required=False, allow_blank=True)
+    source_application_id = serializers.CharField(max_length=64)
+    full_name = serializers.CharField(max_length=150)
+    email = serializers.EmailField()
+    phone = serializers.RegexField(r"^\+?[0-9]{10,15}$")
+    joining_date = serializers.DateField()
+    department = serializers.CharField(max_length=100, required=False, allow_blank=True)
+    designation = serializers.CharField(max_length=120, required=False, allow_blank=True)
+    date_of_birth = serializers.DateField(required=False, allow_null=True)
+    address = serializers.CharField(required=False, allow_blank=True)
+    emergency_contact_name = serializers.CharField(required=False, allow_blank=True, max_length=150)
+    emergency_contact_relationship = serializers.CharField(required=False, allow_blank=True, max_length=80)
+    emergency_contact_phone = serializers.RegexField(
+        r"^\+?[0-9]{10,15}$",
+        required=False,
+        allow_blank=True,
+    )
+    source_payload = serializers.DictField(required=False, default=dict)
+
+
 class OrganizationRegistrationSerializer(serializers.Serializer):
     """Public first-run setup: creates one company and its HR owner."""
 

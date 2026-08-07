@@ -2,6 +2,7 @@ import secrets
 import string
 
 from accounts.models import UserRole
+from django.utils import timezone
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
@@ -9,7 +10,9 @@ from django.db import IntegrityError, transaction
 from django.db.models import Q
 from rest_framework.exceptions import ValidationError
 
-from .models import Employee
+from organizations.models import Organization
+
+from .models import Employee, EmployeeStatus
 
 User = get_user_model()
 
@@ -121,3 +124,84 @@ def reset_employee_user_password(employee: Employee, password=None):
     user.is_active = True
     user.save(update_fields=["password", "is_active"])
     return user, employee_password
+
+
+def sync_employee_from_simplyjob(*, company_data, employee_data):
+    source_company_id = str(company_data.get("source_company_id", "")).strip()
+    company_name = str(company_data.get("company_name", "")).strip()
+    if not source_company_id:
+        raise ValidationError({"source_company_id": "Company source ID is required."})
+    if not company_name:
+        raise ValidationError({"company_name": "Company name is required."})
+
+    source_application_id = str(employee_data.get("source_application_id", "")).strip()
+    full_name = str(employee_data.get("full_name", "")).strip()
+    email = str(employee_data.get("email", "")).strip().lower()
+    phone = str(employee_data.get("phone", "")).strip()
+    if not source_application_id:
+        raise ValidationError({"source_application_id": "Source application ID is required."})
+    if not full_name:
+        raise ValidationError({"full_name": "Employee name is required."})
+    if not email:
+        raise ValidationError({"email": "Employee email is required."})
+    if not phone:
+        raise ValidationError({"phone": "Employee phone is required."})
+
+    owner = None
+    owner_email = str(company_data.get("owner_email", "")).strip().lower()
+    if owner_email:
+        owner = User.objects.filter(email__iexact=owner_email).first()
+
+    organization_defaults = {
+        "name": company_name,
+        "external_source": "simplyjob",
+    }
+    if owner is not None:
+        organization_defaults["owner"] = owner
+
+    organization, _ = Organization.objects.update_or_create(
+        external_company_id=source_company_id,
+        defaults=organization_defaults,
+    )
+
+    joining_date = employee_data.get("joining_date") or timezone.localdate()
+    if isinstance(joining_date, str):
+        from datetime import date
+
+        joining_date = date.fromisoformat(joining_date)
+    status = EmployeeStatus.ACTIVE if joining_date <= timezone.localdate() else EmployeeStatus.PROVISION
+
+    external_payload = employee_data.get("source_payload") or {}
+    if not isinstance(external_payload, dict):
+        external_payload = {}
+
+    employee, _ = Employee.objects.update_or_create(
+        external_application_id=source_application_id,
+        defaults={
+            "organization": organization,
+            "external_source": "simplyjob",
+            "external_payload": external_payload,
+            "full_name": full_name,
+            "email": email,
+            "phone": phone,
+            "date_of_birth": employee_data.get("date_of_birth") or None,
+            "address": str(employee_data.get("address", "")).strip(),
+            "joining_date": joining_date,
+            "department": str(employee_data.get("department", "")).strip(),
+            "designation": str(employee_data.get("designation", "")).strip(),
+            "status": status,
+            "emergency_contact_name": str(employee_data.get("emergency_contact_name", "")).strip(),
+            "emergency_contact_relationship": str(employee_data.get("emergency_contact_relationship", "")).strip(),
+            "emergency_contact_phone": str(employee_data.get("emergency_contact_phone", "")).strip(),
+        },
+    )
+
+    employee._status_effective_date = joining_date
+    employee.save(update_fields=["updated_at"])
+
+    user = sync_employee_user_access(employee)
+    temporary_password = None
+    if user is None:
+        user, temporary_password = create_employee_user(employee)
+
+    return organization, employee, user, temporary_password

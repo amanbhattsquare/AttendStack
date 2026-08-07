@@ -1,3 +1,4 @@
+@use "sass:color";
 // Variables
 
 // Color system
@@ -65,74 +66,74 @@ $dark: $gray-900 !default;
 // scss-docs-end theme-color-variables
 // primary
 $primary-100: #c8fad6 !default;
-$primary-100-rgb: #{red($primary-100)}, #{green($primary-100)}, #{blue($primary-100)};
+$primary-100-rgb: #{color.channel($primary-100, "red", $space: rgb)}, #{color.channel($primary-100, "green", $space: rgb)}, #{color.channel($primary-100, "blue", $space: rgb)};
 
 $primary-200: tint-color($blue, 60%) !default;
 $primary-300: #5be49b !default;
-$primary-300-rgb: #{red($primary-300)}, #{green($primary-300)}, #{blue($primary-300)};
+$primary-300-rgb: #{color.channel($primary-300, "red", $space: rgb)}, #{color.channel($primary-300, "green", $space: rgb)}, #{color.channel($primary-300, "blue", $space: rgb)};
 $primary-400: tint-color($blue, 20%) !default;
 $primary-500: $blue !default;
 $primary-600: shade-color($blue, 20%) !default;
 $primary-700: #007867 !default;
-$primary-700-rgb: #{red($primary-700)}, #{green($primary-700)}, #{blue($primary-700)};
+$primary-700-rgb: #{color.channel($primary-700, "red", $space: rgb)}, #{color.channel($primary-700, "green", $space: rgb)}, #{color.channel($primary-700, "blue", $space: rgb)};
 $primary-800: shade-color($blue, 60%) !default;
 $primary-900: #004b50 !default;
-$primary-900-rgb: #{red($primary-900)}, #{green($primary-900)}, #{blue($primary-900)};
+$primary-900-rgb: #{color.channel($primary-900, "red", $space: rgb)}, #{color.channel($primary-900, "green", $space: rgb)}, #{color.channel($primary-900, "blue", $space: rgb)};
 
 // info
 $info-100: #cafdf5 !default;
-$info-100-rgb: #{red($info-100)}, #{green($info-100)}, #{blue($info-100)};
+$info-100-rgb: #{color.channel($info-100, "red", $space: rgb)}, #{color.channel($info-100, "green", $space: rgb)}, #{color.channel($info-100, "blue", $space: rgb)};
 $info-300: #61f3f3 !default;
-$info-300-rgb: #{red($info-300)}, #{green($info-300)}, #{blue($info-300)};
+$info-300-rgb: #{color.channel($info-300, "red", $space: rgb)}, #{color.channel($info-300, "green", $space: rgb)}, #{color.channel($info-300, "blue", $space: rgb)};
 $info-500: $cyan !default;
 $info-700: #006c9c !default;
-$info-700-rgb: #{red($info-700)}, #{green($info-700)}, #{blue($info-700)};
+$info-700-rgb: #{color.channel($info-700, "red", $space: rgb)}, #{color.channel($info-700, "green", $space: rgb)}, #{color.channel($info-700, "blue", $space: rgb)};
 $info-900: #003768 !default;
-$info-900-rgb: #{red($info-900)}, #{green($info-900)}, #{blue($info-900)};
+$info-900-rgb: #{color.channel($info-900, "red", $space: rgb)}, #{color.channel($info-900, "green", $space: rgb)}, #{color.channel($info-900, "blue", $space: rgb)};
 
 // success
 $success-100: #d3fcd2 !default;
-$success-100-rgb: #{red($success-100)}, #{green($success-100)}, #{blue($success-100)};
+$success-100-rgb: #{color.channel($success-100, "red", $space: rgb)}, #{color.channel($success-100, "green", $space: rgb)}, #{color.channel($success-100, "blue", $space: rgb)};
 $success-300: #77ed8b !default;
-$success-300-rgb: #{red($success-300)}, #{green($success-300)}, #{blue($success-300)};
+$success-300-rgb: #{color.channel($success-300, "red", $space: rgb)}, #{color.channel($success-300, "green", $space: rgb)}, #{color.channel($success-300, "blue", $space: rgb)};
 $success-500: $cyan !default;
 $success-700: #118d57 !default;
-$success-700-rgb: #{red($success-700)}, #{green($success-700)}, #{blue($success-700)};
+$success-700-rgb: #{color.channel($success-700, "red", $space: rgb)}, #{color.channel($success-700, "green", $space: rgb)}, #{color.channel($success-700, "blue", $space: rgb)};
 $success-900: #065e49 !default;
-$success-900-rgb: #{red($success-900)}, #{green($success-900)}, #{blue($success-900)};
+$success-900-rgb: #{color.channel($success-900, "red", $space: rgb)}, #{color.channel($success-900, "green", $space: rgb)}, #{color.channel($success-900, "blue", $space: rgb)};
 
 // danger
 $danger-100: #ffe9d5 !default;
-$danger-100-rgb: #{red($danger-100)}, #{green($danger-100)}, #{blue($danger-100)};
+$danger-100-rgb: #{color.channel($danger-100, "red", $space: rgb)}, #{color.channel($danger-100, "green", $space: rgb)}, #{color.channel($danger-100, "blue", $space: rgb)};
 $danger-300: #ffac82 !default;
-$danger-300-rgb: #{red($danger-300)}, #{green($danger-300)}, #{blue($danger-300)};
+$danger-300-rgb: #{color.channel($danger-300, "red", $space: rgb)}, #{color.channel($danger-300, "green", $space: rgb)}, #{color.channel($danger-300, "blue", $space: rgb)};
 $danger-500: $danger !default;
 $danger-700: #b71d18 !default;
-$danger-700-rgb: #{red($danger-700)}, #{green($danger-700)}, #{blue($danger-700)};
+$danger-700-rgb: #{color.channel($danger-700, "red", $space: rgb)}, #{color.channel($danger-700, "green", $space: rgb)}, #{color.channel($danger-700, "blue", $space: rgb)};
 $danger-900: #7a0916 !default;
-$danger-900-rgb: #{red($danger-900)}, #{green($danger-900)}, #{blue($danger-900)};
+$danger-900-rgb: #{color.channel($danger-900, "red", $space: rgb)}, #{color.channel($danger-900, "green", $space: rgb)}, #{color.channel($danger-900, "blue", $space: rgb)};
 
 // warning
 $warning-100: #fff5cc !default;
-$warning-100-rgb: #{red($warning-100)}, #{green($warning-100)}, #{blue($warning-100)};
+$warning-100-rgb: #{color.channel($warning-100, "red", $space: rgb)}, #{color.channel($warning-100, "green", $space: rgb)}, #{color.channel($warning-100, "blue", $space: rgb)};
 $warning-300: #ffd666 !default;
-$warning-300-rgb: #{red($warning-300)}, #{green($warning-300)}, #{blue($warning-300)};
+$warning-300-rgb: #{color.channel($warning-300, "red", $space: rgb)}, #{color.channel($warning-300, "green", $space: rgb)}, #{color.channel($warning-300, "blue", $space: rgb)};
 $warning-500: $warning !default;
 $warning-700: #b76e00 !default;
-$warning-700-rgb: #{red($warning-700)}, #{green($warning-700)}, #{blue($warning-700)};
+$warning-700-rgb: #{color.channel($warning-700, "red", $space: rgb)}, #{color.channel($warning-700, "green", $space: rgb)}, #{color.channel($warning-700, "blue", $space: rgb)};
 $warning-900: #7a4100 !default;
-$warning-900-rgb: #{red($warning-900)}, #{green($warning-900)}, #{blue($warning-900)};
+$warning-900-rgb: #{color.channel($warning-900, "red", $space: rgb)}, #{color.channel($warning-900, "green", $space: rgb)}, #{color.channel($warning-900, "blue", $space: rgb)};
 
 // warning
 $secondary-100: #f9fafb !default;
-$secondary-100-rgb: #{red($secondary-100)}, #{green($secondary-100)}, #{blue($secondary-100)};
+$secondary-100-rgb: #{color.channel($secondary-100, "red", $space: rgb)}, #{color.channel($secondary-100, "green", $space: rgb)}, #{color.channel($secondary-100, "blue", $space: rgb)};
 $secondary-300: #dfe3e8 !default;
-$secondary-300-rgb: #{red($secondary-300)}, #{green($secondary-300)}, #{blue($secondary-300)};
+$secondary-300-rgb: #{color.channel($secondary-300, "red", $space: rgb)}, #{color.channel($secondary-300, "green", $space: rgb)}, #{color.channel($secondary-300, "blue", $space: rgb)};
 $secondary-500: $secondary !default;
 $secondary-700: #454f5b !default;
-$secondary-700-rgb: #{red($secondary-700)}, #{green($secondary-700)}, #{blue($secondary-700)};
+$secondary-700-rgb: #{color.channel($secondary-700, "red", $space: rgb)}, #{color.channel($secondary-700, "green", $space: rgb)}, #{color.channel($secondary-700, "blue", $space: rgb)};
 $secondary-900: #141a21 !default;
-$secondary-900-rgb: #{red($secondary-900)}, #{green($secondary-900)}, #{blue($secondary-900)};
+$secondary-900-rgb: #{color.channel($secondary-900, "red", $space: rgb)}, #{color.channel($secondary-900, "green", $space: rgb)}, #{color.channel($secondary-900, "blue", $space: rgb)};
 
 $colors: (
   'primary-lighter': $primary-100,

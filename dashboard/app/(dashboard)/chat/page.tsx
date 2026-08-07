@@ -1,11 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
-  Container,
-  Row,
-  Col,
-  Card,
   Form,
   Button,
   Badge,
@@ -31,6 +27,9 @@ import {
   UserCheck,
   User,
   Sparkles,
+  Smile,
+  Phone,
+  Hash,
 } from "lucide-react";
 import {
   Conversation,
@@ -46,16 +45,23 @@ import {
   connectChatWebSocket,
 } from "../../../helper/chatApi";
 
-// Solid, clean standard colors (NO gradients)
+// Redux for sidebar control
+import { useAppDispatch } from "store/store";
+import { setCollapsed } from "store/slices/appSlice";
+
+// Avatar colors – solid, professional palette
 const getAvatarColor = (name: string) => {
   const solidColors = [
-    "#4f46e5", // Indigo
-    "#2563eb", // Royal Blue
-    "#0d9488", // Teal
-    "#d97706", // Amber
-    "#db2777", // Pink
-    "#7c3aed", // Purple
-    "#059669", // Emerald
+    "#6366f1", // Indigo
+    "#3b82f6", // Blue
+    "#0ea5e9", // Sky
+    "#14b8a6", // Teal
+    "#f59e0b", // Amber
+    "#ec4899", // Pink
+    "#8b5cf6", // Violet
+    "#10b981", // Emerald
+    "#f97316", // Orange
+    "#06b6d4", // Cyan
   ];
   let hash = 0;
   for (let i = 0; i < name.length; i++) {
@@ -64,14 +70,21 @@ const getAvatarColor = (name: string) => {
   return solidColors[Math.abs(hash) % solidColors.length];
 };
 
-// Helper function for formatting timestamps nicely
+// Format message timestamp
 const formatMessageTime = (dateStr: string) => {
   try {
     const d = new Date(dateStr);
     const now = new Date();
     const isToday = d.toDateString() === now.toDateString();
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    const isYesterday = d.toDateString() === yesterday.toDateString();
+
     if (isToday) {
       return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    }
+    if (isYesterday) {
+      return "Yesterday " + d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
     }
     return (
       d.toLocaleDateString([], { month: "short", day: "numeric" }) +
@@ -83,7 +96,44 @@ const formatMessageTime = (dateStr: string) => {
   }
 };
 
+// Format last message time for sidebar
+const formatSidebarTime = (dateStr: string) => {
+  try {
+    const d = new Date(dateStr);
+    const now = new Date();
+    const isToday = d.toDateString() === now.toDateString();
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    const isYesterday = d.toDateString() === yesterday.toDateString();
+
+    if (isToday) {
+      return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    }
+    if (isYesterday) return "Yesterday";
+    return d.toLocaleDateString([], { month: "short", day: "numeric" });
+  } catch {
+    return "";
+  }
+};
+
+// Date separator helper
+const getDateLabel = (dateStr: string) => {
+  try {
+    const d = new Date(dateStr);
+    const now = new Date();
+    if (d.toDateString() === now.toDateString()) return "Today";
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    if (d.toDateString() === yesterday.toDateString()) return "Yesterday";
+    return d.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
+  } catch {
+    return "";
+  }
+};
+
 export default function ChatPage() {
+  const dispatch = useAppDispatch();
+
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversation, setActiveConversation] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -91,8 +141,8 @@ export default function ChatPage() {
   const [loadingMessages, setLoadingMessages] = useState<boolean>(false);
   const [sending, setSending] = useState<boolean>(false);
 
-  // Mobile navigation view state
-  const [showMobileSidebar, setShowMobileSidebar] = useState<boolean>(true);
+  // View state: which panel is visible on mobile
+  const [mobileView, setMobileView] = useState<"list" | "chat">("list");
 
   // Message input state
   const [inputContent, setInputContent] = useState<string>("");
@@ -123,8 +173,19 @@ export default function ChatPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const wsRef = useRef<any>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  // Load current user from stored user object or JWT token
+  // Collapse the main sidebar when chat page mounts, restore on unmount
+  useEffect(() => {
+    dispatch(setCollapsed({ value: "collapsed" }));
+    document.querySelector("html")?.setAttribute("class", "collapsed");
+    return () => {
+      dispatch(setCollapsed({ value: "expanded" }));
+      document.querySelector("html")?.setAttribute("class", "expanded");
+    };
+  }, [dispatch]);
+
+  // Load current user
   useEffect(() => {
     try {
       const storedUser = localStorage.getItem("user");
@@ -169,7 +230,7 @@ export default function ChatPage() {
 
   const selectConversation = async (conv: Conversation) => {
     setActiveConversation(conv);
-    setShowMobileSidebar(false); // Hide sidebar on mobile when conversation selected
+    setMobileView("chat");
     setLoadingMessages(true);
     setMessages([]);
     try {
@@ -178,7 +239,6 @@ export default function ChatPage() {
       setMessages(sorted);
       markConversationAsRead(conv.id);
 
-      // Reset unread count locally
       setConversations((prev) =>
         prev.map((c) => (c.id === conv.id ? { ...c, unread_count: 0 } : c))
       );
@@ -197,7 +257,7 @@ export default function ChatPage() {
     scrollToBottom();
   }, [messages, typingUser]);
 
-  // Handle WebSocket connection when active conversation changes
+  // WebSocket connection
   useEffect(() => {
     if (!activeConversation) return;
 
@@ -212,7 +272,6 @@ export default function ChatPage() {
           return [...prev, data.message];
         });
 
-        // Update conversation list last_message
         setConversations((prev) =>
           prev.map((c) =>
             c.id === activeConversation.id
@@ -237,7 +296,7 @@ export default function ChatPage() {
     };
   }, [activeConversation?.id]);
 
-  // Handle File Selection
+  // File handling
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
     const files = Array.from(e.target.files);
@@ -257,7 +316,7 @@ export default function ChatPage() {
     setFilePreviews((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // Handle Sending Message
+  // Send message
   const handleSendMessage = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!activeConversation || (!inputContent.trim() && selectedFiles.length === 0)) return;
@@ -279,7 +338,6 @@ export default function ChatPage() {
       setSelectedFiles([]);
       setFilePreviews([]);
 
-      // Update conversations list
       setConversations((prev) =>
         prev.map((c) =>
           c.id === activeConversation.id
@@ -294,7 +352,15 @@ export default function ChatPage() {
     }
   };
 
-  // Search users for Modal
+  // Handle Enter key (send on Enter, new line on Shift+Enter)
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
+    }
+  };
+
+  // Search users
   const handleSearchUsers = async (q: string) => {
     setUserQuery(q);
     setUserSearchLoading(true);
@@ -338,512 +404,407 @@ export default function ChatPage() {
     (c.display_name || c.name || "").toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  // Render date separators between messages
+  const renderMessagesWithDateSeparators = () => {
+    const elements: React.ReactNode[] = [];
+    let lastDateLabel = "";
+
+    messages.forEach((msg) => {
+      const dateLabel = getDateLabel(msg.created_at);
+      if (dateLabel !== lastDateLabel) {
+        lastDateLabel = dateLabel;
+        elements.push(
+          <div key={`date-${dateLabel}-${msg.id}`} className="chat-date-separator">
+            <span>{dateLabel}</span>
+          </div>
+        );
+      }
+
+      const isMe = String(msg.sender?.id) === String(currentUserId);
+      elements.push(
+        <div
+          key={msg.id}
+          className={`chat-message-row ${isMe ? "sent" : "received"}`}
+        >
+          {/* Avatar for received messages */}
+          {!isMe && (
+            <div
+              className="chat-msg-avatar"
+              style={{ backgroundColor: getAvatarColor(msg.sender?.name || msg.sender?.email || "U") }}
+            >
+              {(msg.sender?.name || msg.sender?.email || "U")[0].toUpperCase()}
+            </div>
+          )}
+
+          <div className={`chat-bubble ${isMe ? "bubble-sent" : "bubble-received"}`}>
+            {/* Sender name for group chats */}
+            {!isMe && activeConversation?.type === "GROUP" && (
+              <div className="chat-sender-name">
+                {msg.sender?.name || msg.sender?.email}
+              </div>
+            )}
+
+            {/* Text Content */}
+            {msg.content && (
+              <p className="chat-text">{msg.content}</p>
+            )}
+
+            {/* Attachments */}
+            {msg.attachments && msg.attachments.length > 0 && (
+              <div className="chat-attachments">
+                {msg.attachments.map((att) => {
+                  const isImg = att.file_type?.startsWith("image/");
+                  const isVid = att.file_type?.startsWith("video/");
+
+                  if (isImg) {
+                    return (
+                      <div key={att.id} className="chat-att-image" onClick={() => setPreviewMediaUrl(att.file_url)}>
+                        <BSImage
+                          src={att.file_url}
+                          alt="attachment"
+                          className="w-100"
+                          style={{ maxHeight: "220px", objectFit: "cover", borderRadius: "8px", cursor: "pointer" }}
+                        />
+                      </div>
+                    );
+                  }
+
+                  if (isVid) {
+                    return (
+                      <div key={att.id} className="chat-att-video">
+                        <video controls className="w-100" style={{ maxHeight: "240px", borderRadius: "8px" }}>
+                          <source src={att.file_url} type={att.file_type || "video/mp4"} />
+                        </video>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <a
+                      key={att.id}
+                      href={att.file_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="chat-att-file"
+                    >
+                      <FileText size={18} />
+                      <div className="chat-att-file-info">
+                        <span className="chat-att-file-name">Attachment</span>
+                        <small>{(att.file_size / (1024 * 1024)).toFixed(2)} MB</small>
+                      </div>
+                    </a>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Timestamp + Status */}
+            <div className="chat-meta">
+              <span className="chat-time">{formatMessageTime(msg.created_at)}</span>
+              {isMe && <CheckCheck size={14} className="chat-read-icon" />}
+            </div>
+          </div>
+        </div>
+      );
+    });
+
+    return elements;
+  };
+
   return (
-    <Container fluid className="p-2 p-md-3" style={{ height: "calc(100vh - 110px)", minHeight: "600px" }}>
-      <Card className="h-100 border-0 shadow-sm rounded-3 overflow-hidden" style={{ backgroundColor: "#f8fafc" }}>
-        <Row className="g-0 h-100">
-          
-          {/* LEFT SIDEBAR: Conversations List */}
-          <Col
-            md={4}
-            lg={3.5}
-            className={`border-end bg-white flex-column h-100 ${
-              showMobileSidebar ? "d-flex col-12" : "d-none d-md-flex"
-            }`}
-          >
-            {/* Sidebar Header */}
-            <div className="p-3 border-bottom bg-white">
-              <div className="d-flex justify-content-between align-items-center mb-3">
-                <div className="d-flex align-items-center gap-2">
+    <>
+      <div className="chat-app-container">
+        {/* === LEFT PANEL: Conversation List === */}
+        <div className={`chat-sidebar ${mobileView === "list" ? "mobile-show" : "mobile-hide"}`}>
+          {/* Sidebar Header */}
+          <div className="chat-sidebar-header">
+            <div className="chat-sidebar-title-row">
+              <div className="chat-sidebar-title">
+                <MessageSquare size={22} className="chat-icon-accent" />
+                <div>
+                  <h2>Chats</h2>
+                  <span className="chat-count">{conversations.length} conversations</span>
+                </div>
+              </div>
+              <div className="chat-sidebar-actions">
+                <button className="chat-icon-btn" title="New Direct Message" onClick={openDirectModal}>
+                  <PlusCircle size={20} />
+                </button>
+                <button className="chat-icon-btn accent" title="Create Group Chat" onClick={openGroupModal}>
+                  <Users size={20} />
+                </button>
+              </div>
+            </div>
+
+            {/* Search */}
+            <div className="chat-search-box">
+              <Search size={16} className="chat-search-icon" />
+              <input
+                type="text"
+                placeholder="Search conversations..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              {searchQuery && (
+                <button className="chat-search-clear" onClick={() => setSearchQuery("")}>
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Conversation List */}
+          <div className="chat-conv-list">
+            {loadingConversations ? (
+              <div className="chat-empty-state">
+                <Spinner animation="border" variant="primary" size="sm" />
+                <p>Loading chats...</p>
+              </div>
+            ) : filteredConversations.length === 0 ? (
+              <div className="chat-empty-state">
+                <div className="chat-empty-icon">
+                  <MessageSquare size={28} />
+                </div>
+                <h6>No conversations yet</h6>
+                <p>Start a new chat with your team</p>
+                <Button variant="outline-primary" size="sm" className="rounded-pill px-3" onClick={openDirectModal}>
+                  Start Chat
+                </Button>
+              </div>
+            ) : (
+              filteredConversations.map((conv) => {
+                const isActive = activeConversation?.id === conv.id;
+                const avatarBg = getAvatarColor(conv.display_name || "Chat");
+                return (
                   <div
-                    className="rounded-3 p-2 d-flex align-items-center justify-content-center text-white"
-                    style={{ backgroundColor: "#4f46e5", width: "36px", height: "36px" }}
+                    key={conv.id}
+                    onClick={() => selectConversation(conv)}
+                    className={`chat-conv-item ${isActive ? "active" : ""}`}
                   >
-                    <MessageSquare size={20} />
+                    <div className="chat-conv-avatar-wrap">
+                      <div
+                        className="chat-conv-avatar"
+                        style={{ backgroundColor: avatarBg }}
+                      >
+                        {conv.type === "GROUP" ? (
+                          <Users size={18} />
+                        ) : (
+                          (conv.display_name || "U")[0].toUpperCase()
+                        )}
+                      </div>
+                      {conv.type === "DIRECT" && (
+                        <span className="chat-online-dot" />
+                      )}
+                    </div>
+
+                    <div className="chat-conv-info">
+                      <div className="chat-conv-top">
+                        <span className="chat-conv-name">{conv.display_name}</span>
+                        <span className="chat-conv-time">
+                          {conv.last_message ? formatSidebarTime(conv.last_message.created_at) : ""}
+                        </span>
+                      </div>
+                      <div className="chat-conv-bottom">
+                        <span className="chat-conv-preview">
+                          {conv.last_message ? (
+                            conv.last_message.content || `[${conv.last_message.message_type}]`
+                          ) : (
+                            <em>No messages yet</em>
+                          )}
+                        </span>
+                        {conv.unread_count > 0 && (
+                          <span className="chat-unread-badge">{conv.unread_count}</span>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <h5 className="fw-bold mb-0 text-dark" style={{ fontSize: "17px" }}>
-                      Messages
-                    </h5>
-                    <small className="text-muted" style={{ fontSize: "11px" }}>
-                      {conversations.length} Conversations
-                    </small>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        {/* === RIGHT PANEL: Chat Area === */}
+        <div className={`chat-main ${mobileView === "chat" ? "mobile-show" : "mobile-hide"}`}>
+          {activeConversation ? (
+            <>
+              {/* Chat Header */}
+              <div className="chat-header">
+                <div className="chat-header-left">
+                  <button
+                    className="chat-back-btn"
+                    onClick={() => setMobileView("list")}
+                  >
+                    <ArrowLeft size={20} />
+                  </button>
+
+                  <div
+                    className="chat-header-avatar"
+                    style={{ backgroundColor: getAvatarColor(activeConversation.display_name || "Chat") }}
+                  >
+                    {activeConversation.type === "GROUP" ? (
+                      <Users size={18} />
+                    ) : (
+                      (activeConversation.display_name || "C")[0].toUpperCase()
+                    )}
+                  </div>
+
+                  <div className="chat-header-info">
+                    <h3>{activeConversation.display_name}</h3>
+                    <span className="chat-header-meta">
+                      {activeConversation.type === "GROUP"
+                        ? `${activeConversation.members.length} members`
+                        : "Online"}
+                    </span>
                   </div>
                 </div>
 
-                <div className="d-flex gap-2">
-                  <Button
-                    variant="light"
-                    size="sm"
-                    className="rounded-circle p-2 border"
-                    title="New Direct Message"
-                    onClick={openDirectModal}
-                  >
-                    <PlusCircle size={18} className="text-primary" />
-                  </Button>
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    className="rounded-circle p-2 d-flex align-items-center justify-content-center border-0"
-                    style={{ backgroundColor: "#4f46e5" }}
-                    title="Create Group Chat"
-                    onClick={openGroupModal}
-                  >
-                    <Users size={18} />
-                  </Button>
+                <div className="chat-header-right">
+                  <Dropdown align="end">
+                    <Dropdown.Toggle variant="light" size="sm" className="chat-icon-btn no-caret border-0">
+                      <MoreVertical size={18} />
+                    </Dropdown.Toggle>
+                    <Dropdown.Menu className="shadow-sm border rounded-3">
+                      <Dropdown.Item onClick={() => selectConversation(activeConversation)}>
+                        Refresh Messages
+                      </Dropdown.Item>
+                      <Dropdown.Item onClick={() => setMobileView("list")}>
+                        Back to Conversations
+                      </Dropdown.Item>
+                    </Dropdown.Menu>
+                  </Dropdown>
                 </div>
               </div>
 
-              {/* Search Box */}
-              <InputGroup className="bg-light rounded-3 border">
-                <InputGroup.Text className="bg-transparent border-0 pe-1">
-                  <Search size={15} className="text-muted" />
-                </InputGroup.Text>
-                <Form.Control
-                  placeholder="Search chats..."
-                  className="bg-transparent border-0 shadow-none text-dark"
-                  style={{ fontSize: "13px" }}
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-                {searchQuery && (
-                  <Button variant="link" className="text-muted p-1 border-0 pe-2" onClick={() => setSearchQuery("")}>
-                    <X size={14} />
-                  </Button>
-                )}
-              </InputGroup>
-            </div>
-
-            {/* Conversation List */}
-            <div className="flex-grow-1 overflow-auto p-2">
-              {loadingConversations ? (
-                <div className="text-center py-5">
-                  <Spinner animation="border" variant="primary" size="sm" />
-                  <p className="text-muted small mt-2">Loading chats...</p>
-                </div>
-              ) : filteredConversations.length === 0 ? (
-                <div className="text-center py-5 px-3">
-                  <div className="rounded-circle bg-light d-inline-flex p-3 mb-2 text-muted">
-                    <MessageSquare size={26} />
+              {/* Messages Area */}
+              <div className="chat-messages-area">
+                {loadingMessages ? (
+                  <div className="chat-empty-state">
+                    <Spinner animation="border" variant="primary" />
+                    <p>Loading messages...</p>
                   </div>
-                  <p className="fw-semibold text-dark mb-1">No chats found</p>
-                  <p className="text-muted small mb-3">Start messaging employees or team members!</p>
-                  <Button variant="outline-primary" size="sm" className="rounded-pill px-3" onClick={openDirectModal}>
-                    Start Chat
-                  </Button>
-                </div>
-              ) : (
-                filteredConversations.map((conv) => {
-                  const isActive = activeConversation?.id === conv.id;
-                  const avatarBg = getAvatarColor(conv.display_name || "Chat");
-                  return (
-                    <div
-                      key={conv.id}
-                      onClick={() => selectConversation(conv)}
-                      className={`p-3 mb-2 rounded-3 d-flex align-items-center gap-3 border ${
-                        isActive
-                          ? "bg-primary-subtle border-primary text-primary"
-                          : "bg-white border-light text-dark"
-                      }`}
-                      style={{
-                        cursor: "pointer",
-                        borderLeft: isActive ? "4px solid #4f46e5" : "1px solid #e2e8f0",
-                      }}
-                    >
-                      {/* Avatar Icon */}
-                      <div className="position-relative">
-                        <div
-                          className="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold"
-                          style={{
-                            width: "42px",
-                            height: "42px",
-                            fontSize: "15px",
-                            backgroundColor: avatarBg,
-                          }}
-                        >
-                          {conv.type === "GROUP" ? (
-                            <Users size={20} />
-                          ) : (
-                            (conv.display_name || "U")[0].toUpperCase()
-                          )}
-                        </div>
-                        {conv.type === "DIRECT" && (
-                          <span
-                            className="position-absolute bottom-0 end-0 rounded-circle border border-white"
-                            style={{ width: "10px", height: "10px", backgroundColor: "#22c55e" }}
-                          />
-                        )}
-                      </div>
-
-                      {/* Content Info */}
-                      <div className="flex-grow-1 min-w-0">
-                        <div className="d-flex justify-content-between align-items-center mb-1">
-                          <h6
-                            className={`mb-0 text-truncate fw-bold ${isActive ? "text-primary" : "text-dark"}`}
-                            style={{ fontSize: "14px" }}
-                          >
-                            {conv.display_name}
-                          </h6>
-                          <small className="text-muted ms-2" style={{ fontSize: "10px" }}>
-                            {conv.last_message ? formatMessageTime(conv.last_message.created_at) : ""}
-                          </small>
-                        </div>
-                        <div className="d-flex justify-content-between align-items-center">
-                          <p className="mb-0 text-truncate text-muted small" style={{ fontSize: "12px", maxWidth: "160px" }}>
-                            {conv.last_message ? (
-                              conv.last_message.content || `[${conv.last_message.message_type}]`
-                            ) : (
-                              <em className="text-muted">No messages yet</em>
-                            )}
-                          </p>
-                          {conv.unread_count > 0 && (
-                            <Badge
-                              bg="danger"
-                              pill
-                              className="px-2 py-1"
-                              style={{ fontSize: "10px" }}
-                            >
-                              {conv.unread_count}
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
+                ) : messages.length === 0 ? (
+                  <div className="chat-empty-state" style={{ marginTop: "auto", marginBottom: "auto" }}>
+                    <div className="chat-empty-icon accent">
+                      <Sparkles size={32} />
                     </div>
-                  );
-                })
-              )}
-            </div>
-          </Col>
+                    <h6>No messages yet</h6>
+                    <p>Send a message to start the conversation with {activeConversation.display_name}</p>
+                  </div>
+                ) : (
+                  renderMessagesWithDateSeparators()
+                )}
 
-          {/* RIGHT VIEW: Chat Conversation Area */}
-          <Col
-            md={8}
-            lg={8.5}
-            className={`d-flex flex-column h-100 bg-white ${
-              !showMobileSidebar ? "d-flex col-12" : "d-none d-md-flex"
-            }`}
-          >
-            {activeConversation ? (
-              <>
-                {/* Chat Header */}
-                <div className="p-3 border-bottom d-flex align-items-center justify-content-between bg-white">
-                  <div className="d-flex align-items-center gap-3">
-                    {/* Mobile Back Button */}
-                    <Button
-                      variant="light"
-                      size="sm"
-                      className="d-md-none rounded-circle p-2 me-1 border"
-                      onClick={() => setShowMobileSidebar(true)}
-                    >
-                      <ArrowLeft size={18} />
-                    </Button>
+                {/* Typing Indicator */}
+                {typingUser && (
+                  <div className="chat-typing-indicator">
+                    <div className="chat-typing-dots">
+                      <span /><span /><span />
+                    </div>
+                    <span>{typingUser} is typing...</span>
+                  </div>
+                )}
 
-                    <div
-                      className="rounded-circle text-white fw-bold d-flex align-items-center justify-content-center"
-                      style={{
-                        width: "40px",
-                        height: "40px",
-                        backgroundColor: getAvatarColor(activeConversation.display_name || "Chat"),
-                      }}
-                    >
-                      {activeConversation.type === "GROUP" ? (
-                        <Users size={20} />
+                <div ref={messagesEndRef} />
+              </div>
+
+              {/* File Previews */}
+              {filePreviews.length > 0 && (
+                <div className="chat-file-previews">
+                  {filePreviews.map((file, idx) => (
+                    <div key={idx} className="chat-file-preview-item">
+                      {file.type.startsWith("image/") ? (
+                        <BSImage
+                          src={file.url}
+                          alt="preview"
+                          style={{ width: "40px", height: "40px", objectFit: "cover", borderRadius: "6px" }}
+                        />
+                      ) : file.type.startsWith("video/") ? (
+                        <div className="chat-file-preview-icon video">
+                          <VideoIcon size={16} />
+                        </div>
                       ) : (
-                        (activeConversation.display_name || "C")[0].toUpperCase()
+                        <div className="chat-file-preview-icon doc">
+                          <FileText size={16} />
+                        </div>
                       )}
-                    </div>
-                    <div>
-                      <h6 className="fw-bold mb-0 text-dark" style={{ fontSize: "15px" }}>
-                        {activeConversation.display_name}
-                      </h6>
-                      <div className="d-flex align-items-center gap-2">
-                        <Badge bg={activeConversation.type === "GROUP" ? "info" : "secondary"} style={{ fontSize: "10px" }}>
-                          {activeConversation.type === "GROUP" ? "Group Chat" : "Direct Message"}
-                        </Badge>
-                        <span className="text-muted small" style={{ fontSize: "11px" }}>
-                          {activeConversation.type === "GROUP"
-                            ? `${activeConversation.members.length} Members`
-                            : "Online"}
-                        </span>
+                      <div className="chat-file-preview-info">
+                        <span className="chat-file-preview-name">{file.name}</span>
+                        <small>{file.size}</small>
                       </div>
+                      <button className="chat-file-preview-remove" onClick={() => removeFile(idx)}>
+                        <X size={14} />
+                      </button>
                     </div>
-                  </div>
-
-                  <div className="d-flex align-items-center gap-2">
-                    <Dropdown align="end">
-                      <Dropdown.Toggle variant="light" size="sm" className="rounded-circle p-2 border-0 no-caret">
-                        <MoreVertical size={18} className="text-muted" />
-                      </Dropdown.Toggle>
-                      <Dropdown.Menu className="shadow-sm border rounded-3">
-                        <Dropdown.Item onClick={() => selectConversation(activeConversation)}>
-                          Refresh Messages
-                        </Dropdown.Item>
-                        <Dropdown.Item onClick={() => setShowMobileSidebar(true)}>
-                          Back to Conversations
-                        </Dropdown.Item>
-                      </Dropdown.Menu>
-                    </Dropdown>
-                  </div>
+                  ))}
                 </div>
+              )}
 
-                {/* Messages Feed */}
-                <div
-                  className="flex-grow-1 overflow-auto p-3 p-md-4"
-                  style={{ backgroundColor: "#f8fafc" }}
+              {/* Message Input */}
+              <div className="chat-input-area">
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  className="d-none"
+                  multiple
+                  accept="image/*,video/*,.pdf,.doc,.docx"
+                  onChange={handleFileSelect}
+                />
+
+                <button
+                  className="chat-input-icon-btn"
+                  onClick={() => fileInputRef.current?.click()}
+                  title="Attach file"
                 >
-                  {loadingMessages ? (
-                    <div className="text-center py-5">
-                      <Spinner animation="border" variant="primary" />
-                      <p className="text-muted small mt-2">Loading messages...</p>
-                    </div>
-                  ) : messages.length === 0 ? (
-                    <div className="text-center py-5 my-5">
-                      <div className="rounded-circle bg-white shadow-sm p-3 d-inline-flex mb-3 text-primary border">
-                        <Sparkles size={32} />
-                      </div>
-                      <h6 className="fw-bold text-dark mb-1">No messages yet</h6>
-                      <p className="text-muted small max-w-sm mx-auto">
-                        Type a message below to start chatting with {activeConversation.display_name}!
-                      </p>
-                    </div>
-                  ) : (
-                    messages.map((msg) => {
-                      const isMe = String(msg.sender?.id) === String(currentUserId);
-                      return (
-                        <div
-                          key={msg.id}
-                          className={`d-flex mb-3 ${isMe ? "justify-content-end" : "justify-content-start"}`}
-                        >
-                          <div
-                            className="p-3 rounded-3 shadow-xs"
-                            style={{
-                              maxWidth: "75%",
-                              minWidth: "130px",
-                              backgroundColor: isMe ? "#4f46e5" : "#ffffff",
-                              color: isMe ? "#ffffff" : "#1e293b",
-                              border: isMe ? "none" : "1px solid #e2e8f0",
-                            }}
-                          >
-                            {!isMe && (
-                              <div className="mb-1 pb-1 border-bottom">
-                                <small className="fw-bold text-primary" style={{ fontSize: "11px" }}>
-                                  {msg.sender?.name || msg.sender?.email}
-                                </small>
-                              </div>
-                            )}
+                  <Paperclip size={20} />
+                </button>
 
-                            {/* Text Content */}
-                            {msg.content && (
-                              <p
-                                className="mb-1 text-break"
-                                style={{ fontSize: "14px", lineHeight: "1.45", whiteSpace: "pre-wrap" }}
-                              >
-                                {msg.content}
-                              </p>
-                            )}
-
-                            {/* Attachments */}
-                            {msg.attachments && msg.attachments.length > 0 && (
-                              <div className="mt-2 d-flex flex-column gap-2">
-                                {msg.attachments.map((att) => {
-                                  const isImg = att.file_type?.startsWith("image/");
-                                  const isVid = att.file_type?.startsWith("video/");
-
-                                  if (isImg) {
-                                    return (
-                                      <div key={att.id} className="rounded-2 overflow-hidden border">
-                                        <BSImage
-                                          src={att.file_url}
-                                          alt="attachment"
-                                          className="w-100 cursor-pointer"
-                                          style={{ maxHeight: "240px", objectFit: "cover" }}
-                                          onClick={() => setPreviewMediaUrl(att.file_url)}
-                                        />
-                                      </div>
-                                    );
-                                  }
-
-                                  if (isVid) {
-                                    return (
-                                      <div key={att.id} className="rounded-2 overflow-hidden border">
-                                        <video controls className="w-100" style={{ maxHeight: "260px" }}>
-                                          <source src={att.file_url} type={att.file_type || "video/mp4"} />
-                                        </video>
-                                      </div>
-                                    );
-                                  }
-
-                                  return (
-                                    <a
-                                      key={att.id}
-                                      href={att.file_url}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      className={`d-flex align-items-center gap-2 p-2 rounded-2 text-decoration-none ${
-                                        isMe ? "bg-white text-dark" : "bg-light text-dark border"
-                                      }`}
-                                    >
-                                      <FileText size={18} />
-                                      <div className="flex-grow-1 min-w-0">
-                                        <span className="small d-block text-truncate fw-semibold">
-                                          Attachment File
-                                        </span>
-                                        <small className="text-muted" style={{ fontSize: "10px" }}>
-                                          {(att.file_size / (1024 * 1024)).toFixed(2)} MB
-                                        </small>
-                                      </div>
-                                    </a>
-                                  );
-                                })}
-                              </div>
-                            )}
-
-                            {/* Timestamp */}
-                            <div className="d-flex justify-content-end align-items-center gap-1 mt-1">
-                              <span
-                                className={`small ${isMe ? "text-white-50" : "text-muted"}`}
-                                style={{ fontSize: "10px" }}
-                              >
-                                {formatMessageTime(msg.created_at)}
-                              </span>
-                              {isMe && <CheckCheck size={14} className="text-white-50" />}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-
-                  {/* Typing Indicator */}
-                  {typingUser && (
-                    <div className="d-flex align-items-center gap-2 text-muted small fst-italic py-1 px-3 bg-white rounded-pill border d-inline-flex mb-2">
-                      <Spinner animation="grow" size="sm" variant="primary" />
-                      <span>{typingUser} is typing...</span>
-                    </div>
-                  )}
-
-                  <div ref={messagesEndRef} />
+                <div className="chat-input-wrapper">
+                  <textarea
+                    ref={inputRef}
+                    placeholder="Type a message..."
+                    value={inputContent}
+                    onChange={(e) => setInputContent(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    disabled={sending}
+                    rows={1}
+                  />
                 </div>
 
-                {/* File Previews Bar */}
-                {filePreviews.length > 0 && (
-                  <div className="px-3 pt-2 pb-2 bg-light border-top d-flex gap-2 flex-wrap">
-                    {filePreviews.map((file, idx) => (
-                      <div key={idx} className="position-relative bg-white p-2 rounded-3 border d-flex align-items-center gap-2">
-                        {file.type.startsWith("image/") ? (
-                          <BSImage
-                            src={file.url}
-                            alt="preview"
-                            style={{ width: "40px", height: "40px", objectFit: "cover" }}
-                            className="rounded-2"
-                          />
-                        ) : file.type.startsWith("video/") ? (
-                          <div className="d-flex align-items-center justify-content-center bg-dark text-white rounded-2" style={{ width: "40px", height: "40px" }}>
-                            <VideoIcon size={18} />
-                          </div>
-                        ) : (
-                          <div className="d-flex align-items-center justify-content-center bg-light text-primary rounded-2 border" style={{ width: "40px", height: "40px" }}>
-                            <FileText size={18} />
-                          </div>
-                        )}
-
-                        <div className="min-w-0" style={{ maxWidth: "120px" }}>
-                          <p className="mb-0 small fw-semibold text-truncate" style={{ fontSize: "11px" }}>
-                            {file.name}
-                          </p>
-                          <small className="text-muted" style={{ fontSize: "9px" }}>
-                            {file.size}
-                          </small>
-                        </div>
-
-                        <Button
-                          variant="danger"
-                          size="sm"
-                          className="rounded-circle p-0 ms-1 d-flex align-items-center justify-content-center"
-                          style={{ width: "18px", height: "18px" }}
-                          onClick={() => removeFile(idx)}
-                        >
-                          <X size={12} />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Message Input Box */}
-                <div className="p-3 border-top bg-white">
-                  <Form onSubmit={handleSendMessage}>
-                    <InputGroup className="bg-light rounded-pill p-1 border">
-                      <input
-                        type="file"
-                        ref={fileInputRef}
-                        className="d-none"
-                        multiple
-                        accept="image/*,video/*,.pdf,.doc,.docx"
-                        onChange={handleFileSelect}
-                      />
-                      <Button
-                        variant="light"
-                        className="rounded-circle border-0 p-2 text-muted"
-                        onClick={() => fileInputRef.current?.click()}
-                        title="Attach Image, Video, or File"
-                      >
-                        <Paperclip size={19} />
-                      </Button>
-
-                      <Form.Control
-                        placeholder="Type a message..."
-                        className="bg-transparent border-0 shadow-none text-dark px-2"
-                        style={{ fontSize: "14px" }}
-                        value={inputContent}
-                        onChange={(e) => setInputContent(e.target.value)}
-                        disabled={sending}
-                      />
-
-                      <Button
-                        variant="primary"
-                        type="submit"
-                        disabled={sending || (!inputContent.trim() && selectedFiles.length === 0)}
-                        className="rounded-circle p-2 d-flex align-items-center justify-content-center border-0"
-                        style={{
-                          width: "38px",
-                          height: "38px",
-                          backgroundColor: "#4f46e5",
-                        }}
-                      >
-                        {sending ? <Spinner animation="border" size="sm" /> : <Send size={17} />}
-                      </Button>
-                    </InputGroup>
-                  </Form>
-                </div>
-              </>
-            ) : (
-              <div className="d-flex flex-column align-items-center justify-content-center h-100 text-muted p-4">
-                <div
-                  className="rounded-circle p-4 mb-3 d-flex align-items-center justify-content-center text-primary border bg-light"
+                <button
+                  className={`chat-send-btn ${(inputContent.trim() || selectedFiles.length > 0) ? "active" : ""}`}
+                  onClick={() => handleSendMessage()}
+                  disabled={sending || (!inputContent.trim() && selectedFiles.length === 0)}
                 >
-                  <MessageSquare size={44} />
+                  {sending ? <Spinner animation="border" size="sm" /> : <Send size={18} />}
+                </button>
+              </div>
+            </>
+          ) : (
+            /* No conversation selected placeholder */
+            <div className="chat-no-selection">
+              <div className="chat-no-selection-content">
+                <div className="chat-empty-icon large">
+                  <MessageSquare size={48} />
                 </div>
-                <h5 className="fw-bold text-dark mb-1">Your Chat Space</h5>
-                <p className="text-muted small text-center max-w-sm mb-4">
-                  Select a conversation from the sidebar or start a new chat with your team.
-                </p>
+                <h4>Welcome to Chat</h4>
+                <p>Select a conversation or start a new one to begin messaging your team.</p>
                 <Button
                   variant="primary"
-                  className="rounded-pill px-4 border-0"
-                  style={{ backgroundColor: "#4f46e5" }}
+                  className="rounded-pill px-4 border-0 mt-2"
+                  style={{ backgroundColor: "#6366f1" }}
                   onClick={openDirectModal}
                 >
                   <PlusCircle size={18} className="me-2" /> Start New Chat
                 </Button>
               </div>
-            )}
-          </Col>
-        </Row>
-      </Card>
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* NEW DIRECT CHAT MODAL */}
-      <Modal show={showDirectModal} onHide={() => setShowDirectModal(false)} centered className="rounded-3">
+      <Modal show={showDirectModal} onHide={() => setShowDirectModal(false)} centered>
         <Modal.Header closeButton className="border-bottom-0 pb-0">
           <Modal.Title className="h6 fw-bold text-dark d-flex align-items-center gap-2">
             <UserCheck size={20} className="text-primary" /> New Direct Message
@@ -913,7 +874,7 @@ export default function ChatPage() {
       </Modal>
 
       {/* NEW GROUP CHAT MODAL */}
-      <Modal show={showGroupModal} onHide={() => setShowGroupModal(false)} centered className="rounded-3">
+      <Modal show={showGroupModal} onHide={() => setShowGroupModal(false)} centered>
         <Modal.Header closeButton className="border-bottom-0 pb-0">
           <Modal.Title className="h6 fw-bold text-dark d-flex align-items-center gap-2">
             <Users size={20} className="text-primary" /> Create Group Chat
@@ -953,7 +914,7 @@ export default function ChatPage() {
                   key={m.id}
                   bg="primary"
                   className="d-flex align-items-center gap-1 px-3 py-2 rounded-pill"
-                  style={{ backgroundColor: "#4f46e5" }}
+                  style={{ backgroundColor: "#6366f1" }}
                 >
                   {m.name || m.email}
                   <X
@@ -1026,7 +987,7 @@ export default function ChatPage() {
             variant="primary"
             size="sm"
             className="rounded-pill px-4 border-0"
-            style={{ backgroundColor: "#4f46e5" }}
+            style={{ backgroundColor: "#6366f1" }}
             disabled={!groupName.trim() || selectedGroupMembers.length === 0}
             onClick={handleCreateGroup}
           >
@@ -1050,6 +1011,846 @@ export default function ChatPage() {
           )}
         </Modal.Body>
       </Modal>
-    </Container>
+
+      {/* === SCOPED STYLES === */}
+      <style jsx global>{`
+        /* ===== CHAT APP LAYOUT ===== */
+        .chat-app-container {
+          display: flex;
+          height: calc(100vh - 110px);
+          min-height: 500px;
+          background: #fff;
+          border-radius: 12px;
+          overflow: hidden;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 6px 16px rgba(0,0,0,0.04);
+          border: 1px solid #e5e7eb;
+        }
+
+        /* ===== SIDEBAR ===== */
+        .chat-sidebar {
+          width: 340px;
+          min-width: 340px;
+          max-width: 340px;
+          display: flex;
+          flex-direction: column;
+          border-right: 1px solid #e5e7eb;
+          background: #fff;
+          transition: transform 0.25s ease;
+        }
+
+        .chat-sidebar-header {
+          padding: 16px;
+          border-bottom: 1px solid #f1f5f9;
+        }
+
+        .chat-sidebar-title-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: 12px;
+        }
+
+        .chat-sidebar-title {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
+
+        .chat-sidebar-title h2 {
+          margin: 0;
+          font-size: 18px;
+          font-weight: 700;
+          color: #1e293b;
+          line-height: 1.2;
+        }
+
+        .chat-count {
+          font-size: 11px;
+          color: #94a3b8;
+          font-weight: 500;
+        }
+
+        .chat-icon-accent {
+          color: #6366f1;
+        }
+
+        .chat-sidebar-actions {
+          display: flex;
+          gap: 6px;
+        }
+
+        .chat-icon-btn {
+          width: 34px;
+          height: 34px;
+          border-radius: 8px;
+          border: 1px solid #e5e7eb;
+          background: #fff;
+          color: #64748b;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.15s ease;
+        }
+
+        .chat-icon-btn:hover {
+          background: #f1f5f9;
+          color: #6366f1;
+          border-color: #c7d2fe;
+        }
+
+        .chat-icon-btn.accent {
+          background: #6366f1;
+          color: white;
+          border-color: #6366f1;
+        }
+
+        .chat-icon-btn.accent:hover {
+          background: #4f46e5;
+        }
+
+        /* Search box */
+        .chat-search-box {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          background: #f8fafc;
+          border: 1px solid #e5e7eb;
+          border-radius: 8px;
+          padding: 8px 12px;
+        }
+
+        .chat-search-box input {
+          flex: 1;
+          border: none;
+          background: transparent;
+          outline: none;
+          font-size: 13px;
+          color: #1e293b;
+        }
+
+        .chat-search-box input::placeholder {
+          color: #94a3b8;
+        }
+
+        .chat-search-icon {
+          color: #94a3b8;
+          flex-shrink: 0;
+        }
+
+        .chat-search-clear {
+          background: none;
+          border: none;
+          color: #94a3b8;
+          cursor: pointer;
+          padding: 0;
+          display: flex;
+        }
+
+        /* Conversation list */
+        .chat-conv-list {
+          flex: 1;
+          overflow-y: auto;
+          padding: 8px;
+        }
+
+        .chat-conv-item {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 10px 12px;
+          border-radius: 10px;
+          cursor: pointer;
+          transition: all 0.15s ease;
+          margin-bottom: 2px;
+        }
+
+        .chat-conv-item:hover {
+          background: #f8fafc;
+        }
+
+        .chat-conv-item.active {
+          background: #eef2ff;
+        }
+
+        .chat-conv-avatar-wrap {
+          position: relative;
+          flex-shrink: 0;
+        }
+
+        .chat-conv-avatar {
+          width: 44px;
+          height: 44px;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: #fff;
+          font-weight: 700;
+          font-size: 15px;
+        }
+
+        .chat-online-dot {
+          position: absolute;
+          bottom: 1px;
+          right: 1px;
+          width: 10px;
+          height: 10px;
+          background: #22c55e;
+          border: 2px solid #fff;
+          border-radius: 50%;
+        }
+
+        .chat-conv-info {
+          flex: 1;
+          min-width: 0;
+        }
+
+        .chat-conv-top {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 3px;
+        }
+
+        .chat-conv-name {
+          font-size: 13.5px;
+          font-weight: 600;
+          color: #1e293b;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .chat-conv-item.active .chat-conv-name {
+          color: #4338ca;
+        }
+
+        .chat-conv-time {
+          font-size: 10.5px;
+          color: #94a3b8;
+          white-space: nowrap;
+          margin-left: 8px;
+          flex-shrink: 0;
+        }
+
+        .chat-conv-bottom {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        }
+
+        .chat-conv-preview {
+          font-size: 12px;
+          color: #94a3b8;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .chat-unread-badge {
+          background: #ef4444;
+          color: white;
+          font-size: 10px;
+          font-weight: 700;
+          min-width: 18px;
+          height: 18px;
+          border-radius: 9px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 0 5px;
+          flex-shrink: 0;
+          margin-left: 6px;
+        }
+
+        /* ===== CHAT MAIN AREA ===== */
+        .chat-main {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          min-width: 0;
+          background: #fff;
+        }
+
+        /* Chat header */
+        .chat-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 12px 16px;
+          border-bottom: 1px solid #f1f5f9;
+          background: #fff;
+          min-height: 64px;
+        }
+
+        .chat-header-left {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          min-width: 0;
+        }
+
+        .chat-back-btn {
+          display: none;
+          width: 36px;
+          height: 36px;
+          border-radius: 50%;
+          border: 1px solid #e5e7eb;
+          background: #fff;
+          color: #475569;
+          cursor: pointer;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+        }
+
+        .chat-header-avatar {
+          width: 40px;
+          height: 40px;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: #fff;
+          font-weight: 700;
+          font-size: 15px;
+          flex-shrink: 0;
+        }
+
+        .chat-header-info h3 {
+          margin: 0;
+          font-size: 15px;
+          font-weight: 700;
+          color: #1e293b;
+          line-height: 1.3;
+        }
+
+        .chat-header-meta {
+          font-size: 11.5px;
+          color: #94a3b8;
+          font-weight: 500;
+        }
+
+        .chat-header-right {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+
+        /* Messages area */
+        .chat-messages-area {
+          flex: 1;
+          overflow-y: auto;
+          padding: 16px 20px;
+          background: #f8fafc;
+          display: flex;
+          flex-direction: column;
+        }
+
+        /* Date separator */
+        .chat-date-separator {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 12px 0;
+        }
+
+        .chat-date-separator span {
+          background: #e2e8f0;
+          color: #64748b;
+          font-size: 11px;
+          font-weight: 600;
+          padding: 4px 12px;
+          border-radius: 12px;
+          letter-spacing: 0.02em;
+        }
+
+        /* Message rows */
+        .chat-message-row {
+          display: flex;
+          margin-bottom: 6px;
+          align-items: flex-end;
+          gap: 8px;
+        }
+
+        .chat-message-row.sent {
+          justify-content: flex-end;
+        }
+
+        .chat-message-row.received {
+          justify-content: flex-start;
+        }
+
+        .chat-msg-avatar {
+          width: 30px;
+          height: 30px;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: white;
+          font-weight: 700;
+          font-size: 12px;
+          flex-shrink: 0;
+        }
+
+        /* Bubbles */
+        .chat-bubble {
+          max-width: 65%;
+          min-width: 100px;
+          padding: 10px 14px;
+          border-radius: 16px;
+          position: relative;
+          word-wrap: break-word;
+        }
+
+        .bubble-sent {
+          background: #6366f1;
+          color: #fff;
+          border-bottom-right-radius: 4px;
+        }
+
+        .bubble-received {
+          background: #fff;
+          color: #1e293b;
+          border: 1px solid #e5e7eb;
+          border-bottom-left-radius: 4px;
+        }
+
+        .chat-sender-name {
+          font-size: 11px;
+          font-weight: 700;
+          color: #6366f1;
+          margin-bottom: 4px;
+        }
+
+        .chat-text {
+          margin: 0;
+          font-size: 13.5px;
+          line-height: 1.45;
+          white-space: pre-wrap;
+          word-break: break-word;
+        }
+
+        .chat-attachments {
+          margin-top: 8px;
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+
+        .chat-att-file {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 8px 10px;
+          border-radius: 8px;
+          text-decoration: none;
+          font-size: 12px;
+          transition: opacity 0.15s;
+        }
+
+        .bubble-sent .chat-att-file {
+          background: rgba(255,255,255,0.15);
+          color: #fff;
+        }
+
+        .bubble-received .chat-att-file {
+          background: #f1f5f9;
+          color: #1e293b;
+        }
+
+        .chat-att-file-info {
+          display: flex;
+          flex-direction: column;
+          min-width: 0;
+        }
+
+        .chat-att-file-name {
+          font-weight: 600;
+          font-size: 12px;
+        }
+
+        .chat-meta {
+          display: flex;
+          align-items: center;
+          justify-content: flex-end;
+          gap: 4px;
+          margin-top: 4px;
+        }
+
+        .chat-time {
+          font-size: 10px;
+          opacity: 0.65;
+        }
+
+        .bubble-sent .chat-read-icon {
+          opacity: 0.65;
+        }
+
+        /* Typing indicator */
+        .chat-typing-indicator {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 12px;
+          color: #94a3b8;
+          font-style: italic;
+          padding: 6px 0;
+        }
+
+        .chat-typing-dots {
+          display: flex;
+          gap: 3px;
+        }
+
+        .chat-typing-dots span {
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: #6366f1;
+          animation: typingBounce 1.4s infinite both;
+        }
+
+        .chat-typing-dots span:nth-child(2) { animation-delay: 0.16s; }
+        .chat-typing-dots span:nth-child(3) { animation-delay: 0.32s; }
+
+        @keyframes typingBounce {
+          0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+          40% { transform: scale(1); opacity: 1; }
+        }
+
+        /* File previews bar */
+        .chat-file-previews {
+          display: flex;
+          gap: 8px;
+          flex-wrap: wrap;
+          padding: 10px 16px;
+          background: #f8fafc;
+          border-top: 1px solid #f1f5f9;
+        }
+
+        .chat-file-preview-item {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          background: #fff;
+          border: 1px solid #e5e7eb;
+          border-radius: 8px;
+          padding: 6px 10px;
+        }
+
+        .chat-file-preview-icon {
+          width: 36px;
+          height: 36px;
+          border-radius: 6px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .chat-file-preview-icon.video {
+          background: #1e293b;
+          color: #fff;
+        }
+
+        .chat-file-preview-icon.doc {
+          background: #eff6ff;
+          color: #3b82f6;
+        }
+
+        .chat-file-preview-info {
+          display: flex;
+          flex-direction: column;
+          max-width: 100px;
+        }
+
+        .chat-file-preview-name {
+          font-size: 11px;
+          font-weight: 600;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          color: #1e293b;
+        }
+
+        .chat-file-preview-info small {
+          font-size: 9px;
+          color: #94a3b8;
+        }
+
+        .chat-file-preview-remove {
+          width: 20px;
+          height: 20px;
+          border-radius: 50%;
+          border: none;
+          background: #fee2e2;
+          color: #ef4444;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          margin-left: 4px;
+        }
+
+        /* Input area */
+        .chat-input-area {
+          display: flex;
+          align-items: flex-end;
+          gap: 8px;
+          padding: 12px 16px;
+          border-top: 1px solid #f1f5f9;
+          background: #fff;
+        }
+
+        .chat-input-icon-btn {
+          width: 38px;
+          height: 38px;
+          border-radius: 50%;
+          border: none;
+          background: #f1f5f9;
+          color: #64748b;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+          transition: all 0.15s;
+        }
+
+        .chat-input-icon-btn:hover {
+          background: #e2e8f0;
+          color: #6366f1;
+        }
+
+        .chat-input-wrapper {
+          flex: 1;
+          min-width: 0;
+        }
+
+        .chat-input-wrapper textarea {
+          width: 100%;
+          border: 1px solid #e5e7eb;
+          border-radius: 20px;
+          padding: 9px 16px;
+          font-size: 13.5px;
+          line-height: 1.4;
+          resize: none;
+          outline: none;
+          background: #f8fafc;
+          color: #1e293b;
+          max-height: 120px;
+          transition: border-color 0.15s, background 0.15s;
+        }
+
+        .chat-input-wrapper textarea:focus {
+          border-color: #a5b4fc;
+          background: #fff;
+        }
+
+        .chat-input-wrapper textarea::placeholder {
+          color: #94a3b8;
+        }
+
+        .chat-send-btn {
+          width: 40px;
+          height: 40px;
+          border-radius: 50%;
+          border: none;
+          background: #e2e8f0;
+          color: #94a3b8;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+          transition: all 0.2s ease;
+        }
+
+        .chat-send-btn.active {
+          background: #6366f1;
+          color: #fff;
+          box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+        }
+
+        .chat-send-btn:disabled {
+          cursor: not-allowed;
+          opacity: 0.7;
+        }
+
+        /* No conversation selected */
+        .chat-no-selection {
+          flex: 1;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: #f8fafc;
+        }
+
+        .chat-no-selection-content {
+          text-align: center;
+          max-width: 320px;
+        }
+
+        .chat-no-selection-content h4 {
+          font-weight: 700;
+          color: #1e293b;
+          margin-bottom: 8px;
+        }
+
+        .chat-no-selection-content p {
+          color: #94a3b8;
+          font-size: 13px;
+        }
+
+        /* Empty state */
+        .chat-empty-state {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          padding: 40px 20px;
+          text-align: center;
+        }
+
+        .chat-empty-state h6 {
+          font-weight: 700;
+          color: #1e293b;
+          margin-top: 12px;
+          margin-bottom: 4px;
+        }
+
+        .chat-empty-state p {
+          color: #94a3b8;
+          font-size: 12.5px;
+          margin-bottom: 0;
+        }
+
+        .chat-empty-icon {
+          width: 56px;
+          height: 56px;
+          border-radius: 50%;
+          background: #f1f5f9;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: #94a3b8;
+        }
+
+        .chat-empty-icon.accent {
+          background: #eef2ff;
+          color: #6366f1;
+        }
+
+        .chat-empty-icon.large {
+          width: 72px;
+          height: 72px;
+        }
+
+        /* Dropdown caret fix */
+        .no-caret::after {
+          display: none !important;
+        }
+
+        /* ===== MOBILE RESPONSIVE ===== */
+        @media (max-width: 768px) {
+          .chat-app-container {
+            height: calc(100vh - 80px);
+            min-height: 0;
+            border-radius: 0;
+            border: none;
+            box-shadow: none;
+          }
+
+          .chat-sidebar {
+            width: 100%;
+            min-width: 100%;
+            max-width: 100%;
+            border-right: none;
+            position: absolute;
+            inset: 0;
+            z-index: 10;
+          }
+
+          .chat-main {
+            position: absolute;
+            inset: 0;
+            z-index: 10;
+          }
+
+          /* Toggle visibility on mobile */
+          .mobile-hide {
+            display: none !important;
+          }
+
+          .mobile-show {
+            display: flex !important;
+          }
+
+          .chat-back-btn {
+            display: flex;
+          }
+
+          .chat-bubble {
+            max-width: 82%;
+          }
+
+          .chat-messages-area {
+            padding: 12px 12px;
+          }
+
+          .chat-input-area {
+            padding: 10px 12px;
+          }
+
+          .chat-header {
+            padding: 10px 12px;
+          }
+        }
+
+        /* Tablet */
+        @media (min-width: 769px) and (max-width: 1024px) {
+          .chat-sidebar {
+            width: 280px;
+            min-width: 280px;
+            max-width: 280px;
+          }
+
+          .chat-bubble {
+            max-width: 72%;
+          }
+        }
+
+        /* Fix scrollbar styling */
+        .chat-conv-list::-webkit-scrollbar,
+        .chat-messages-area::-webkit-scrollbar {
+          width: 4px;
+        }
+
+        .chat-conv-list::-webkit-scrollbar-track,
+        .chat-messages-area::-webkit-scrollbar-track {
+          background: transparent;
+        }
+
+        .chat-conv-list::-webkit-scrollbar-thumb,
+        .chat-messages-area::-webkit-scrollbar-thumb {
+          background: #cbd5e1;
+          border-radius: 4px;
+        }
+
+        .chat-conv-list::-webkit-scrollbar-thumb:hover,
+        .chat-messages-area::-webkit-scrollbar-thumb:hover {
+          background: #94a3b8;
+        }
+
+        /* Make chat container relative for mobile abs positioning */
+        @media (max-width: 768px) {
+          .chat-app-container {
+            position: relative;
+          }
+        }
+      `}</style>
+    </>
   );
 }

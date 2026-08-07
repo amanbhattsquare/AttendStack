@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import {
   Form,
   Button,
@@ -27,10 +27,13 @@ import {
   UserCheck,
   User,
   Sparkles,
-  Smile,
-  Phone,
-  Hash,
 } from "lucide-react";
+import {
+  useQuery,
+  useMutation,
+  useQueryClient,
+} from "@tanstack/react-query";
+
 import {
   Conversation,
   Message,
@@ -133,13 +136,9 @@ const getDateLabel = (dateStr: string) => {
 
 export default function ChatPage() {
   const dispatch = useAppDispatch();
+  const queryClient = useQueryClient();
 
-  const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [activeConversation, setActiveConversation] = useState<Conversation | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [loadingConversations, setLoadingConversations] = useState<boolean>(true);
-  const [loadingMessages, setLoadingMessages] = useState<boolean>(false);
-  const [sending, setSending] = useState<boolean>(false);
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
 
   // View state: which panel is visible on mobile
   const [mobileView, setMobileView] = useState<"list" | "chat">("list");
@@ -170,10 +169,10 @@ export default function ChatPage() {
   // Current user ID
   const [currentUserId, setCurrentUserId] = useState<string | number | null>(null);
 
-  const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const wsRef = useRef<any>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Collapse the main sidebar when chat page mounts, restore on unmount
   useEffect(() => {
@@ -196,86 +195,84 @@ export default function ChatPage() {
     } catch (e) {
       console.error("Error reading stored user:", e);
     }
-    loadConversations();
   }, []);
 
-  const openDirectModal = () => {
-    setShowDirectModal(true);
-    setUserQuery("");
-    handleSearchUsers("");
-  };
+  // TanStack Query: Fetch Conversations
+  const {
+    data: conversations = [],
+    isLoading: loadingConversations,
+    refetch: refetchConversations,
+  } = useQuery({
+    queryKey: ["conversations"],
+    queryFn: fetchConversations,
+  });
 
-  const openGroupModal = () => {
-    setShowGroupModal(true);
-    setGroupName("");
-    setSelectedGroupMembers([]);
-    setUserQuery("");
-    handleSearchUsers("");
-  };
-
-  const loadConversations = async () => {
-    setLoadingConversations(true);
-    try {
-      const list = await fetchConversations();
-      setConversations(list);
-      if (list.length > 0 && !activeConversation) {
-        selectConversation(list[0]);
-      }
-    } catch (err) {
-      console.error("Failed to load conversations:", err);
-    } finally {
-      setLoadingConversations(false);
+  // Auto-select first conversation if none active
+  useEffect(() => {
+    if (conversations.length > 0 && !activeConversationId) {
+      setActiveConversationId(conversations[0].id);
     }
-  };
+  }, [conversations, activeConversationId]);
 
-  const selectConversation = async (conv: Conversation) => {
-    setActiveConversation(conv);
-    setMobileView("chat");
-    setLoadingMessages(true);
-    setMessages([]);
-    try {
-      const res = await fetchMessages(conv.id);
-      const sorted = (res.results || []).slice().reverse();
-      setMessages(sorted);
-      markConversationAsRead(conv.id);
+  const activeConversation = useMemo(
+    () => conversations.find((c) => c.id === activeConversationId) || null,
+    [conversations, activeConversationId]
+  );
 
-      setConversations((prev) =>
-        prev.map((c) => (c.id === conv.id ? { ...c, unread_count: 0 } : c))
+  // TanStack Query: Fetch Messages for active conversation
+  const {
+    data: messagesData,
+    isLoading: loadingMessages,
+    refetch: refetchMessages,
+  } = useQuery({
+    queryKey: ["messages", activeConversationId],
+    queryFn: async () => {
+      if (!activeConversationId) return [];
+      const res = await fetchMessages(activeConversationId);
+      markConversationAsRead(activeConversationId);
+      // Reset unread count locally in query cache
+      queryClient.setQueryData<Conversation[]>(["conversations"], (old = []) =>
+        old.map((c) => (c.id === activeConversationId ? { ...c, unread_count: 0 } : c))
       );
-    } catch (err) {
-      console.error("Failed to load messages:", err);
-    } finally {
-      setLoadingMessages(false);
-    }
-  };
+      return (res.results || []).slice().reverse();
+    },
+    enabled: !!activeConversationId,
+  });
 
-  const scrollToBottom = () => {
+  const messages = useMemo(() => messagesData || [], [messagesData]);
+
+  // Scroll to bottom on new messages
+  const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
+  }, []);
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, typingUser]);
+  }, [messages, typingUser, scrollToBottom]);
 
-  // WebSocket connection
+  // WebSocket Connection with query cache mutation
   useEffect(() => {
-    if (!activeConversation) return;
+    if (!activeConversationId) return;
 
     if (wsRef.current) {
       wsRef.current.close();
     }
 
-    const controller = connectChatWebSocket(activeConversation.id, (data) => {
+    const controller = connectChatWebSocket(activeConversationId, (data) => {
       if (data.type === "new_message") {
-        setMessages((prev) => {
-          if (prev.some((m) => m.id === data.message.id)) return prev;
-          return [...prev, data.message];
+        const newMsg: Message = data.message;
+
+        // Append to current messages query cache
+        queryClient.setQueryData<Message[]>(["messages", activeConversationId], (old = []) => {
+          if (old.some((m) => m.id === newMsg.id)) return old;
+          return [...old, newMsg];
         });
 
-        setConversations((prev) =>
-          prev.map((c) =>
-            c.id === activeConversation.id
-              ? { ...c, last_message: data.message, updated_at: new Date().toISOString() }
+        // Update conversation list last_message
+        queryClient.setQueryData<Conversation[]>(["conversations"], (old = []) =>
+          old.map((c) =>
+            c.id === activeConversationId
+              ? { ...c, last_message: newMsg, updated_at: new Date().toISOString() }
               : c
           )
         );
@@ -294,9 +291,48 @@ export default function ChatPage() {
     return () => {
       if (controller) controller.close();
     };
-  }, [activeConversation?.id]);
+  }, [activeConversationId, queryClient]);
 
-  // File handling
+  // Select conversation
+  const selectConversation = (conv: Conversation) => {
+    setActiveConversationId(conv.id);
+    setMobileView("chat");
+  };
+
+  // TanStack Mutation: Send Message
+  const sendMessageMutation = useMutation({
+    mutationFn: async () => {
+      if (!activeConversationId || (!inputContent.trim() && selectedFiles.length === 0)) return;
+      return await sendMessageWithAttachments(
+        activeConversationId,
+        inputContent.trim(),
+        selectedFiles
+      );
+    },
+    onSuccess: (newMsg) => {
+      if (!newMsg || !activeConversationId) return;
+
+      setInputContent("");
+      setSelectedFiles([]);
+      setFilePreviews([]);
+
+      // Update message cache instantly
+      queryClient.setQueryData<Message[]>(["messages", activeConversationId], (old = []) => {
+        if (old.some((m) => m.id === newMsg.id)) return old;
+        return [...old, newMsg];
+      });
+
+      // Update conversations cache
+      queryClient.setQueryData<Conversation[]>(["conversations"], (old = []) =>
+        old.map((c) =>
+          c.id === activeConversationId
+            ? { ...c, last_message: newMsg, updated_at: new Date().toISOString() }
+            : c
+        )
+      );
+    },
+  });
+
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
     const files = Array.from(e.target.files);
@@ -316,43 +352,13 @@ export default function ChatPage() {
     setFilePreviews((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // Send message
-  const handleSendMessage = async (e?: React.FormEvent) => {
+  const handleSendMessage = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!activeConversation || (!inputContent.trim() && selectedFiles.length === 0)) return;
-
-    setSending(true);
-    try {
-      const newMsg = await sendMessageWithAttachments(
-        activeConversation.id,
-        inputContent.trim(),
-        selectedFiles
-      );
-
-      setMessages((prev) => {
-        if (prev.some((m) => m.id === newMsg.id)) return prev;
-        return [...prev, newMsg];
-      });
-
-      setInputContent("");
-      setSelectedFiles([]);
-      setFilePreviews([]);
-
-      setConversations((prev) =>
-        prev.map((c) =>
-          c.id === activeConversation.id
-            ? { ...c, last_message: newMsg, updated_at: new Date().toISOString() }
-            : c
-        )
-      );
-    } catch (err) {
-      console.error("Failed to send message:", err);
-    } finally {
-      setSending(false);
-    }
+    if (!sending) sendMessageMutation.mutate();
   };
 
-  // Handle Enter key (send on Enter, new line on Shift+Enter)
+  const sending = sendMessageMutation.isPending;
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -374,37 +380,54 @@ export default function ChatPage() {
     }
   };
 
-  const startDirectChatWithUser = async (user: UserMinimal) => {
-    try {
-      const conv = await createDirectChat(user.id);
+  // Direct chat creation mutation
+  const createDirectChatMutation = useMutation({
+    mutationFn: (user: UserMinimal) => createDirectChat(user.id),
+    onSuccess: (conv) => {
       setShowDirectModal(false);
-      await loadConversations();
+      refetchConversations();
       selectConversation(conv);
-    } catch (err) {
-      console.error("Error creating direct chat:", err);
-    }
-  };
+    },
+  });
 
-  const handleCreateGroup = async () => {
-    if (!groupName.trim() || selectedGroupMembers.length === 0) return;
-    try {
+  // Group chat creation mutation
+  const createGroupChatMutation = useMutation({
+    mutationFn: () => {
       const memberIds = selectedGroupMembers.map((m) => m.id);
-      const conv = await createGroupChat(groupName.trim(), memberIds);
+      return createGroupChat(groupName.trim(), memberIds);
+    },
+    onSuccess: (conv) => {
       setShowGroupModal(false);
       setGroupName("");
       setSelectedGroupMembers([]);
-      await loadConversations();
+      refetchConversations();
       selectConversation(conv);
-    } catch (err) {
-      console.error("Error creating group chat:", err);
-    }
+    },
+  });
+
+  const openDirectModal = () => {
+    setShowDirectModal(true);
+    setUserQuery("");
+    handleSearchUsers("");
   };
 
-  const filteredConversations = conversations.filter((c) =>
-    (c.display_name || c.name || "").toLowerCase().includes(searchQuery.toLowerCase())
+  const openGroupModal = () => {
+    setShowGroupModal(true);
+    setGroupName("");
+    setSelectedGroupMembers([]);
+    setUserQuery("");
+    handleSearchUsers("");
+  };
+
+  const filteredConversations = useMemo(
+    () =>
+      conversations.filter((c) =>
+        (c.display_name || c.name || "").toLowerCase().includes(searchQuery.toLowerCase())
+      ),
+    [conversations, searchQuery]
   );
 
-  // Render date separators between messages
+  // Render date separators & message bubbles in clean flex container
   const renderMessagesWithDateSeparators = () => {
     const elements: React.ReactNode[] = [];
     let lastDateLabel = "";
@@ -428,33 +451,29 @@ export default function ChatPage() {
           key={msg.id}
           className={`chat-message-row ${isMe ? "sent" : "received"}`}
         >
-          {/* Tiny avatar for received */}
+          {/* Avatar for received messages */}
           {!isMe && (
             <div
               className="chat-msg-avatar"
-              style={{ backgroundColor: getAvatarColor(msg.sender?.name || msg.sender?.email || "U") }}
+              style={{
+                backgroundColor: getAvatarColor(msg.sender?.name || msg.sender?.email || "U"),
+              }}
             >
               {(msg.sender?.name || msg.sender?.email || "U")[0].toUpperCase()}
             </div>
           )}
 
           <div className={`chat-bubble ${isMe ? "bubble-sent" : "bubble-received"}`}>
-            {/* Sender name in group chats */}
+            {/* Sender name for group chat */}
             {!isMe && activeConversation?.type === "GROUP" && (
               <span className="chat-sender-name">
                 {msg.sender?.name || msg.sender?.email}
               </span>
             )}
 
-            {/* Text + inline timestamp */}
+            {/* Text message content */}
             {msg.content && (
-              <div className="chat-text-wrap">
-                <span className="chat-text">{msg.content}</span>
-                <span className="chat-meta-inline">
-                  <span className="chat-time">{timeStr}</span>
-                  {isMe && <CheckCheck size={12} className="chat-read-icon" />}
-                </span>
-              </div>
+              <p className="chat-text">{msg.content}</p>
             )}
 
             {/* Attachments */}
@@ -466,12 +485,22 @@ export default function ChatPage() {
 
                   if (isImg) {
                     return (
-                      <div key={att.id} className="chat-att-image" onClick={() => setPreviewMediaUrl(att.file_url)}>
+                      <div
+                        key={att.id}
+                        className="chat-att-image"
+                        onClick={() => setPreviewMediaUrl(att.file_url)}
+                      >
                         <BSImage
                           src={att.file_url}
                           alt="attachment"
                           className="w-100"
-                          style={{ maxHeight: "180px", objectFit: "cover", borderRadius: "6px", cursor: "pointer" }}
+                          style={{
+                            maxHeight: "220px",
+                            objectFit: "contain",
+                            borderRadius: "8px",
+                            cursor: "pointer",
+                            backgroundColor: "rgba(0,0,0,0.03)",
+                          }}
                         />
                       </div>
                     );
@@ -480,7 +509,11 @@ export default function ChatPage() {
                   if (isVid) {
                     return (
                       <div key={att.id} className="chat-att-video">
-                        <video controls className="w-100" style={{ maxHeight: "200px", borderRadius: "6px" }}>
+                        <video
+                          controls
+                          className="w-100"
+                          style={{ maxHeight: "220px", borderRadius: "8px" }}
+                        >
                           <source src={att.file_url} type={att.file_type || "video/mp4"} />
                         </video>
                       </div>
@@ -506,13 +539,11 @@ export default function ChatPage() {
               </div>
             )}
 
-            {/* Fallback timestamp if no text content (attachment-only msgs) */}
-            {!msg.content && (
-              <div className="chat-meta-block">
-                <span className="chat-time">{timeStr}</span>
-                {isMe && <CheckCheck size={12} className="chat-read-icon" />}
-              </div>
-            )}
+            {/* Bottom metadata (timestamp + status checks) */}
+            <div className="chat-bubble-meta">
+              <span className="chat-time">{timeStr}</span>
+              {isMe && <CheckCheck size={13} className="chat-read-icon" />}
+            </div>
           </div>
         </div>
       );
@@ -583,7 +614,7 @@ export default function ChatPage() {
               </div>
             ) : (
               filteredConversations.map((conv) => {
-                const isActive = activeConversation?.id === conv.id;
+                const isActive = activeConversationId === conv.id;
                 const avatarBg = getAvatarColor(conv.display_name || "Chat");
                 return (
                   <div
@@ -675,7 +706,7 @@ export default function ChatPage() {
                       <MoreVertical size={18} />
                     </Dropdown.Toggle>
                     <Dropdown.Menu className="shadow-sm border rounded-3">
-                      <Dropdown.Item onClick={() => selectConversation(activeConversation)}>
+                      <Dropdown.Item onClick={() => refetchMessages()}>
                         Refresh Messages
                       </Dropdown.Item>
                       <Dropdown.Item onClick={() => setMobileView("list")}>
@@ -686,7 +717,7 @@ export default function ChatPage() {
                 </div>
               </div>
 
-              {/* Messages Area */}
+              {/* Messages Flex Scroll Area */}
               <div className="chat-messages-area">
                 {loadingMessages ? (
                   <div className="chat-empty-state">
@@ -702,7 +733,10 @@ export default function ChatPage() {
                     <p>Send a message to start the conversation with {activeConversation.display_name}</p>
                   </div>
                 ) : (
-                  renderMessagesWithDateSeparators()
+                  <div className="chat-messages-flex">
+                    {renderMessagesWithDateSeparators()}
+                    <div ref={messagesEndRef} />
+                  </div>
                 )}
 
                 {/* Typing Indicator */}
@@ -714,8 +748,6 @@ export default function ChatPage() {
                     <span>{typingUser} is typing...</span>
                   </div>
                 )}
-
-                <div ref={messagesEndRef} />
               </div>
 
               {/* File Previews */}
@@ -852,7 +884,7 @@ export default function ChatPage() {
                 <div
                   key={user.id}
                   className="list-group-item list-group-item-action d-flex align-items-center justify-content-between p-3 border-0 rounded-3 mb-1 cursor-pointer"
-                  onClick={() => startDirectChatWithUser(user)}
+                  onClick={() => createDirectChatMutation.mutate(user)}
                 >
                   <div className="d-flex align-items-center gap-3">
                     <div
@@ -998,8 +1030,8 @@ export default function ChatPage() {
             size="sm"
             className="rounded-pill px-4 border-0"
             style={{ backgroundColor: "#6366f1" }}
-            disabled={!groupName.trim() || selectedGroupMembers.length === 0}
-            onClick={handleCreateGroup}
+            disabled={!groupName.trim() || selectedGroupMembers.length === 0 || createGroupChatMutation.isPending}
+            onClick={() => createGroupChatMutation.mutate()}
           >
             Create Group
           </Button>
@@ -1348,7 +1380,7 @@ export default function ChatPage() {
           gap: 6px;
         }
 
-        /* Messages area */
+        /* Messages scroll area */
         .chat-messages-area {
           flex: 1;
           overflow-y: auto;
@@ -1358,12 +1390,18 @@ export default function ChatPage() {
           flex-direction: column;
         }
 
+        .chat-messages-flex {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+        }
+
         /* Date separator */
         .chat-date-separator {
           display: flex;
           align-items: center;
           justify-content: center;
-          padding: 12px 0;
+          padding: 10px 0;
         }
 
         .chat-date-separator span {
@@ -1377,12 +1415,12 @@ export default function ChatPage() {
         }
 
         /* Message rows */
-        /* Message rows — tight spacing */
         .chat-message-row {
           display: flex;
-          margin-bottom: 3px;
           align-items: flex-end;
-          gap: 6px;
+          gap: 8px;
+          margin-bottom: 2px;
+          width: 100%;
         }
 
         .chat-message-row.sent {
@@ -1393,10 +1431,10 @@ export default function ChatPage() {
           justify-content: flex-start;
         }
 
-        /* Tiny avatar */
+        /* Avatar for received */
         .chat-msg-avatar {
-          width: 26px;
-          height: 26px;
+          width: 28px;
+          height: 28px;
           border-radius: 50%;
           display: flex;
           align-items: center;
@@ -1405,101 +1443,95 @@ export default function ChatPage() {
           font-weight: 700;
           font-size: 11px;
           flex-shrink: 0;
-          margin-bottom: 1px;
+          margin-bottom: 2px;
         }
 
-        /* Compact bubbles */
+        /* Clean message bubble */
         .chat-bubble {
-          max-width: 60%;
-          min-width: 80px;
-          padding: 6px 10px;
+          max-width: 65%;
+          min-width: 90px;
+          padding: 8px 12px;
           border-radius: 14px;
           position: relative;
           word-wrap: break-word;
+          display: flex;
+          flex-direction: column;
         }
 
         .bubble-sent {
           background: #6366f1;
           color: #fff;
-          border-bottom-right-radius: 3px;
+          border-bottom-right-radius: 4px;
         }
 
         .bubble-received {
           background: #fff;
           color: #1e293b;
-          border: 1px solid #e9ecef;
-          border-bottom-left-radius: 3px;
+          border: 1px solid #e2e8f0;
+          border-bottom-left-radius: 4px;
         }
 
         .chat-sender-name {
-          font-size: 10.5px;
+          font-size: 11px;
           font-weight: 700;
           color: #6366f1;
-          display: block;
-          margin-bottom: 1px;
+          margin-bottom: 2px;
           line-height: 1.2;
-        }
-
-        /* Text + inline time in same flow */
-        .chat-text-wrap {
-          display: inline;
         }
 
         .chat-text {
           margin: 0;
-          font-size: 13px;
-          line-height: 1.4;
+          font-size: 13.5px;
+          line-height: 1.45;
           white-space: pre-wrap;
           word-break: break-word;
-          display: inline;
         }
 
-        .chat-meta-inline {
-          display: inline-flex;
-          align-items: center;
-          gap: 3px;
-          float: right;
-          margin-left: 8px;
-          margin-top: 4px;
-          white-space: nowrap;
-        }
-
-        /* Fallback meta for attachment-only messages */
-        .chat-meta-block {
+        /* Bubble meta (time + checkmarks) */
+        .chat-bubble-meta {
           display: flex;
           align-items: center;
           justify-content: flex-end;
-          gap: 3px;
-          margin-top: 2px;
+          gap: 4px;
+          margin-top: 4px;
+          align-self: flex-end;
         }
 
         .chat-time {
           font-size: 10px;
-          opacity: 0.55;
+          opacity: 0.7;
           line-height: 1;
         }
 
-        .chat-read-icon {
-          opacity: 0.55;
-          flex-shrink: 0;
+        .bubble-sent .chat-read-icon {
+          color: #c7d2fe;
+        }
+
+        .bubble-received .chat-read-icon {
+          color: #94a3b8;
         }
 
         /* Attachments */
         .chat-attachments {
-          margin-top: 4px;
+          margin-top: 6px;
           display: flex;
           flex-direction: column;
-          gap: 4px;
+          gap: 6px;
+        }
+
+        .chat-att-image {
+          border-radius: 8px;
+          overflow: hidden;
         }
 
         .chat-att-file {
           display: flex;
           align-items: center;
-          gap: 6px;
-          padding: 5px 8px;
-          border-radius: 6px;
+          gap: 8px;
+          padding: 6px 10px;
+          border-radius: 8px;
           text-decoration: none;
-          font-size: 11px;
+          font-size: 12px;
           transition: opacity 0.15s;
         }
 
@@ -1521,7 +1553,7 @@ export default function ChatPage() {
 
         .chat-att-file-name {
           font-weight: 600;
-          font-size: 11px;
+          font-size: 12px;
         }
 
         /* Typing indicator */

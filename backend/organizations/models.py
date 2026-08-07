@@ -18,6 +18,14 @@ class Organization(models.Model):
         blank=True,
         null=True,
     )
+    external_source = models.CharField(max_length=40, blank=True)
+    external_company_id = models.CharField(
+        max_length=64,
+        unique=True,
+        blank=True,
+        null=True,
+        db_index=True,
+    )
     invite_code = models.CharField(
         max_length=12,
         unique=True,

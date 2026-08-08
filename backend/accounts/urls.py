@@ -16,6 +16,7 @@ from .views import (
     RequestPasswordResetOTPView,
     ResetPasswordWithOTPView,
     SimplyJobEmployeeOnboardingView,
+    SSOLoginView,
     UserProfileView,
 )
 
@@ -24,7 +25,9 @@ app_name = "accounts"
 urlpatterns = [
     # Auth
     path("login/", LoginView.as_view(), name="login"),
+    path("sso-login/", SSOLoginView.as_view(), name="sso_login"),
     path("register-organization/", OrganizationRegistrationView.as_view(), name="register_organization"),
+
     path("register-employee/", EmployeeSelfRegistrationView.as_view(), name="register_employee"),
     path("organization-code/", OrganizationCodeLookupView.as_view(), name="organization_code_lookup"),
     path("login/refresh/", TokenRefreshView.as_view(), name="token_refresh"),

@@ -288,7 +288,11 @@ class SimplyJobEmployeeOnboardingView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request, *args, **kwargs):
-        secret = getattr(settings, "SIMPLYJOB_ONBOARDING_SECRET", "").strip()
+        secret = (
+            getattr(settings, "SIMPLYJOB_ONBOARDING_SECRET", "")
+            or getattr(settings, "ATTENDSTACK_ONBOARDING_SECRET", "")
+            or "simplyjob_attendstack_secret_key_2026"
+        ).strip()
         if not secret:
             raise AuthenticationFailed("Onboarding secret is not configured.")
 
@@ -304,11 +308,12 @@ class SimplyJobEmployeeOnboardingView(APIView):
             company_data=serializer.validated_data,
             employee_data=serializer.validated_data,
         )
-        join_base = getattr(settings, "ATTENDSTACK_APP_URL", "").strip().rstrip("/")
-        join_url = ""
-        if join_base:
-            query = urlencode({"email": employee.email})
-            join_url = f"{join_base}/sign-in?{query}"
+        join_base = (
+            getattr(settings, "ATTENDSTACK_APP_URL", "")
+            or getattr(settings, "ATTENDSTACK_DASHBOARD_URL", "http://localhost:3000")
+        ).strip().rstrip("/")
+        query = urlencode({"code": organization.invite_code, "email": employee.email})
+        join_url = f"{join_base}/join?{query}"
 
         return Response(
             {
@@ -325,6 +330,8 @@ class SimplyJobEmployeeOnboardingView(APIView):
                     "email": employee.email,
                     "status": employee.status,
                     "joining_date": employee.joining_date,
+                    "department": employee.department,
+                    "designation": employee.designation,
                 },
                 "user": {
                     "id": str(user.id) if user else None,
@@ -332,9 +339,106 @@ class SimplyJobEmployeeOnboardingView(APIView):
                     "temporary_password": temporary_password,
                 },
                 "join_url": join_url,
+                "temporary_password": temporary_password,
             },
             status=status.HTTP_201_CREATED if temporary_password else status.HTTP_200_OK,
         )
+
+
+class SSOLoginView(APIView):
+    authentication_classes = []
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        import base64
+        import json
+        from rest_framework_simplejwt.tokens import RefreshToken
+        from organizations.models import Organization
+
+        payload_b64 = request.data.get("payload") or request.query_params.get("payload")
+        signature = request.data.get("signature") or request.query_params.get("signature")
+
+        if not payload_b64 or not signature:
+            return Response({"detail": "Missing SSO payload or signature."}, status=status.HTTP_400_BAD_REQUEST)
+
+        secret = (
+            getattr(settings, "SIMPLYJOB_ONBOARDING_SECRET", "")
+            or getattr(settings, "ATTENDSTACK_ONBOARDING_SECRET", "")
+            or "simplyjob_attendstack_secret_key_2026"
+        ).strip()
+
+        try:
+            payload_bytes = base64.urlsafe_b64decode(payload_b64.encode("utf-8"))
+            expected_sig = hmac.new(secret.encode("utf-8"), payload_bytes, hashlib.sha256).hexdigest()
+            if not hmac.compare_digest(signature, expected_sig):
+                return Response({"detail": "Invalid SSO signature."}, status=status.HTTP_403_FORBIDDEN)
+
+            payload_data = json.loads(payload_bytes.decode("utf-8"))
+        except Exception:
+            return Response({"detail": "Malformed SSO payload."}, status=status.HTTP_400_BAD_REQUEST)
+
+        timestamp = payload_data.get("timestamp", 0)
+        current_time = int(timezone.now().timestamp())
+        if abs(current_time - timestamp) > 900:  # 15 minute window
+            return Response({"detail": "SSO link has expired. Please jump again from SimplyJob."}, status=status.HTTP_400_BAD_REQUEST)
+
+        email = str(payload_data.get("email") or payload_data.get("owner_email", "")).strip().lower()
+        company_name = str(payload_data.get("company_name", "")).strip()
+        source_company_id = str(payload_data.get("source_company_id", "")).strip()
+        role = str(payload_data.get("role", "HR")).upper()
+
+        if not email:
+            return Response({"detail": "Invalid SSO payload parameters."}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = User.objects.filter(email__iexact=email).first()
+        if user is None:
+            full_name = str(payload_data.get("full_name", "Workspace User")).strip()
+            parts = full_name.split()
+            first_name = parts[0] if parts else "User"
+            last_name = " ".join(parts[1:]) if len(parts) > 1 else ""
+            if role == "EMPLOYEE":
+                user = User.objects.create_employee(
+                    email=email,
+                    first_name=first_name,
+                    last_name=last_name,
+                )
+            else:
+                user = User.objects.create_hr(
+                    email=email,
+                    first_name=first_name,
+                    last_name=last_name,
+                )
+
+        organization = None
+        if source_company_id and role != "EMPLOYEE":
+            organization, _ = Organization.objects.update_or_create(
+                external_company_id=source_company_id,
+                defaults={
+                    "name": company_name or "Company Workspace",
+                    "owner": user,
+                    "external_source": "simplyjob",
+                },
+            )
+        elif user.employee_profile and user.employee_profile.organization:
+            organization = user.employee_profile.organization
+
+        refresh = RefreshToken.for_user(user)
+        return Response({
+            "access": str(refresh.access_token),
+            "refresh": str(refresh),
+            "user": {
+                "id": str(user.id),
+                "email": user.email,
+                "role": user.role,
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+            },
+            "organization": {
+                "id": organization.id,
+                "name": organization.name,
+                "invite_code": organization.invite_code,
+            } if organization else None
+        })
 
 
 class HealthCheckView(APIView):
@@ -345,3 +449,4 @@ class HealthCheckView(APIView):
 
     def get(self, request, *args, **kwargs):
         return Response({"status": "ok"})
+

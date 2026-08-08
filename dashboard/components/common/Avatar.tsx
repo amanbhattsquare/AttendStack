@@ -132,6 +132,9 @@ const Avatar: React.FC<AvatarProps> = (props) => {
               <Image
                 src={getAssetPath(src)}
                 alt={alt}
+                onError={(e: any) => {
+                  e.currentTarget.src = getAssetPath("/images/avatar/avatar-1.jpg");
+                }}
                 className={`mb-2 mb-lg-0 ${className}`}
               />
             </DasherTippy>
@@ -147,6 +150,9 @@ const Avatar: React.FC<AvatarProps> = (props) => {
             <Image
               src={getAssetPath(src)}
               alt={alt}
+              onError={(e: any) => {
+                e.currentTarget.src = getAssetPath("/images/avatar/avatar-1.jpg");
+              }}
               className={`mb-2 mb-lg-0 ${className}`}
             />
           </span>

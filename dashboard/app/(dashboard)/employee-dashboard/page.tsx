@@ -205,11 +205,13 @@ const EmployeeDashboard = () => {
   const [attendanceRules, setAttendanceRules] = useState("");
   const [settings, setSettings] = useState<any>(null);
 
+  const apiEndpoint = (process.env.NEXT_PUBLIC_API_ENDPOINT || 'http://localhost:8001').replace(/\/$/, '');
+
   const loadSettings = async () => {
     const token = localStorage.getItem("authToken");
     if (!token) return;
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/settings/`, {
+      const res = await fetch(`${apiEndpoint}/api/v1/settings/`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
@@ -232,10 +234,10 @@ const EmployeeDashboard = () => {
       const headers = { Authorization: `Bearer ${token}` };
 
       const [attendanceRes, leavesRes, payrollRes, holidaysRes] = await Promise.all([
-        fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/attendance/me/?date_from=${weekStart.toISOString().slice(0, 10)}`, { headers }),
-        fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/attendance/leaves/`, { headers }),
-        fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/payroll/`, { headers }),
-        fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/holidays/`, { headers }),
+        fetch(`${apiEndpoint}/api/v1/attendance/me/?date_from=${weekStart.toISOString().slice(0, 10)}`, { headers }),
+        fetch(`${apiEndpoint}/api/v1/attendance/leaves/`, { headers }),
+        fetch(`${apiEndpoint}/api/v1/payroll/`, { headers }),
+        fetch(`${apiEndpoint}/api/v1/holidays/`, { headers }),
       ]);
 
       const activities: EmployeeActivity[] = [];
@@ -311,7 +313,7 @@ const EmployeeDashboard = () => {
     if (!token) return;
 
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/tasks/?page_size=500`, {
+      const res = await fetch(`${apiEndpoint}/api/v1/tasks/?page_size=500`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
@@ -331,7 +333,7 @@ const EmployeeDashboard = () => {
     }
     setTodayLoadError("");
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/attendance/me/today/`, {
+      const res = await fetch(`${apiEndpoint}/api/v1/attendance/me/today/`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) {
@@ -472,7 +474,7 @@ const EmployeeDashboard = () => {
         }
       }
 
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/attendance/${action}/`, {
+      const res = await fetch(`${apiEndpoint}/api/v1/attendance/${action}/`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,

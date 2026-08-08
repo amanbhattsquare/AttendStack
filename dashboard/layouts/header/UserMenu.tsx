@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Dropdown, Image } from "react-bootstrap";
 import Link from "next/link";
-import { IconLogin2, IconHome2, IconSettings, IconActivity, IconBook } from "@tabler/icons-react";
+import { IconLogin2, IconHome2, IconSettings, IconActivity, IconBook, IconUser, IconBuildingSkyscraper } from "@tabler/icons-react";
 import { useBranding } from "context/BrandingContext";
 import { Avatar } from "components/common/Avatar";
 import { getAssetPath } from "helper/assetPath";
@@ -25,6 +25,7 @@ const UserMenu = () => {
   const { companyLogo } = useBranding();
   const [user, setUser] = useState<{ full_name: string; email: string; role: string } | null>(null);
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
+  const [imgError, setImgError] = useState(false);
 
   useEffect(() => {
     const userData = localStorage.getItem("user");
@@ -33,7 +34,6 @@ const UserMenu = () => {
         const parsedUser = JSON.parse(userData);
         setUser(parsedUser);
 
-        // Fetch live dynamic profile photo/DP directly from the server
         const fetchLiveProfile = async () => {
           const token = localStorage.getItem("authToken");
           if (!token) return;
@@ -62,7 +62,6 @@ const UserMenu = () => {
             }
           } catch {
             // The saved session details remain usable while the API is offline.
-            // Avoid logging an expected network failure as a Next.js runtime error.
           }
         };
 
@@ -82,6 +81,7 @@ const UserMenu = () => {
   };
 
   const isEmployee = user?.role === "EMPLOYEE";
+  const isCompanyUser = user?.role === "HR" || user?.role === "ADMIN" || user?.role === "SUPER_ADMIN";
 
   const dynamicMenuItems = isEmployee 
     ? [
@@ -131,27 +131,64 @@ const UserMenu = () => {
         },
       ];
 
-  const userAvatar = profilePhoto || companyLogo || getAssetPath("/images/brand/logo/b-logo.png");
+  const activePhoto = profilePhoto || (isCompanyUser ? companyLogo : null);
+
+  const renderAvatarBadge = (size: number) => {
+    if (activePhoto && !imgError) {
+      return (
+        <Image
+          src={activePhoto}
+          alt="Avatar"
+          onError={() => setImgError(true)}
+          className="rounded-circle border border-2 border-white shadow-sm"
+          style={{ width: `${size}px`, height: `${size}px`, objectFit: "cover" }}
+        />
+      );
+    }
+
+    if (isCompanyUser) {
+      return (
+        <div
+          className="d-inline-flex align-items-center justify-content-center rounded-circle border border-2 border-white shadow-sm"
+          style={{
+            width: `${size}px`,
+            height: `${size}px`,
+            background: "linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%)",
+            color: "#0284c7",
+            flexShrink: 0,
+          }}
+          title="Company Workspace"
+        >
+          <IconBuildingSkyscraper size={size * 0.55} strokeWidth={2} />
+        </div>
+      );
+    }
+
+    return (
+      <div
+        className="d-inline-flex align-items-center justify-content-center rounded-circle border border-2 border-white shadow-sm"
+        style={{
+          width: `${size}px`,
+          height: `${size}px`,
+          background: "linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%)",
+          color: "#4338ca",
+          flexShrink: 0,
+        }}
+        title="User Profile"
+      >
+        <IconUser size={size * 0.55} strokeWidth={2} />
+      </div>
+    );
+  };
 
   return (
     <Dropdown>
       <Dropdown.Toggle as={CustomToggle}>
-        <Avatar
-          type="image"
-          src={userAvatar}
-          size="sm"
-          alt="User Avatar"
-          className="rounded-circle border border-2 border-white shadow-sm"
-        />
+        {renderAvatarBadge(36)}
       </Dropdown.Toggle>
       <Dropdown.Menu align="end" className="p-0 dropdown-menu-md shadow border-0" style={{ borderRadius: "14px", overflow: "hidden" }}>
         <div className="d-flex gap-3 align-items-center border-bottom px-4 py-4" style={{ backgroundColor: "#fcfdfe", borderBottomStyle: "dashed" }}>
-          <Image
-            src={userAvatar}
-            alt=""
-            className="avatar avatar-md rounded-circle border border-2 border-white shadow-sm"
-            style={{ width: "48px", height: "48px", objectFit: "cover" }}
-          />
+          {renderAvatarBadge(48)}
           <div className="overflow-hidden">
             <h5 className="mb-0 fw-bold text-dark text-truncate">{user ? user.full_name : "AttendStack User"}</h5>
             <p className="mb-0 text-secondary small text-truncate" style={{ fontSize: "0.8rem" }}>

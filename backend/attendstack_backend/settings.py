@@ -26,7 +26,7 @@ DEBUG = str(config("DEBUG", default="true")).strip().lower() in {
     "yes",
     "on",
 }
-ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="localhost,127.0.0.1").split(",")
+ALLOWED_HOSTS = [h.strip() for h in config("ALLOWED_HOSTS", default="localhost,127.0.0.1").split(",") if h.strip()]
 
 # ──────────────────────────────────────────────────────────────────────────────
 # APPLICATION DEFINITION

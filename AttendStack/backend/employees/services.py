@@ -126,20 +126,6 @@ def reset_employee_user_password(employee: Employee, password=None):
     return user, employee_password
 
 
-def sanitize_for_json(obj):
-    if obj is None:
-        return None
-    if isinstance(obj, (str, int, float, bool)):
-        return obj
-    if hasattr(obj, "isoformat"):
-        return obj.isoformat()
-    if isinstance(obj, dict):
-        return {str(k): sanitize_for_json(v) for k, v in obj.items()}
-    if isinstance(obj, (list, tuple, set)):
-        return [sanitize_for_json(v) for v in obj]
-    return str(obj)
-
-
 def sync_employee_from_simplyjob(*, company_data, employee_data):
     source_company_id = str(company_data.get("source_company_id", "")).strip()
     company_name = str(company_data.get("company_name", "")).strip()
@@ -185,49 +171,30 @@ def sync_employee_from_simplyjob(*, company_data, employee_data):
         joining_date = date.fromisoformat(joining_date)
     status = EmployeeStatus.ACTIVE if joining_date <= timezone.localdate() else EmployeeStatus.PROVISION
 
-    external_payload = sanitize_for_json(employee_data)
-    documents = employee_data.get("documents") or []
-    if isinstance(documents, list) and documents:
-        external_payload["transferred_documents"] = sanitize_for_json(documents)
+    external_payload = employee_data.get("source_payload") or {}
+    if not isinstance(external_payload, dict):
+        external_payload = {}
 
-    existing_emp = Employee.objects.filter(email=email).first()
-    if existing_emp:
-        employee = existing_emp
-        employee.organization = organization
-        employee.external_source = "simplyjob"
-        employee.external_application_id = source_application_id
-        employee.external_payload = external_payload
-        employee.full_name = full_name
-        employee.phone = phone
-        if employee_data.get("date_of_birth"):
-            employee.date_of_birth = employee_data.get("date_of_birth")
-        if employee_data.get("address"):
-            employee.address = str(employee_data.get("address", "")).strip()
-        employee.joining_date = joining_date
-        employee.department = str(employee_data.get("department", "")).strip() or employee.department
-        employee.designation = str(employee_data.get("designation", "")).strip() or employee.designation
-        employee.status = status
-    else:
-        employee, _ = Employee.objects.update_or_create(
-            external_application_id=source_application_id,
-            defaults={
-                "organization": organization,
-                "external_source": "simplyjob",
-                "external_payload": external_payload,
-                "full_name": full_name,
-                "email": email,
-                "phone": phone,
-                "date_of_birth": employee_data.get("date_of_birth") or None,
-                "address": str(employee_data.get("address", "")).strip(),
-                "joining_date": joining_date,
-                "department": str(employee_data.get("department", "")).strip(),
-                "designation": str(employee_data.get("designation", "")).strip(),
-                "status": status,
-                "emergency_contact_name": str(employee_data.get("emergency_contact_name", "")).strip(),
-                "emergency_contact_relationship": str(employee_data.get("emergency_contact_relationship", "")).strip(),
-                "emergency_contact_phone": str(employee_data.get("emergency_contact_phone", "")).strip(),
-            },
-        )
+    employee, _ = Employee.objects.update_or_create(
+        external_application_id=source_application_id,
+        defaults={
+            "organization": organization,
+            "external_source": "simplyjob",
+            "external_payload": external_payload,
+            "full_name": full_name,
+            "email": email,
+            "phone": phone,
+            "date_of_birth": employee_data.get("date_of_birth") or None,
+            "address": str(employee_data.get("address", "")).strip(),
+            "joining_date": joining_date,
+            "department": str(employee_data.get("department", "")).strip(),
+            "designation": str(employee_data.get("designation", "")).strip(),
+            "status": status,
+            "emergency_contact_name": str(employee_data.get("emergency_contact_name", "")).strip(),
+            "emergency_contact_relationship": str(employee_data.get("emergency_contact_relationship", "")).strip(),
+            "emergency_contact_phone": str(employee_data.get("emergency_contact_phone", "")).strip(),
+        },
+    )
 
     employee._status_effective_date = joining_date
     
@@ -245,11 +212,11 @@ def sync_employee_from_simplyjob(*, company_data, employee_data):
         except Exception:
             pass
 
+    employee.save(update_fields=["updated_at", "cv_document"])
+
     user = sync_employee_user_access(employee)
+    temporary_password = None
     if user is None:
         user, temporary_password = create_employee_user(employee)
-    else:
-        user, temporary_password = reset_employee_user_password(employee)
 
     return organization, employee, user, temporary_password
-

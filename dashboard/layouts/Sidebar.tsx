@@ -22,6 +22,7 @@ import { Avatar } from "components/common/Avatar";
 import CustomToggle, { CustomToggleLevel2 } from "./SidebarMenuToggle";
 
 // import required routes
+import { IconBuildingSkyscraper } from "@tabler/icons-react";
 import { getAssetPath } from "helper/assetPath";
 import { DashboardMenu } from "routes/DashboardRoute";
 import { EmployeeDashboardMenu } from "routes/EmployeeDashboardRoute";
@@ -332,12 +333,19 @@ const Sidebar: React.FC<SidebarProps> = ({ hideLogo = false, containerId, curren
             <div className='text-center py-5 upgrade-ui'>
               <div>
                 <div className='sidebar-company-avatar-wrap'>
-                  <Avatar
-                    type='image'
-                    src={companyLogo || getAssetPath("/images/brand/logo/logo.png")}
-                    size='md'
-                    className='rounded-circle'
-                  />
+                  <div
+                    className="d-inline-flex align-items-center justify-content-center rounded-circle border border-2 border-white shadow-sm"
+                    style={{
+                      width: "48px",
+                      height: "48px",
+                      background: "linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%)",
+                      color: "#0284c7",
+                      margin: "0 auto",
+                    }}
+                    title={companyName || "Company Workspace"}
+                  >
+                    <IconBuildingSkyscraper size={24} strokeWidth={2} />
+                  </div>
                   {isEmployee && (
                     <OverlayTrigger
                       placement='top'

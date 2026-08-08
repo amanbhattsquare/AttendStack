@@ -104,7 +104,7 @@ class ConversationViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['get'], url_path='messages')
     def get_messages(self, request, pk=None):
         conversation = self.get_object()
-        messages = conversation.messages.all().order_by('-created_at')
+        messages = conversation.messages.filter(is_deleted=False).order_by('-created_at')
         
         paginator = MessagePagination()
         page = paginator.paginate_queryset(messages, request)
@@ -183,16 +183,67 @@ class ConversationViewSet(viewsets.ModelViewSet):
 
         return Response(msg_data, status=status.HTTP_201_CREATED)
 
+    @action(detail=True, methods=['post', 'delete'], url_path='delete-message')
+    def delete_message(self, request, pk=None):
+        conversation = self.get_object()
+        message_id = request.data.get('message_id') or request.query_params.get('message_id')
+        if not message_id:
+            return Response(
+                {"error": "message_id is required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        message = get_object_or_404(Message, id=message_id, conversation=conversation)
+
+        is_sender = (message.sender == request.user)
+        is_admin = conversation.members.filter(
+            user=request.user,
+            role=ConversationMember.Role.ADMIN
+        ).exists()
+
+        if not (is_sender or is_admin):
+            return Response(
+                {"error": "You do not have permission to delete this message."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        message.is_deleted = True
+        message.content = "This message was deleted"
+        message.save()
+        message.attachments.all().delete()
+
+        msg_data = MessageSerializer(message, context={'request': request}).data
+
+        try:
+            channel_layer = get_channel_layer()
+            if channel_layer:
+                from django.core.serializers.json import DjangoJSONEncoder
+                import json
+                async_to_sync(channel_layer.group_send)(
+                    f"chat_{conversation.id}",
+                    {
+                        "type": "chat.message_deleted",
+                        "message_id": str(message.id),
+                        "conversation_id": str(conversation.id)
+                    }
+                )
+        except Exception as e:
+            import logging
+            logging.warning(f"Failed to broadcast WS message deletion: {e}")
+
+        return Response(msg_data, status=status.HTTP_200_OK)
+
     @action(detail=True, methods=['post'], url_path='read')
     def mark_read(self, request, pk=None):
         conversation = self.get_object()
-        latest_message = conversation.messages.order_by('-created_at').first()
+        latest_message = conversation.messages.filter(is_deleted=False).order_by('-created_at').first()
         if latest_message:
             member = conversation.members.filter(user=request.user).first()
             if member:
                 member.last_read_message = latest_message
                 member.save(update_fields=['last_read_message'])
         return Response({"status": "read marked"}, status=status.HTTP_200_OK)
+
 
 
 class ChatUserViewSet(viewsets.ReadOnlyModelViewSet):

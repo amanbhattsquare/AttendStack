@@ -27,6 +27,10 @@ import {
   UserCheck,
   User,
   Sparkles,
+  Trash2,
+  CornerUpRight,
+  Copy,
+  Smile,
 } from "lucide-react";
 import {
   useQuery,
@@ -46,6 +50,7 @@ import {
   searchUsers,
   markConversationAsRead,
   connectChatWebSocket,
+  deleteMessage,
 } from "../../../helper/chatApi";
 
 // Redux for sidebar control
@@ -166,6 +171,55 @@ export default function ChatPage() {
   // Typing indicator state
   const [typingUser, setTypingUser] = useState<string | null>(null);
 
+  // Forward message state
+  const [forwardMsg, setForwardMsg] = useState<Message | null>(null);
+  const [forwardSearch, setForwardSearch] = useState<string>("");
+  const [forwardedConvIds, setForwardedConvIds] = useState<string[]>([]);
+  const [copiedMsgId, setCopiedMsgId] = useState<string | null>(null);
+
+  // Emoji picker state
+  const [showEmojiPicker, setShowEmojiPicker] = useState<boolean>(false);
+  const emojiPickerRef = useRef<HTMLDivElement>(null);
+
+  const EMOJI_LIST = [
+    "😊", "😂", "🥰", "😍", "😎", "😅", "🤔", "🥳", 
+    "👍", "👏", "🙌", "🙏", "❤️", "🔥", "✨", "🎉", 
+    "🚀", "💡", "💯", "✅", "⭐", "📌", "💬", "🤝",
+    "😭", "🙈", "💪", "✌️", "👌", "🎯", "🌟", "⚡"
+  ];
+
+  const handleSelectEmoji = (emoji: string) => {
+    setInputContent((prev) => prev + emoji);
+    setShowEmojiPicker(false);
+    if (inputRef.current) {
+      inputRef.current.focus();
+      setTimeout(() => {
+        if (inputRef.current) {
+          inputRef.current.style.height = "auto";
+          const newHeight = Math.min(inputRef.current.scrollHeight, 150);
+          inputRef.current.style.height = `${newHeight}px`;
+        }
+      }, 50);
+    }
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target as Node)) {
+        setShowEmojiPicker(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleCopyMessage = (msgId: string, content: string | null) => {
+    if (!content) return;
+    navigator.clipboard.writeText(content);
+    setCopiedMsgId(msgId);
+    setTimeout(() => setCopiedMsgId(null), 2000);
+  };
+
   // Current user ID
   const [currentUserId, setCurrentUserId] = useState<string | number | null>(null);
 
@@ -276,6 +330,11 @@ export default function ChatPage() {
               : c
           )
         );
+      } else if (data.type === "message_deleted") {
+        queryClient.setQueryData<Message[]>(["messages", activeConversationId], (old = []) =>
+          old.filter((m) => m.id !== data.message_id)
+        );
+        queryClient.invalidateQueries({ queryKey: ["conversations"] });
       } else if (data.type === "typing") {
         if (data.is_typing) {
           setTypingUser(data.username);
@@ -299,6 +358,54 @@ export default function ChatPage() {
     setMobileView("chat");
   };
 
+  // TanStack Mutation: Delete Message
+  const deleteMessageMutation = useMutation({
+    mutationFn: async (messageId: string) => {
+      if (!activeConversationId) return;
+      await deleteMessage(activeConversationId, messageId);
+    },
+    onSuccess: (_, messageId) => {
+      if (!activeConversationId) return;
+      queryClient.setQueryData<Message[]>(["messages", activeConversationId], (old = []) =>
+        old.filter((m) => m.id !== messageId)
+      );
+      queryClient.invalidateQueries({ queryKey: ["conversations"] });
+    },
+  });
+
+  const handleDeleteMessage = (messageId: string) => {
+    if (window.confirm("Are you sure you want to delete this message?")) {
+      deleteMessageMutation.mutate(messageId);
+    }
+  };
+
+  // TanStack Mutation: Forward Message
+  const forwardMessageMutation = useMutation({
+    mutationFn: async ({ targetConvId, content }: { targetConvId: string; content: string }) => {
+      return await sendMessageWithAttachments(targetConvId, content, []);
+    },
+    onSuccess: (newMsg, variables) => {
+      setForwardedConvIds((prev) => [...prev, variables.targetConvId]);
+      queryClient.setQueryData<Message[]>(["messages", variables.targetConvId], (old = []) => {
+        if (old.some((m) => m.id === newMsg.id)) return old;
+        return [...old, newMsg];
+      });
+      queryClient.invalidateQueries({ queryKey: ["conversations"] });
+    },
+  });
+
+  const handleForwardToConv = (convId: string) => {
+    if (!forwardMsg) return;
+    let contentToForward = forwardMsg.content || "";
+    if (forwardMsg.attachments && forwardMsg.attachments.length > 0) {
+      const attUrls = forwardMsg.attachments.map((att) => att.file_url).join("\n");
+      contentToForward = contentToForward ? `${contentToForward}\n${attUrls}` : attUrls;
+    }
+    if (!contentToForward.trim()) contentToForward = "[Forwarded attachment]";
+
+    forwardMessageMutation.mutate({ targetConvId: convId, content: contentToForward });
+  };
+
   // TanStack Mutation: Send Message
   const sendMessageMutation = useMutation({
     mutationFn: async () => {
@@ -315,6 +422,10 @@ export default function ChatPage() {
       setInputContent("");
       setSelectedFiles([]);
       setFilePreviews([]);
+
+      if (inputRef.current) {
+        inputRef.current.style.height = "auto";
+      }
 
       // Update message cache instantly
       queryClient.setQueryData<Message[]>(["messages", activeConversationId], (old = []) => {
@@ -446,6 +557,47 @@ export default function ChatPage() {
       const isMe = String(msg.sender?.id) === String(currentUserId);
       const timeStr = formatMessageTime(msg.created_at);
 
+      const canDelete = isMe || activeConversation?.members?.some((m) => String(m.user.id) === String(currentUserId) && m.role === "ADMIN");
+
+      const messageActionsMenu = (
+        <Dropdown className="chat-msg-actions-dropdown" align="end">
+          <Dropdown.Toggle variant="light" size="sm" className="chat-msg-more-btn no-caret border-0">
+            <MoreVertical size={13} />
+          </Dropdown.Toggle>
+          <Dropdown.Menu className="shadow-sm border rounded-3 py-1" style={{ minWidth: "130px" }}>
+            {msg.content && (
+              <Dropdown.Item
+                className="d-flex align-items-center gap-2 text-secondary px-3 py-1.5"
+                onClick={() => handleCopyMessage(msg.id, msg.content)}
+              >
+                <Copy size={14} />
+                <span>{copiedMsgId === msg.id ? "Copied!" : "Copy"}</span>
+              </Dropdown.Item>
+            )}
+            <Dropdown.Item
+              className="d-flex align-items-center gap-2 text-secondary px-3 py-1.5"
+              onClick={() => {
+                setForwardMsg(msg);
+                setForwardSearch("");
+                setForwardedConvIds([]);
+              }}
+            >
+              <CornerUpRight size={14} />
+              <span>Forward</span>
+            </Dropdown.Item>
+            {canDelete && (
+              <Dropdown.Item
+                className="d-flex align-items-center gap-2 text-danger px-3 py-1.5"
+                onClick={() => handleDeleteMessage(msg.id)}
+              >
+                <Trash2 size={14} />
+                <span>Delete</span>
+              </Dropdown.Item>
+            )}
+          </Dropdown.Menu>
+        </Dropdown>
+      );
+
       elements.push(
         <div
           key={msg.id}
@@ -464,6 +616,9 @@ export default function ChatPage() {
           )}
 
           <div className={`chat-bubble ${isMe ? "bubble-sent" : "bubble-received"}`}>
+            {/* Top-right 3-dots action menu */}
+            {messageActionsMenu}
+
             {/* Sender name for group chat */}
             {!isMe && activeConversation?.type === "GROUP" && (
               <span className="chat-sender-name">
@@ -793,6 +948,7 @@ export default function ChatPage() {
                   onChange={handleFileSelect}
                 />
 
+                {/* Attach file button */}
                 <button
                   className="chat-input-icon-btn"
                   onClick={() => fileInputRef.current?.click()}
@@ -801,12 +957,52 @@ export default function ChatPage() {
                   <Paperclip size={20} />
                 </button>
 
+                {/* Emoji picker button & popover */}
+                <div className="chat-emoji-wrapper" ref={emojiPickerRef}>
+                  <button
+                    className={`chat-input-icon-btn ${showEmojiPicker ? "active" : ""}`}
+                    onClick={() => setShowEmojiPicker((prev) => !prev)}
+                    title="Add emoji"
+                  >
+                    <Smile size={20} />
+                  </button>
+
+                  {showEmojiPicker && (
+                    <div className="chat-emoji-popover">
+                      <div className="chat-emoji-header">
+                        <span>Select Emoji</span>
+                        <button className="chat-emoji-close" onClick={() => setShowEmojiPicker(false)}>
+                          <X size={14} />
+                        </button>
+                      </div>
+                      <div className="chat-emoji-grid">
+                        {EMOJI_LIST.map((emoji, idx) => (
+                          <button
+                            key={idx}
+                            className="chat-emoji-btn"
+                            onClick={() => handleSelectEmoji(emoji)}
+                          >
+                            {emoji}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Textarea wrapper with auto-expand */}
                 <div className="chat-input-wrapper">
                   <textarea
                     ref={inputRef}
                     placeholder="Type a message..."
                     value={inputContent}
-                    onChange={(e) => setInputContent(e.target.value)}
+                    onChange={(e) => {
+                      setInputContent(e.target.value);
+                      const textarea = e.target;
+                      textarea.style.height = "auto";
+                      const newHeight = Math.min(textarea.scrollHeight, 150);
+                      textarea.style.height = `${newHeight}px`;
+                    }}
                     onKeyDown={handleKeyDown}
                     disabled={sending}
                     rows={1}
@@ -912,6 +1108,81 @@ export default function ChatPage() {
               ))}
             </div>
           )}
+        </Modal.Body>
+      </Modal>
+
+      {/* FORWARD MESSAGE MODAL */}
+      <Modal show={Boolean(forwardMsg)} onHide={() => setForwardMsg(null)} centered>
+        <Modal.Header closeButton className="border-0 pb-0">
+          <Modal.Title className="h6 fw-bold text-dark d-flex align-items-center gap-2">
+            <CornerUpRight size={20} className="text-primary" /> Forward Message
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body className="p-3">
+          {forwardMsg && (
+            <div className="p-3 bg-light rounded-3 mb-3 border">
+              <small className="text-muted d-block fw-semibold mb-1">Message Preview:</small>
+              <p className="mb-0 text-dark small text-truncate">
+                {forwardMsg.content || (forwardMsg.attachments?.length ? `[${forwardMsg.attachments.length} attachment(s)]` : "")}
+              </p>
+            </div>
+          )}
+
+          <div className="chat-search-box mb-3">
+            <Search size={16} className="chat-search-icon" />
+            <input
+              type="text"
+              placeholder="Search conversations..."
+              value={forwardSearch}
+              onChange={(e) => setForwardSearch(e.target.value)}
+            />
+          </div>
+
+          <div style={{ maxHeight: "280px", overflowY: "auto" }}>
+            {conversations
+              .filter((c) =>
+                (c.display_name || c.name || "").toLowerCase().includes(forwardSearch.toLowerCase())
+              )
+              .map((conv) => {
+                const isSent = forwardedConvIds.includes(conv.id);
+                return (
+                  <div
+                    key={conv.id}
+                    className="d-flex align-items-center justify-content-between p-2 rounded-3 hover-bg-light"
+                  >
+                    <div className="d-flex align-items-center gap-2">
+                      <div
+                        className="chat-conv-avatar"
+                        style={{
+                          width: "32px",
+                          height: "32px",
+                          fontSize: "12px",
+                          backgroundColor: getAvatarColor(conv.display_name || "C"),
+                        }}
+                      >
+                        {conv.type === "GROUP" ? (
+                          <Users size={14} />
+                        ) : (
+                          (conv.display_name || "C")[0].toUpperCase()
+                        )}
+                      </div>
+                      <span className="fw-semibold text-dark small">{conv.display_name}</span>
+                    </div>
+
+                    <Button
+                      variant={isSent ? "success" : "primary"}
+                      size="sm"
+                      disabled={isSent || forwardMessageMutation.isPending}
+                      className="rounded-pill px-3"
+                      style={{ fontSize: "12px" }}
+                      onClick={() => handleForwardToConv(conv.id)}
+                    >
+                      {isSent ? "Sent ✓" : "Forward"}
+                    </Button>
+                  </div>
+                );
+              })}
+          </div>
         </Modal.Body>
       </Modal>
 
@@ -1431,6 +1702,46 @@ export default function ChatPage() {
           justify-content: flex-start;
         }
 
+        .chat-msg-actions-dropdown {
+          position: absolute;
+          top: 4px;
+          right: 4px;
+          opacity: 0;
+          transition: opacity 0.15s ease;
+          z-index: 5;
+        }
+
+        .chat-bubble:hover .chat-msg-actions-dropdown,
+        .chat-msg-actions-dropdown.show {
+          opacity: 1;
+        }
+
+        .bubble-sent .chat-msg-more-btn {
+          color: rgba(255, 255, 255, 0.8) !important;
+          background: transparent !important;
+          padding: 2px 4px !important;
+          border-radius: 4px !important;
+          box-shadow: none !important;
+        }
+
+        .bubble-sent .chat-msg-more-btn:hover {
+          color: #ffffff !important;
+          background: rgba(255, 255, 255, 0.22) !important;
+        }
+
+        .bubble-received .chat-msg-more-btn {
+          color: #94a3b8 !important;
+          background: transparent !important;
+          padding: 2px 4px !important;
+          border-radius: 4px !important;
+          box-shadow: none !important;
+        }
+
+        .bubble-received .chat-msg-more-btn:hover {
+          color: #475569 !important;
+          background: rgba(148, 163, 184, 0.18) !important;
+        }
+
         /* Avatar for received */
         .chat-msg-avatar {
           width: 28px;
@@ -1664,11 +1975,12 @@ export default function ChatPage() {
         /* Input area */
         .chat-input-area {
           display: flex;
-          align-items: flex-end;
+          align-items: center;
           gap: 8px;
           padding: 12px 16px;
           border-top: 1px solid #f1f5f9;
           background: #fff;
+          position: relative;
         }
 
         .chat-input-icon-btn {
@@ -1686,14 +1998,102 @@ export default function ChatPage() {
           transition: all 0.15s;
         }
 
-        .chat-input-icon-btn:hover {
-          background: #e2e8f0;
+        .chat-input-icon-btn:hover,
+        .chat-input-icon-btn.active {
+          background: #e0e7ff;
           color: #6366f1;
+        }
+
+        .chat-emoji-wrapper {
+          position: relative;
+          display: flex;
+          align-items: center;
+        }
+
+        .chat-emoji-popover {
+          position: absolute;
+          bottom: 48px;
+          left: 0;
+          background: #ffffff;
+          border: 1px solid #e2e8f0;
+          border-radius: 12px;
+          box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+          width: 260px;
+          padding: 10px;
+          z-index: 100;
+          animation: popoverFadeIn 0.15s ease-out;
+        }
+
+        @keyframes popoverFadeIn {
+          from {
+            opacity: 0;
+            transform: translateY(6px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        .chat-emoji-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding-bottom: 6px;
+          margin-bottom: 6px;
+          border-bottom: 1px solid #f1f5f9;
+          font-size: 11px;
+          font-weight: 600;
+          color: #64748b;
+        }
+
+        .chat-emoji-close {
+          border: none;
+          background: transparent;
+          color: #94a3b8;
+          cursor: pointer;
+          padding: 2px;
+          border-radius: 4px;
+          display: flex;
+          align-items: center;
+        }
+
+        .chat-emoji-close:hover {
+          color: #ef4444;
+          background: #fee2e2;
+        }
+
+        .chat-emoji-grid {
+          display: grid;
+          grid-template-columns: repeat(8, 1fr);
+          gap: 4px;
+          max-height: 160px;
+          overflow-y: auto;
+        }
+
+        .chat-emoji-btn {
+          border: none;
+          background: transparent;
+          font-size: 18px;
+          padding: 4px;
+          border-radius: 6px;
+          cursor: pointer;
+          transition: transform 0.1s, background-color 0.1s;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .chat-emoji-btn:hover {
+          background: #f1f5f9;
+          transform: scale(1.2);
         }
 
         .chat-input-wrapper {
           flex: 1;
           min-width: 0;
+          display: flex;
+          align-items: center;
         }
 
         .chat-input-wrapper textarea {
@@ -1707,7 +2107,9 @@ export default function ChatPage() {
           outline: none;
           background: #f8fafc;
           color: #1e293b;
-          max-height: 120px;
+          min-height: 38px;
+          max-height: 150px;
+          overflow-y: auto;
           transition: border-color 0.15s, background 0.15s;
         }
 

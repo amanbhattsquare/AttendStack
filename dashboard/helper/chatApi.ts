@@ -110,6 +110,13 @@ export const markConversationAsRead = async (conversationId: string): Promise<vo
   await apiClient.post(`/api/v1/chat/conversations/${conversationId}/read/`);
 };
 
+export const deleteMessage = async (conversationId: string, messageId: string): Promise<void> => {
+  await apiClient.post(`/api/v1/chat/conversations/${conversationId}/delete-message/`, {
+    message_id: messageId,
+  });
+};
+
+
 export interface ChatWebSocketController {
   ws: WebSocket | null;
   close: () => void;

@@ -21,6 +21,23 @@ const authHeaders = (): HeadersInit => {
 const formatCurrency = (val: number | string) =>
   new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(Number(val));
 
+const formatDate = (dateStr: string | null | undefined) => {
+  if (!dateStr) return "N/A";
+  try {
+    const d = new Date(dateStr);
+    return d.toLocaleDateString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    });
+  } catch {
+    return dateStr;
+  }
+};
+
 const leaveTotal = (summary: any, paymentType: "paid" | "unpaid") =>
   Object.values(summary?.leave_breakdown || {}).reduce(
     (total: number, item: any) => total + Number(item?.[paymentType] || 0),
@@ -349,6 +366,7 @@ const SalaryPage = () => {
                 <thead className="table-light">
                   <tr>
                     <th>Employee Name</th>
+                    <th>Generated On</th>
                     <th>Monthly Salary</th>
                     <th>Allowances</th>
                     <th>Deductions</th>
@@ -386,6 +404,14 @@ const SalaryPage = () => {
                                 </small>
                               </div>
                             </div>
+                          </td>
+                          <td>
+                            <div className="fw-medium text-dark small">{formatDate(p.created_at)}</div>
+                            {p.paid_on && (
+                              <small className="text-success d-block" style={{ fontSize: "0.72rem" }}>
+                                Paid: {formatDate(p.paid_on)}
+                              </small>
+                            )}
                           </td>
                           <td>{formatCurrency(monthlySalary)}</td>
                           <td>{formatCurrency(p.allowances)}</td>

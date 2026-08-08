@@ -65,6 +65,15 @@ class Employee(models.Model):
     organization = models.ForeignKey(
         Organization, on_delete=models.CASCADE, related_name="employees", null=True
     )
+    external_source = models.CharField(max_length=40, blank=True)
+    external_application_id = models.CharField(
+        max_length=64,
+        unique=True,
+        blank=True,
+        null=True,
+        db_index=True,
+    )
+    external_payload = models.JSONField(default=dict, blank=True)
     employee_id = models.CharField(max_length=30, unique=True, db_index=True, blank=True)
 
     full_name = models.CharField(max_length=150)

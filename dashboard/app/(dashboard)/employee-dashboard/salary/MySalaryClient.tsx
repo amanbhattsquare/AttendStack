@@ -23,6 +23,23 @@ const formatCurrency = (val: number | string) =>
 const formatDays = (val: number | string | undefined) =>
   Number(val || 0).toLocaleString("en-IN", { maximumFractionDigits: 1 });
 
+const formatDate = (dateStr: string | null | undefined) => {
+  if (!dateStr) return "N/A";
+  try {
+    const d = new Date(dateStr);
+    return d.toLocaleDateString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    });
+  } catch {
+    return dateStr;
+  }
+};
+
 const leaveTotal = (summary: any, paymentType: "paid" | "unpaid") =>
   Object.values(summary?.leave_breakdown || {}).reduce(
     (total: number, item: any) => total + Number(item?.[paymentType] || 0),
@@ -81,19 +98,20 @@ const MySalaryClient = () => {
 
   const annualSalary = payrolls[0]?.employee_details?.annual_salary || 0;
   const monthlyEst = annualSalary ? Number(annualSalary) / 12 : 0;
+  const lastGeneratedDate = payrolls[0]?.created_at;
 
   return (
     <Fragment>
       <div className="card border-0 shadow-sm mb-5">
         <div className="card-header bg-white border-bottom-0 pt-4 pb-0">
           <h4 className="mb-0 fw-bold text-dark">My Salary & Pay History</h4>
-          <p className="text-secondary small mb-0">View your current salary profile and download monthly payslip summaries.</p>
+          <p className="text-secondary small mb-0">View your current salary profile, generation dates, and download monthly payslip summaries.</p>
         </div>
         <div className="card-body">
           {error && <Alert variant="danger">{error}</Alert>}
 
           <Row className="g-4 mb-4">
-            <Col md={4}>
+            <Col lg={3} md={6}>
               <div className="p-3 border rounded bg-light-subtle">
                 <span className="text-muted d-block small fw-semibold text-uppercase mb-1">Annual CTC</span>
                 <strong className="fs-4 text-dark">
@@ -101,7 +119,7 @@ const MySalaryClient = () => {
                 </strong>
               </div>
             </Col>
-            <Col md={4}>
+            <Col lg={3} md={6}>
               <div className="p-3 border rounded bg-light-subtle">
                 <span className="text-muted d-block small fw-semibold text-uppercase mb-1">Monthly Salary</span>
                 <strong className="fs-4 text-dark">
@@ -109,10 +127,18 @@ const MySalaryClient = () => {
                 </strong>
               </div>
             </Col>
-            <Col md={4}>
+            <Col lg={3} md={6}>
               <div className="p-3 border rounded bg-light-subtle">
                 <span className="text-muted d-block small fw-semibold text-uppercase mb-1">Pay Frequency</span>
                 <strong className="fs-4 text-primary">Monthly</strong>
+              </div>
+            </Col>
+            <Col lg={3} md={6}>
+              <div className="p-3 border rounded bg-light-subtle">
+                <span className="text-muted d-block small fw-semibold text-uppercase mb-1">Last Salary Generated</span>
+                <strong className="fs-6 text-dark d-block text-truncate">
+                  {lastGeneratedDate ? formatDate(lastGeneratedDate) : "No record yet"}
+                </strong>
               </div>
             </Col>
           </Row>
@@ -137,6 +163,7 @@ const MySalaryClient = () => {
                 <thead className="table-light">
                   <tr>
                     <th>Payroll Period</th>
+                    <th>Generated On</th>
                     <th>Monthly Salary</th>
                     <th>Allowances</th>
                     <th>Deductions</th>
@@ -150,6 +177,14 @@ const MySalaryClient = () => {
                     <tr key={p.id}>
                       <td className="fw-semibold text-dark">
                         {p.month_name} {p.year}
+                      </td>
+                      <td>
+                        <div className="fw-medium text-dark small">{formatDate(p.created_at)}</div>
+                        {p.paid_on && (
+                          <small className="text-success d-block" style={{ fontSize: "0.72rem" }}>
+                            Paid: {formatDate(p.paid_on)}
+                          </small>
+                        )}
                       </td>
                       <td>{formatCurrency(p.basic_salary)}</td>
                       <td>{formatCurrency(p.allowances)}</td>

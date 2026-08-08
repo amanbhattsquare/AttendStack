@@ -1,11 +1,18 @@
 python3 -m venv venv
 source venv/bin/activate
-
+.\venv\Scripts\Activate.ps1
+pip install -r requirements.txt
 
 python manage.py collectstatic --noinput
 sudo nano /etc/systemd/system/attendstack-backend.service
 
 
+.\venv\Scripts\Activate.ps1
+# 3. Apply any pending database migrations
+python manage.py makemigrations
+python manage.py migrate
+# 4. Start the Django development server
+python manage.py runserver
 
 sudo systemctl start attendstack-backend
 sudo systemctl enable attendstack-backend  # Starts on boot

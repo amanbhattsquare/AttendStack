@@ -8,11 +8,12 @@ const nextConfig: NextConfig = {
   },
   env: {
     NEXT_PUBLIC_BASE_PATH: "",
-    NEXT_PUBLIC_API_ENDPOINT: process.env.NEXT_PUBLIC_API_ENDPOINT || "",
+    NEXT_PUBLIC_API_ENDPOINT: process.env.NEXT_PUBLIC_API_ENDPOINT || "http://localhost:8001",
   },
   sassOptions: {
     includePaths: [path.join(__dirname, "node_modules")],
   },
+  transpilePackages: ["@tabler/icons-react", "@tabler/icons"],
   async redirects() {
     return [
       {

@@ -13,6 +13,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # SECURITY
 # ──────────────────────────────────────────────────────────────────────────────
 SECRET_KEY = config("SECRET_KEY", default="unsafe-secret-key")
+SIMPLYJOB_ONBOARDING_SECRET = config("SIMPLYJOB_ONBOARDING_SECRET", default="")
+ATTENDSTACK_APP_URL = config("ATTENDSTACK_APP_URL", default="http://localhost:3000")
 # Some deployment platforms use environment labels such as ``release`` for
 # DEBUG.  python-decouple's strict bool cast raises ValueError for those values
 # and prevents Django/Gunicorn from starting, which surfaces as a 502 from the
@@ -24,7 +26,7 @@ DEBUG = str(config("DEBUG", default="true")).strip().lower() in {
     "yes",
     "on",
 }
-ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="localhost,127.0.0.1").split(",")
+ALLOWED_HOSTS = [h.strip() for h in config("ALLOWED_HOSTS", default="localhost,127.0.0.1").split(",") if h.strip()]
 
 # ──────────────────────────────────────────────────────────────────────────────
 # APPLICATION DEFINITION
@@ -44,6 +46,7 @@ THIRD_PARTY_APPS = [
     "rest_framework_simplejwt.token_blacklist",
     "corsheaders",
     "drf_spectacular",
+    "channels",
 ]
 
 LOCAL_APPS = [
@@ -55,9 +58,10 @@ LOCAL_APPS = [
     "payroll",
     "settings",
     "tasks",
+    "chat",
 ]
 
-INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
+INSTALLED_APPS = ["daphne"] + DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 
 # ──────────────────────────────────────────────────────────────────────────────
 # MIDDLEWARE
@@ -287,3 +291,34 @@ CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = "Asia/Kolkata"
+
+# ──────────────────────────────────────────────────────────────────────────────
+# CHANNELS & REAL-TIME WEBSOCKETS (REDIS WITH RESP2 & NO HEALTHCHECK TIMEOUTS)
+# ──────────────────────────────────────────────────────────────────────────────
+ASGI_APPLICATION = "attendstack_backend.asgi.application"
+
+REDIS_HOST = config("REDIS_HOST", default="127.0.0.1")
+REDIS_PORT = config("REDIS_PORT", default=6379, cast=int)
+USE_REDIS = config("USE_REDIS", default=True, cast=bool)
+
+if USE_REDIS:
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels_redis.core.RedisChannelLayer",
+            "CONFIG": {
+                "hosts": [f"redis://{REDIS_HOST}:{REDIS_PORT}/0?protocol=2&socket_timeout=10&health_check_interval=0"],
+            },
+        },
+    }
+else:
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels.layers.InMemoryChannelLayer",
+        },
+    }
+
+# ──────────────────────────────────────────────────────────────────────────────
+# MEDIA FILES (LOCAL DEV & S3 READY)
+# ──────────────────────────────────────────────────────────────────────────────
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"

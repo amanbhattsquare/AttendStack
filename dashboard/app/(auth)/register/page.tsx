@@ -163,8 +163,15 @@ const scrollToField = (field?: FormField) => {
   if (!field) return;
   window.setTimeout(() => {
     const target = document.querySelector<HTMLElement>(`[data-field="${field}"]`);
-    target?.scrollIntoView({ behavior: "smooth", block: "center" });
-    target?.querySelector<HTMLElement>("input, textarea, select, button")?.focus({ preventScroll: true });
+    if (target) {
+      target.scrollIntoView({ behavior: "smooth", block: "center" });
+      const focusable = target.querySelector<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
+        "input:not([type='hidden']), textarea, select"
+      );
+      if (focusable) {
+        focusable.focus({ preventScroll: true });
+      }
+    }
   }, 50);
 };
 
@@ -197,6 +204,17 @@ export default function EmployeeRegistrationPage() {
   const [organizationCodeStatus, setOrganizationCodeStatus] = useState<"idle" | "checking" | "valid" | "invalid">("idle");
   const [profilePhotoPreview, setProfilePhotoPreview] = useState<string | null>(null);
 
+  const clearFile = (field: UploadField) => {
+    setFiles((current) => ({ ...current, [field]: null }));
+    setFieldErrors((current) => ({ ...current, [field]: undefined, upload_total: undefined }));
+    if (field === "profile_photo") {
+      if (profilePhotoPreview) URL.revokeObjectURL(profilePhotoPreview);
+      setProfilePhotoPreview(null);
+    }
+    const inputEl = document.querySelector<HTMLInputElement>(`[data-field="${field}"] input[type="file"]`);
+    if (inputEl) inputEl.value = "";
+  };
+
   const totalUploadSize = useMemo(
     () => UPLOAD_FIELDS.reduce((sum, field) => sum + (files[field]?.size || 0), 0),
     [files],
@@ -212,18 +230,14 @@ export default function EmployeeRegistrationPage() {
     setFieldErrors((current) => ({ ...current, [field]: undefined, upload_total: undefined }));
 
     if (!file) {
-      setFiles((current) => ({ ...current, [field]: null }));
-      if (field === "profile_photo") {
-        if (profilePhotoPreview) URL.revokeObjectURL(profilePhotoPreview);
-        setProfilePhotoPreview(null);
-      }
+      clearFile(field);
       return;
     }
 
     const extension = file.name.toLowerCase().slice(file.name.lastIndexOf("."));
     const typeAllowed = rules.mimeTypes.includes(file.type) || rules.extensions.includes(extension);
     if (!typeAllowed) {
-      setFiles((current) => ({ ...current, [field]: null }));
+      clearFile(field);
       setFieldErrors((current) => ({
         ...current,
         [field]: `Upload a valid ${rules.label} file (${rules.extensions.join(", ")}).`,
@@ -233,7 +247,7 @@ export default function EmployeeRegistrationPage() {
     }
 
     if (file.size > rules.maxBytes) {
-      setFiles((current) => ({ ...current, [field]: null }));
+      clearFile(field);
       setFieldErrors((current) => ({
         ...current,
         [field]: `${fieldLabels[field]} must be ${formatBytes(rules.maxBytes)} or smaller.`,
@@ -591,7 +605,14 @@ export default function EmployeeRegistrationPage() {
                   </Row>
 
                   <Form.Group className="mt-4" controlId="profile-photo" data-field="profile_photo">
-                    <Form.Label>Professional profile photo <span className="text-secondary">(recommended)</span></Form.Label>
+                    <div className="d-flex align-items-center justify-content-between mb-1">
+                      <Form.Label className="mb-0">Professional profile photo <span className="text-secondary">(recommended)</span></Form.Label>
+                      {files.profile_photo && (
+                        <Button type="button" variant="link" size="sm" className="text-danger p-0 text-decoration-none border-0 small" onClick={() => clearFile("profile_photo")}>
+                          <IconX size={15} className="me-1" />Clear photo
+                        </Button>
+                      )}
+                    </div>
                     <div className="d-flex flex-column flex-sm-row align-items-sm-center gap-3 rounded-3 border bg-body-tertiary p-3">
                       {profilePhotoPreview ? (
                         <img src={profilePhotoPreview} alt="Profile photo preview" className="rounded-circle border object-fit-cover" width={72} height={72} />
@@ -607,14 +628,14 @@ export default function EmployeeRegistrationPage() {
                           onChange={(event) => updateFile("profile_photo", (event.currentTarget as HTMLInputElement).files?.[0])}
                           isInvalid={Boolean(fieldErrors.profile_photo)}
                         />
-                        <Form.Text>{fileText(files.profile_photo, "JPEG, PNG, or WebP; maximum 5 MB.")}</Form.Text>
+                        <div className="d-flex align-items-center justify-content-between mt-1">
+                          <Form.Text className={files.profile_photo ? "text-success fw-medium" : undefined}>
+                            {fileText(files.profile_photo, "JPEG, PNG, or WebP; maximum 5 MB.")}
+                          </Form.Text>
+                          {files.profile_photo && <Badge bg="success-subtle" text="success" className="ms-1">Selected</Badge>}
+                        </div>
                         <Form.Control.Feedback type="invalid">{fieldErrors.profile_photo}</Form.Control.Feedback>
                       </div>
-                      {profilePhotoPreview && (
-                        <Button type="button" variant="outline-secondary" size="sm" onClick={removeProfilePhoto}>
-                          <IconX size={16} className="me-1" />Remove
-                        </Button>
-                      )}
                     </div>
                   </Form.Group>
 
@@ -678,25 +699,79 @@ export default function EmployeeRegistrationPage() {
                   <Row className="g-3">
                     <Col md={4}>
                       <Form.Group controlId="aadhaar-document" data-field="aadhaar_document">
-                        <Form.Label><IconFileDescription size={16} className="me-1" />Aadhaar document</Form.Label>
+                        <div className="d-flex align-items-center justify-content-between mb-1">
+                          <Form.Label className="mb-0"><IconFileDescription size={16} className="me-1" />Aadhaar document</Form.Label>
+                          {files.aadhaar_document && (
+                            <Button
+                              type="button"
+                              variant="link"
+                              size="sm"
+                              className="text-danger p-0 text-decoration-none border-0 small"
+                              onClick={() => clearFile("aadhaar_document")}
+                            >
+                              <IconX size={15} className="me-1" />Clear
+                            </Button>
+                          )}
+                        </div>
                         <Form.Control type="file" accept=".pdf,image/jpeg,image/png,image/webp" onChange={(event) => updateFile("aadhaar_document", (event.currentTarget as HTMLInputElement).files?.[0])} isInvalid={Boolean(fieldErrors.aadhaar_document)} />
-                        <Form.Text>{fileText(files.aadhaar_document, "PDF, JPG, PNG, or WebP")}</Form.Text>
+                        <div className="d-flex align-items-center justify-content-between mt-1">
+                          <Form.Text className={files.aadhaar_document ? "text-success fw-medium" : undefined}>
+                            {fileText(files.aadhaar_document, "PDF, JPG, PNG, or WebP")}
+                          </Form.Text>
+                          {files.aadhaar_document && <Badge bg="success-subtle" text="success" className="ms-1">Selected</Badge>}
+                        </div>
                         <Form.Control.Feedback type="invalid">{fieldErrors.aadhaar_document}</Form.Control.Feedback>
                       </Form.Group>
                     </Col>
                     <Col md={4}>
                       <Form.Group controlId="pan-card-document" data-field="pan_card_document">
-                        <Form.Label><IconFileDescription size={16} className="me-1" />PAN card</Form.Label>
+                        <div className="d-flex align-items-center justify-content-between mb-1">
+                          <Form.Label className="mb-0"><IconFileDescription size={16} className="me-1" />PAN card</Form.Label>
+                          {files.pan_card_document && (
+                            <Button
+                              type="button"
+                              variant="link"
+                              size="sm"
+                              className="text-danger p-0 text-decoration-none border-0 small"
+                              onClick={() => clearFile("pan_card_document")}
+                            >
+                              <IconX size={15} className="me-1" />Clear
+                            </Button>
+                          )}
+                        </div>
                         <Form.Control type="file" accept=".pdf,image/jpeg,image/png,image/webp" onChange={(event) => updateFile("pan_card_document", (event.currentTarget as HTMLInputElement).files?.[0])} isInvalid={Boolean(fieldErrors.pan_card_document)} />
-                        <Form.Text>{fileText(files.pan_card_document, "PDF, JPG, PNG, or WebP")}</Form.Text>
+                        <div className="d-flex align-items-center justify-content-between mt-1">
+                          <Form.Text className={files.pan_card_document ? "text-success fw-medium" : undefined}>
+                            {fileText(files.pan_card_document, "PDF, JPG, PNG, or WebP")}
+                          </Form.Text>
+                          {files.pan_card_document && <Badge bg="success-subtle" text="success" className="ms-1">Selected</Badge>}
+                        </div>
                         <Form.Control.Feedback type="invalid">{fieldErrors.pan_card_document}</Form.Control.Feedback>
                       </Form.Group>
                     </Col>
                     <Col md={4}>
                       <Form.Group controlId="cv-document" data-field="cv_document">
-                        <Form.Label><IconFileDescription size={16} className="me-1" />CV / Resume</Form.Label>
+                        <div className="d-flex align-items-center justify-content-between mb-1">
+                          <Form.Label className="mb-0"><IconFileDescription size={16} className="me-1" />CV / Resume</Form.Label>
+                          {files.cv_document && (
+                            <Button
+                              type="button"
+                              variant="link"
+                              size="sm"
+                              className="text-danger p-0 text-decoration-none border-0 small"
+                              onClick={() => clearFile("cv_document")}
+                            >
+                              <IconX size={15} className="me-1" />Clear
+                            </Button>
+                          )}
+                        </div>
                         <Form.Control type="file" accept=".pdf,.doc,.docx" onChange={(event) => updateFile("cv_document", (event.currentTarget as HTMLInputElement).files?.[0])} isInvalid={Boolean(fieldErrors.cv_document)} />
-                        <Form.Text>{fileText(files.cv_document, "PDF, DOC, or DOCX")}</Form.Text>
+                        <div className="d-flex align-items-center justify-content-between mt-1">
+                          <Form.Text className={files.cv_document ? "text-success fw-medium" : undefined}>
+                            {fileText(files.cv_document, "PDF, DOC, or DOCX")}
+                          </Form.Text>
+                          {files.cv_document && <Badge bg="success-subtle" text="success" className="ms-1">Selected</Badge>}
+                        </div>
                         <Form.Control.Feedback type="invalid">{fieldErrors.cv_document}</Form.Control.Feedback>
                       </Form.Group>
                     </Col>

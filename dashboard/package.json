@@ -33,7 +33,7 @@
     "lucide-react": "^1.28.0",
     "moment": "^2.30.1",
     "next": "^16.2.6",
-    "quill": "^2.0.3",
+    "quill": "^2.0.2",
     "react": "^19.2.6",
     "react-apexcharts": "^1.7.0",
     "react-big-calendar": "^1.19.4",
@@ -44,7 +44,7 @@
     "react-feather": "^2.0.10",
     "react-flatpickr": "^4.0.10",
     "react-hook-form": "^7.76.0",
-    "react-quilljs": "^2.0.5",
+    "react-quilljs": "^2.0.4",
     "react-redux": "^9.2.0",
     "react-responsive": "^10.0.1",
     "react-router-dom": "^7.18.2",
@@ -52,7 +52,7 @@
     "redux": "^5.0.1",
     "simplebar-react": "^3.3.2",
     "sweetalert2": "^11.26.24",
-    "swiper": "^11.2.10",
+    "swiper": "^14.1.0",
     "uuid": "^11.1.0"
   },
   "devDependencies": {

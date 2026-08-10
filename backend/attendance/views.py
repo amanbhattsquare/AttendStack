@@ -840,6 +840,12 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         user = self.request.user
         
         with transaction.atomic():
+            # Store original values before saving to detect critical changes
+            original_leave_type = serializer.instance.leave_type
+            original_start_date = serializer.instance.start_date
+            original_end_date = serializer.instance.end_date
+            original_status = serializer.instance.status
+            
             employee = Employee.objects.select_for_update().get(
                 pk=serializer.validated_data.get("employee", serializer.instance.employee).pk
             )
@@ -861,7 +867,16 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
                 self._validate_half_day_approval(serializer)
                 leave_request = serializer.save(employee=employee)
 
-            sync_leave_request_attendance(leave_request)
+            # Always sync attendance if any critical field that affects attendance changes
+            critical_fields_changed = (
+                leave_request.leave_type != original_leave_type or
+                leave_request.start_date != original_start_date or
+                leave_request.end_date != original_end_date or
+                leave_request.status != original_status
+            )
+            
+            if critical_fields_changed:
+                sync_leave_request_attendance(leave_request)
 
     def perform_destroy(self, instance):
         user = self.request.user

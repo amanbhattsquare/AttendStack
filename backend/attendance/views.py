@@ -758,11 +758,15 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
                 })
             return
 
-        record = AttendanceRecord.objects.filter(employee=employee, date=start_date).first()
-        if record is None or not record.check_out:
-            raise ValidationError({
-                "detail": "A half-day leave can be approved only after the employee has checked out."
-            })
+        # Only require checkout if the half-day is for today or a past date
+        from django.utils import timezone
+        today = timezone.localdate()
+        if start_date <= today:
+            record = AttendanceRecord.objects.filter(employee=employee, date=start_date).first()
+            if record is None or not record.check_out:
+                raise ValidationError({
+                    "detail": "A half-day leave for today or a past date can only be approved after the employee has checked out."
+                })
 
     def _validate_monthly_policy(self, serializer, employee):
         instance = serializer.instance

@@ -89,6 +89,8 @@ export const DashboardMenu: MenuItemType[] = [
     title: "Chat & Messages",
     link: "/chat",
     icon: <IconMessage size={20} strokeWidth={1.5} />,
+    badge: "Beta",
+    badgecolor: "primary",
   },
   {
     id: uuid(),

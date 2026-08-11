@@ -194,3 +194,79 @@ def reschedule_increment(increment: EmployeeIncrement, new_date: date, user=None
     emp.save(update_fields=["next_increment_date"])
 
     return increment
+
+
+def get_increment_chart_projections(months_ahead: int = 12):
+    """
+    Returns monthly projection data for upcoming employee increments
+    for the line chart visualization.
+    """
+    try:
+        sync_employee_increments()
+    except Exception:
+        pass
+
+    today = timezone.localdate()
+    from calendar import monthrange
+    from django.db.models import Sum
+
+    monthly_series = []
+    total_upcoming_count = 0
+    total_upcoming_raise = Decimal("0")
+
+    for i in range(months_ahead):
+        month_idx = today.month - 1 + i
+        year = today.year + month_idx // 12
+        month = month_idx % 12 + 1
+
+        _, last_day = monthrange(year, month)
+        m_start = date(year, month, 1)
+        m_end = date(year, month, last_day)
+
+        increments = EmployeeIncrement.objects.filter(
+            status__in=[IncrementStatus.PENDING, IncrementStatus.RESCHEDULED],
+            due_date__gte=m_start,
+            due_date__lte=m_end
+        ).select_related("employee")
+
+        emp_count = increments.count()
+        raise_sum = increments.aggregate(total=Sum("calculated_increment_amount"))["total"] or Decimal("0")
+
+        emp_list = [
+            {
+                "id": str(inc.employee.id),
+                "full_name": inc.employee.full_name,
+                "due_date": str(inc.due_date),
+                "raise_amount": float(inc.calculated_increment_amount or 0),
+                "new_salary": float(inc.new_salary or 0),
+            }
+            for inc in increments
+        ]
+
+        month_label = m_start.strftime("%b %Y")
+
+        monthly_series.append({
+            "month_key": m_start.strftime("%Y-%m"),
+            "month_label": month_label,
+            "employee_count": emp_count,
+            "total_raise_amount": float(raise_sum),
+            "employees": emp_list,
+        })
+
+        total_upcoming_count += emp_count
+        total_upcoming_raise += raise_sum
+
+    next_month_info = monthly_series[1] if len(monthly_series) > 1 else (monthly_series[0] if monthly_series else {"month_label": "", "employee_count": 0, "total_raise_amount": 0, "employees": []})
+
+    return {
+        "months_ahead": months_ahead,
+        "total_upcoming_count": total_upcoming_count,
+        "total_upcoming_raise": float(total_upcoming_raise),
+        "next_month": {
+            "label": next_month_info["month_label"],
+            "employee_count": next_month_info["employee_count"],
+            "total_raise_amount": next_month_info["total_raise_amount"],
+            "employees": next_month_info["employees"],
+        },
+        "series": monthly_series,
+    }

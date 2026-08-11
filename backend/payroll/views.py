@@ -155,6 +155,7 @@ from .increment_service import (
     reject_increment,
     reschedule_increment,
     get_effective_increment_config,
+    get_increment_chart_projections,
 )
 from django.utils import timezone
 
@@ -380,4 +381,15 @@ class EmployeeIncrementViewSet(viewsets.ModelViewSet):
             )
         except ValueError as err:
             return Response({"detail": str(err)}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=False, methods=["get"], url_path="chart-projections")
+    def chart_projections(self, request):
+        """Returns monthly line chart projection data for upcoming employee increments."""
+        try:
+            months_ahead = int(request.query_params.get("months", 12))
+        except (ValueError, TypeError):
+            months_ahead = 12
+
+        data = get_increment_chart_projections(months_ahead=months_ahead)
+        return Response(data, status=status.HTTP_200_OK)
 

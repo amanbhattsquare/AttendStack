@@ -322,6 +322,7 @@ const ProfilePage = () => {
         { label: "Pay Frequency", value: employee.pay_frequency_label, icon: <IconCalendar size={18} /> },
         { label: "Bank Name", value: employee.bank_name, icon: <IconBuildingBank size={18} /> },
         { label: "Account Number", value: employee.bank_account_number, icon: <IconId size={18} /> },
+        { label: "IFSC Code", value: employee.ifsc_code, icon: <IconBuildingBank size={18} /> },
         { label: "Tax ID / PAN Card", value: employee.tax_id, icon: <IconFileText size={18} /> },
       ],
     },

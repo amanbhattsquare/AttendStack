@@ -185,6 +185,9 @@ class EmployeeIncrementViewSet(viewsets.ModelViewSet):
         status_param = self.request.query_params.get("status")
         search_param = self.request.query_params.get("search")
         employee_id_param = self.request.query_params.get("employee_id")
+        period_param = self.request.query_params.get("period") or self.request.query_params.get("due")
+
+        today = timezone.localdate()
 
         if status_param:
             queryset = queryset.filter(status=status_param.upper())
@@ -197,6 +200,25 @@ class EmployeeIncrementViewSet(viewsets.ModelViewSet):
                 Q(employee__department__icontains=search_param)
             )
 
+        if period_param == "next_month":
+            if today.month == 12:
+                nm_year, nm_month = today.year + 1, 1
+            else:
+                nm_year, nm_month = today.year, today.month + 1
+            
+            from calendar import monthrange
+            _, last_day = monthrange(nm_year, nm_month)
+            nm_start = date(nm_year, nm_month, 1)
+            nm_end = date(nm_year, nm_month, last_day)
+            queryset = queryset.filter(due_date__gte=nm_start, due_date__lte=nm_end)
+
+        elif period_param == "this_month":
+            from calendar import monthrange
+            _, last_day = monthrange(today.year, today.month)
+            tm_start = date(today.year, today.month, 1)
+            tm_end = date(today.year, today.month, last_day)
+            queryset = queryset.filter(due_date__gte=tm_start, due_date__lte=tm_end)
+
         return queryset
 
     @action(detail=False, methods=["get"], url_path="summary")
@@ -208,22 +230,46 @@ class EmployeeIncrementViewSet(viewsets.ModelViewSet):
             pass
 
         today = timezone.localdate()
-        this_month_start = today.replace(day=1)
+        from calendar import monthrange
         
-        pending_count = EmployeeIncrement.objects.filter(status=IncrementStatus.PENDING).count()
+        _, tm_last_day = monthrange(today.year, today.month)
+        this_month_start = date(today.year, today.month, 1)
+        this_month_end = date(today.year, today.month, tm_last_day)
+
+        if today.month == 12:
+            nm_year, nm_month = today.year + 1, 1
+        else:
+            nm_year, nm_month = today.year, today.month + 1
+
+        _, nm_last_day = monthrange(nm_year, nm_month)
+        next_month_start = date(nm_year, nm_month, 1)
+        next_month_end = date(nm_year, nm_month, nm_last_day)
+        
+        pending_count = EmployeeIncrement.objects.filter(status__in=[IncrementStatus.PENDING, IncrementStatus.RESCHEDULED]).count()
         due_this_month = EmployeeIncrement.objects.filter(
-            status=IncrementStatus.PENDING,
+            status__in=[IncrementStatus.PENDING, IncrementStatus.RESCHEDULED],
             due_date__gte=this_month_start,
-            due_date__lte=today.replace(day=28) + timezone.timedelta(days=4)
+            due_date__lte=this_month_end
+        ).count()
+        due_next_month = EmployeeIncrement.objects.filter(
+            status__in=[IncrementStatus.PENDING, IncrementStatus.RESCHEDULED],
+            due_date__gte=next_month_start,
+            due_date__lte=next_month_end
         ).count()
         approved_this_year = EmployeeIncrement.objects.filter(
             status=IncrementStatus.APPROVED,
             action_date__year=today.year
         ).count()
 
+        next_month_name = next_month_start.strftime("%B %Y")
+        this_month_name = this_month_start.strftime("%B %Y")
+
         return Response({
             "pending_count": pending_count,
             "due_this_month": due_this_month,
+            "due_next_month": due_next_month,
+            "this_month_name": this_month_name,
+            "next_month_name": next_month_name,
             "approved_this_year": approved_this_year,
         })
 

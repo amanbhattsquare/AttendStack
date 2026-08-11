@@ -47,12 +47,22 @@ export interface EmployeeIncrementItem {
 export interface IncrementSummary {
   pending_count: number;
   due_this_month: number;
+  due_next_month?: number;
+  this_month_name?: string;
+  next_month_name?: string;
   approved_this_year: number;
 }
 
 const UpcomingIncrementsWidget: React.FC = () => {
   const [increments, setIncrements] = useState<EmployeeIncrementItem[]>([]);
-  const [summary, setSummary] = useState<IncrementSummary>({ pending_count: 0, due_this_month: 0, approved_this_year: 0 });
+  const [summary, setSummary] = useState<IncrementSummary>({
+    pending_count: 0,
+    due_this_month: 0,
+    due_next_month: 0,
+    this_month_name: "",
+    next_month_name: "",
+    approved_this_year: 0,
+  });
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>("");
   const [filterStatus, setFilterStatus] = useState<string>("PENDING");
@@ -79,9 +89,15 @@ const UpcomingIncrementsWidget: React.FC = () => {
       }
 
       // 2. Fetch Increments List
-      const listUrl = filterStatus
-        ? `${BASE_URL}/payroll/increments/?status=${filterStatus}`
-        : `${BASE_URL}/payroll/increments/`;
+      let listUrl = `${BASE_URL}/payroll/increments/`;
+      if (filterStatus === "NEXT_MONTH") {
+        listUrl = `${BASE_URL}/payroll/increments/?due=next_month`;
+      } else if (filterStatus === "THIS_MONTH") {
+        listUrl = `${BASE_URL}/payroll/increments/?due=this_month`;
+      } else if (filterStatus) {
+        listUrl = `${BASE_URL}/payroll/increments/?status=${filterStatus}`;
+      }
+
       const res = await fetch(listUrl, { headers: authHeaders() });
       if (!res.ok) throw new Error("Failed to load employee increments.");
       const data = await res.json();
@@ -233,45 +249,77 @@ const UpcomingIncrementsWidget: React.FC = () => {
 
   return (
     <div className="upcoming-increments-section my-4">
-      {/* Metric Cards */}
+      {/* Metric Cards Grid */}
       <Row className="g-3 mb-4">
-        <Col md={4}>
-          <Card className="border-0 shadow-sm bg-primary text-white">
+        <Col xs={12} sm={6} xl={3}>
+          <Card
+            className="border-0 shadow-sm text-white h-100"
+            style={{ background: "linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)", cursor: "pointer" }}
+            onClick={() => setFilterStatus("PENDING")}
+          >
             <Card.Body className="d-flex align-items-center justify-content-between p-3">
               <div>
-                <span className="text-white-50 small fw-semibold text-uppercase">Pending Increments</span>
+                <span className="text-white-50 small fw-semibold text-uppercase">Pending Review</span>
                 <h3 className="mb-0 fw-bold mt-1 text-white">{summary.pending_count}</h3>
               </div>
-              <div className="rounded-circle bg-white bg-opacity-25 p-3 d-flex align-items-center justify-content-center">
-                <IconTrendingUp size={24} className="text-white" />
+              <div className="rounded-circle bg-white bg-opacity-20 p-2.5 d-flex align-items-center justify-content-center">
+                <IconTrendingUp size={22} className="text-white" />
               </div>
             </Card.Body>
           </Card>
         </Col>
 
-        <Col md={4}>
-          <Card className="border-0 shadow-sm bg-warning text-dark">
+        <Col xs={12} sm={6} xl={3}>
+          <Card
+            className="border-0 shadow-sm text-white h-100 position-relative overflow-hidden"
+            style={{ background: "linear-gradient(135deg, #0d9488 0%, #059669 100%)", cursor: "pointer" }}
+            onClick={() => setFilterStatus("NEXT_MONTH")}
+          >
             <Card.Body className="d-flex align-items-center justify-content-between p-3">
               <div>
-                <span className="text-dark-50 small fw-semibold text-uppercase">Due This Month</span>
-                <h3 className="mb-0 fw-bold mt-1 text-dark">{summary.due_this_month}</h3>
+                <span className="text-white-50 small fw-semibold text-uppercase">
+                  Due Next Month {summary.next_month_name ? `(${summary.next_month_name})` : ""}
+                </span>
+                <h3 className="mb-0 fw-bold mt-1 text-white">{summary.due_next_month ?? 0}</h3>
               </div>
-              <div className="rounded-circle bg-black bg-opacity-10 p-3 d-flex align-items-center justify-content-center">
-                <IconCalendarTime size={24} className="text-dark" />
+              <div className="rounded-circle bg-white bg-opacity-25 p-2.5 d-flex align-items-center justify-content-center">
+                <IconCalendarTime size={22} className="text-white" />
               </div>
             </Card.Body>
           </Card>
         </Col>
 
-        <Col md={4}>
-          <Card className="border-0 shadow-sm bg-success text-white">
+        <Col xs={12} sm={6} xl={3}>
+          <Card
+            className="border-0 shadow-sm text-dark h-100"
+            style={{ background: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)", cursor: "pointer" }}
+            onClick={() => setFilterStatus("THIS_MONTH")}
+          >
             <Card.Body className="d-flex align-items-center justify-content-between p-3">
               <div>
-                <span className="text-white-50 small fw-semibold text-uppercase">Approved Raises (This Year)</span>
+                <span className="text-white-50 small fw-semibold text-uppercase">Due This Month</span>
+                <h3 className="mb-0 fw-bold mt-1 text-white">{summary.due_this_month}</h3>
+              </div>
+              <div className="rounded-circle bg-white bg-opacity-25 p-2.5 d-flex align-items-center justify-content-center">
+                <IconCalendarTime size={22} className="text-white" />
+              </div>
+            </Card.Body>
+          </Card>
+        </Col>
+
+        <Col xs={12} sm={6} xl={3}>
+          <Card
+            className="border-0 shadow-sm text-white h-100"
+            style={{ background: "linear-gradient(135deg, #10b981 0%, #047857 100%)", cursor: "pointer" }}
+            onClick={() => setFilterStatus("APPROVED")}
+          >
+            <Card.Body className="d-flex align-items-center justify-content-between p-3">
+              <div>
+                <span className="text-white-50 small fw-semibold text-uppercase">Approved (Year)</span>
                 <h3 className="mb-0 fw-bold mt-1 text-white">{summary.approved_this_year}</h3>
               </div>
-              <div className="rounded-circle bg-white bg-opacity-25 p-3 d-flex align-items-center justify-content-center">
-                <IconCurrencyRupee size={24} className="text-white" />
+              <div className="rounded-circle bg-white bg-opacity-20 p-2.5 d-flex align-items-center justify-content-center">
+                <IconCurrencyRupee size={22} className="text-white" />
               </div>
             </Card.Body>
           </Card>
@@ -283,18 +331,29 @@ const UpcomingIncrementsWidget: React.FC = () => {
         <Card.Header className="bg-white py-3 border-0 d-flex flex-wrap align-items-center justify-content-between gap-2">
           <div className="d-flex align-items-center gap-2">
             <IconTrendingUp size={22} className="text-primary" />
-            <h5 className="mb-0 fw-bold">Employee Salary Increment Management</h5>
+            <div>
+              <h5 className="mb-0 fw-bold">Employee Salary Increment Management</h5>
+              <small className="text-muted">
+                {filterStatus === "NEXT_MONTH"
+                  ? `Showing employees with increments scheduled for next month (${summary.next_month_name || "Next Month"})`
+                  : filterStatus === "THIS_MONTH"
+                  ? `Showing employees with increments scheduled for this month (${summary.this_month_name || "This Month"})`
+                  : "Track, approve, reject or reschedule upcoming employee salary raises"}
+              </small>
+            </div>
           </div>
 
           <div className="d-flex align-items-center gap-2">
             {/* Filter Dropdown */}
             <Form.Select
               size="sm"
-              style={{ width: "160px" }}
+              style={{ width: "210px" }}
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
             >
-              <option value="PENDING">Pending Review</option>
+              <option value="NEXT_MONTH">🗓️ Due Next Month {summary.next_month_name ? `(${summary.next_month_name})` : ""}</option>
+              <option value="THIS_MONTH">📅 Due This Month</option>
+              <option value="PENDING">Pending Review (All)</option>
               <option value="RESCHEDULED">Rescheduled</option>
               <option value="APPROVED">Approved</option>
               <option value="REJECTED">Rejected</option>

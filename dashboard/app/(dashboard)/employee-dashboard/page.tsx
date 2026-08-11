@@ -26,6 +26,7 @@ import {
 } from "@tabler/icons-react";
 import { useCurrentEmployee } from "./useCurrentEmployee";
 import { Spinner, Alert, Badge, Card, Button, Row, Col } from "react-bootstrap";
+import EmployeeIncrementWidget from "components/EmployeeIncrementWidget";
 import {
   getCurrentPosition,
   getGeolocationPermissionState,
@@ -950,6 +951,9 @@ const EmployeeDashboard = () => {
           </Card.Body>
         </Card>
       )}
+
+      {/* Salary Increment Growth & History Widget */}
+      <EmployeeIncrementWidget />
 
       <style jsx global>{`
         .employee-dashboard-container {

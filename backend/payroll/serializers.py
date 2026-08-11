@@ -76,3 +76,56 @@ class PayrollSerializer(serializers.ModelSerializer):
             "per_day_salary": payroll["per_day_salary"],
             "leave_breakdown": payroll["leave_breakdown"],
         }
+
+
+from .models import EmployeeIncrement
+
+
+class EmployeeIncrementSerializer(serializers.ModelSerializer):
+    employee_details = EmployeeMiniSerializer(source="employee", read_only=True)
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    increment_type_display = serializers.CharField(source="get_increment_type_display", read_only=True)
+    action_by_name = serializers.CharField(source="action_by.get_full_name", read_only=True)
+
+    class Meta:
+        model = EmployeeIncrement
+        fields = [
+            "id",
+            "employee",
+            "employee_details",
+            "due_date",
+            "current_salary",
+            "increment_type",
+            "increment_type_display",
+            "increment_value",
+            "calculated_increment_amount",
+            "new_salary",
+            "status",
+            "status_display",
+            "rescheduled_date",
+            "action_date",
+            "action_by",
+            "action_by_name",
+            "notes",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "calculated_increment_amount",
+            "new_salary",
+            "action_date",
+            "action_by",
+            "created_at",
+            "updated_at",
+        ]
+
+
+class RescheduleIncrementSerializer(serializers.Serializer):
+    rescheduled_date = serializers.DateField(required=True)
+    notes = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+class ProcessIncrementActionSerializer(serializers.Serializer):
+    notes = serializers.CharField(required=False, allow_blank=True, default="")
+

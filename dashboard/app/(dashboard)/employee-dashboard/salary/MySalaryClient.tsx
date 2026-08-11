@@ -6,6 +6,7 @@ import { Spinner, Alert, Badge, Table, Button, Modal, Row, Col } from "react-boo
 import PayslipPreview from "components/payroll/PayslipPreview";
 import { downloadPayslipPdf } from "components/payroll/payslipPdf";
 import { useBranding } from "context/BrandingContext";
+import EmployeeIncrementWidget from "components/EmployeeIncrementWidget";
 
 const BASE_URL = `${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/payroll/`;
 
@@ -318,6 +319,8 @@ const MySalaryClient = () => {
         </Modal.Footer>
       </Modal>
 
+      {/* Employee Increment Growth Timeline */}
+      <EmployeeIncrementWidget />
     </Fragment>
   );
 };

@@ -74,6 +74,22 @@ class SystemSettings(models.Model):
     # Burger Rule (for sandwich leave around holidays)
     burger_rule_enabled = models.BooleanField(default=False, help_text="If enabled, a holiday is marked as unpaid if it is sandwiched between two leave days.")
     
+    # Increment Management Settings
+    increment_enabled = models.BooleanField(default=True, help_text="Enable automatic calculation and scheduling of employee salary increments.")
+    default_increment_months = models.PositiveIntegerField(default=12, help_text="Default increment cycle interval in months (e.g. 1, 3, 6, 9, 12, 18, 24).")
+    default_increment_type = models.CharField(
+        max_length=20,
+        default="PERCENTAGE",
+        choices=[("PERCENTAGE", "Percentage"), ("FLAT_AMOUNT", "Flat Amount (Rupees)")],
+        help_text="Default increment calculation method."
+    )
+    default_increment_value = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=10.00,
+        help_text="Default increment value (percentage or rupee amount)."
+    )
+
     
     # Annual leave allocations. Each approved leave is paid only while its
     # own leave-type balance remains for that calendar year.

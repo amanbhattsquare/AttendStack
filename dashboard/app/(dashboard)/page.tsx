@@ -5,6 +5,7 @@ import { Badge, Card, Col, Row, Table, Spinner, Button } from "react-bootstrap";
 import { IconUsers, IconListCheck, IconClock, IconSnowboarding, IconRefresh } from "@tabler/icons-react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
+import UpcomingIncrementsWidget from "components/UpcomingIncrementsWidget";
 import { ApexOptions } from "apexcharts";
 
 // SSR safe dynamic import for ApexCharts
@@ -444,6 +445,9 @@ const HomePage = () => {
           </Card>
         </Col>
       </Row>
+
+      {/* Upcoming & Due Employee Increments Management Section */}
+      <UpcomingIncrementsWidget />
     </Fragment>
   );
 };

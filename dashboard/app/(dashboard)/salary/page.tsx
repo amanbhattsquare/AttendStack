@@ -7,6 +7,7 @@ import Swal from "sweetalert2";
 import PayslipPreview from "components/payroll/PayslipPreview";
 import { downloadPayslipPdf } from "components/payroll/payslipPdf";
 import { useBranding } from "context/BrandingContext";
+import UpcomingIncrementsWidget from "components/UpcomingIncrementsWidget";
 
 const BASE_URL = `${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/payroll/`;
 
@@ -692,6 +693,8 @@ const SalaryPage = () => {
           </Button>
         </Modal.Footer>
       </Modal>
+      {/* Salary Increment Management Section */}
+      <UpcomingIncrementsWidget />
     </Fragment>
   );
 };

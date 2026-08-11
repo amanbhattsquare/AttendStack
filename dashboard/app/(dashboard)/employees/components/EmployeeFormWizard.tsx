@@ -38,6 +38,11 @@ export type EmployeeFormData = {
   bankAccountNumber: string;
   ifscCode: string;
   taxId: string;
+  overrideIncrementPolicy?: boolean;
+  customIncrementMonths?: string;
+  customIncrementType?: string;
+  customIncrementValue?: string;
+  incrementStatus?: string;
 };
 
 export type EmployeeFormErrors = Partial<Record<keyof EmployeeFormData, string>>;
@@ -68,6 +73,11 @@ export const initialEmployeeFormData: EmployeeFormData = {
   bankAccountNumber: "",
   ifscCode: "",
   taxId: "",
+  overrideIncrementPolicy: false,
+  customIncrementMonths: "12",
+  customIncrementType: "PERCENTAGE",
+  customIncrementValue: "10",
+  incrementStatus: "ENABLED",
 };
 
 const API_URL = `${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/employees/`;
@@ -227,8 +237,12 @@ const EmployeeFormWizard = ({ mode = "add", initialData, employeeId, onSave, onC
       pay_frequency: safeTrim(formData.payFrequency),
       bank_name: safeTrim(formData.bankName),
       bank_account_number: safeTrim(formData.bankAccountNumber),
-      ifsc_code: safeTrim(formData.ifscCode).toUpperCase(),
       tax_id: safeTrim(formData.taxId).toUpperCase(),
+      override_increment_policy: String(Boolean(formData.overrideIncrementPolicy)),
+      custom_increment_months: safeTrim(formData.customIncrementMonths),
+      custom_increment_type: safeTrim(formData.customIncrementType),
+      custom_increment_value: safeTrim(formData.customIncrementValue),
+      increment_status: safeTrim(formData.incrementStatus || "ENABLED"),
     };
 
     Object.entries(fields).forEach(([key, value]) => {

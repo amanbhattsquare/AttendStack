@@ -94,6 +94,8 @@ const DashboardLayout: React.FC<DashboardProps> = ({ children }) => {
     };
   }, [pathname, router]);
 
+  const isChatPage = pathname.startsWith("/chat");
+
   return (
     <BrandingProvider>
       <div>
@@ -103,9 +105,11 @@ const DashboardLayout: React.FC<DashboardProps> = ({ children }) => {
           <div className='custom-container' style={{ flex: '1 0 auto' }}>
             {children}
           </div>
-          <div className='custom-container py-3'>
-            <span className='me-1'>© 2026 AttendStack. A <a href="https://bhattsquare.com" target="_blank" rel="noopener noreferrer">Bhatt Square</a> Project. <span className='text-secondary ms-2'>Version 2.5.3</span></span>
-          </div>
+          {!isChatPage && (
+            <div className='custom-container py-3'>
+              <span className='me-1'>© 2026 AttendStack. A <a href="https://bhattsquare.com" target="_blank" rel="noopener noreferrer">Bhatt Square</a> Project. <span className='text-secondary ms-2'>Version 2.5.3</span></span>
+            </div>
+          )}
         </div>
       </div>
     </BrandingProvider>

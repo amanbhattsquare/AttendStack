@@ -162,7 +162,7 @@ const UpcomingIncrementsChartWidget: React.FC = () => {
       fontSize: "13px",
       fontWeight: 600,
       markers: {
-        radius: 12,
+        size: 6,
       },
     },
   };

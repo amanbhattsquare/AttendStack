@@ -354,7 +354,7 @@ const HomePage = () => {
               </Link>
             </Card.Header>
             <Card.Body className="p-0">
-              <Table hover responsive className="text-nowrap align-middle mb-0">
+              <Table hover size="sm" responsive className="text-nowrap align-middle mb-0">
                 <thead className="table-light">
                   <tr>
                     <th>Employee</th>

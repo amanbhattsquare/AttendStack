@@ -561,42 +561,43 @@ const EmployeePageClient = () => {
           {successMessage && <div className="alert alert-success">{successMessage}</div>}
 
           <div className="table-responsive employee-table-responsive">
-            <table className="table align-middle table-hover text-nowrap">
+            <table className="table table-sm table-borderless table-striped align-middle table-hover text-nowrap mb-0">
               <thead className="table-light">
                 <tr>
-                  <th>Employee Name</th>
-                  <th>ID</th>
-                  <th>Department</th>
-                  <th>Designation</th>
-                  <th>Status</th>
-                  <th className="text-center employee-action-column">Action</th>
+                  <th className="py-2.5 ps-3">Employee Name</th>
+                  <th className="py-2.5">ID</th>
+                  <th className="py-2.5">Department</th>
+                  <th className="py-2.5">Designation</th>
+                  <th className="py-2.5">Status</th>
+                  <th className="py-2.5 text-center employee-action-column pe-3">Action</th>
                 </tr>
               </thead>
               <tbody>
                 {isLoading && (
                   <tr>
-                    <td colSpan={7} className="text-center py-5 text-secondary">Loading employees...</td>
+                    <td colSpan={7} className="text-center py-4 text-secondary">Loading employees...</td>
                   </tr>
                 )}
 
                 {!isLoading && filteredEmployees.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="text-center py-5 text-secondary">No employees found.</td>
+                    <td colSpan={7} className="text-center py-4 text-secondary">No employees found.</td>
                   </tr>
                 )}
 
                 {!isLoading && filteredEmployees.map((employee) => (
                   <tr key={employee.id} style={{ cursor: "pointer" }} onClick={() => handleRowClick(employee.id)}>
-                    <td>
+                    <td className="py-2 ps-3">
                       <div className="d-flex align-items-center">
                         <img
                           src={employee.profile_photo_url || "/images/avatar/avatar-fallback.jpg"}
                           alt={employee.full_name}
-                          className="avatar avatar-sm rounded-circle me-3"
+                          className="rounded-circle me-2.5"
+                          style={{ width: "32px", height: "32px", objectFit: "cover" }}
                         />
                         <div>
-                          <h6 className="mb-0">{employee.full_name}</h6>
-                          <small className="text-muted">{employee.email}</small>
+                          <h6 className="mb-0 fw-semibold fs-6">{employee.full_name}</h6>
+                          <small className="text-muted" style={{ fontSize: "0.78rem" }}>{employee.email}</small>
                         </div>
                       </div>
                     </td>

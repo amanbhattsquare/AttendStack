@@ -374,7 +374,7 @@ const AdminDashboard = () => {
             </div>
             <div>
               <div className="fw-bold text-dark">System Live</div>
-              <div className="small text-secondary">{formatDateTime(new Date().toISOString())}</div>
+              <div className="small text-secondary" suppressHydrationWarning>{formatDateTime(new Date().toISOString())}</div>
             </div>
           </Card.Body>
         </Card>

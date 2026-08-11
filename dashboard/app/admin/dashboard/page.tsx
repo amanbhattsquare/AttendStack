@@ -18,6 +18,7 @@ import {
 } from "@tabler/icons-react";
 import DashboardStats from "components/dashboard/DashboardStats";
 import ActivityLog from "components/dashboard/ActivityLog";
+import UpcomingIncrementsWidget from "components/UpcomingIncrementsWidget";
 import { DashboardStatType } from "types/DashboardTypes";
 
 const EmployeesByOrgChart = dynamic(
@@ -500,6 +501,9 @@ const AdminDashboard = () => {
               )}
             </Card.Body>
           </Card>
+
+          {/* Employee Salary Increments Section */}
+          <UpcomingIncrementsWidget />
 
           <Row className="g-4 mb-4">
             <Col xs={12} xl={8}>

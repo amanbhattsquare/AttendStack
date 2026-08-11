@@ -323,7 +323,7 @@ const UpcomingIncrementsWidget: React.FC = () => {
             </div>
           ) : (
             <div className="table-responsive">
-              <Table hover className="align-middle mb-0">
+              <Table hover size="sm" className="align-middle mb-0">
                 <thead className="table-light text-secondary small text-uppercase">
                   <tr>
                     <th>Employee</th>

@@ -7,14 +7,27 @@ User = get_user_model()
 
 class UserMinimalSerializer(serializers.ModelSerializer):
     name = serializers.SerializerMethodField()
+    status = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ['id', 'email', 'first_name', 'last_name', 'name', 'role', 'employee_id']
+        fields = ['id', 'email', 'first_name', 'last_name', 'name', 'role', 'employee_id', 'is_active', 'status']
 
     def get_name(self, obj):
         full_name = f"{getattr(obj, 'first_name', '')} {getattr(obj, 'last_name', '')}".strip()
         return full_name if full_name else obj.email
+
+    def get_status(self, obj):
+        if not obj.is_active:
+            return "INACTIVE"
+        try:
+            from employees.models import Employee
+            emp = Employee.objects.filter(email=obj.email).first()
+            if emp:
+                return emp.status
+        except Exception:
+            pass
+        return "ACTIVE"
 
 
 class AttachmentSerializer(serializers.ModelSerializer):

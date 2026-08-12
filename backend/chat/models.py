@@ -118,3 +118,20 @@ class Attachment(models.Model):
 
     def __str__(self):
         return f"Attachment {self.id} for Message {self.message_id}"
+
+
+from django.db.models.signals import post_delete
+from django.dispatch import receiver
+
+
+@receiver(post_delete, sender=Attachment)
+def auto_delete_file_on_attachment_delete(sender, instance, **kwargs):
+    """
+    Deletes underlying file from filesystem/storage when corresponding Attachment record is deleted.
+    """
+    if instance.file:
+        try:
+            instance.file.delete(save=False)
+        except Exception:
+            pass
+

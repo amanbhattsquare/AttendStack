@@ -221,10 +221,11 @@ export default function ChatPage() {
     setTimeout(() => setCopiedMsgId(null), 2000);
   };
 
-  // Current user info & DP
+  // Current user info & DP & role
   const [currentUserId, setCurrentUserId] = useState<string | number | null>(null);
   const [myProfilePhoto, setMyProfilePhoto] = useState<string | null>(null);
   const [myUserName, setMyUserName] = useState<string>("");
+  const [userRole, setUserRole] = useState<string>("");
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const wsRef = useRef<any>(null);
@@ -250,6 +251,7 @@ export default function ChatPage() {
         if (storedUser) {
           const parsed = JSON.parse(storedUser);
           if (parsed?.id) setCurrentUserId(parsed.id);
+          if (parsed?.role) setUserRole(parsed.role);
           if (parsed?.full_name || parsed?.name || parsed?.username) {
             setMyUserName(parsed.full_name || parsed.name || parsed.username);
           }
@@ -554,6 +556,10 @@ export default function ChatPage() {
   };
 
   const openGroupModal = () => {
+    if (userRole === "EMPLOYEE") {
+      alert("Only Administrators and HR Managers are authorized to create group chats.");
+      return;
+    }
     setShowGroupModal(true);
     setGroupName("");
     setSelectedGroupMembers([]);
@@ -577,8 +583,8 @@ export default function ChatPage() {
   const activeUserSearchResults = useMemo(() => {
     return userSearchResults.filter((u) => {
       if (u.is_active === false) return false;
-      if (u.status && (u.status.toUpperCase() === "INACTIVE" || u.status.toUpperCase() === "TERMINATED")) return false;
-      if (u.employment_status && (u.employment_status.toUpperCase() === "INACTIVE" || u.employment_status.toUpperCase() === "TERMINATED")) return false;
+      if (u.status && u.status.toUpperCase() !== "ACTIVE") return false;
+      if (u.employment_status && u.employment_status.toUpperCase() !== "ACTIVE") return false;
       return true;
     });
   }, [userSearchResults]);
@@ -814,9 +820,19 @@ export default function ChatPage() {
                 <button className="chat-icon-btn" title="New Direct Message" onClick={openDirectModal}>
                   <PlusCircle size={20} />
                 </button>
-                <button className="chat-icon-btn accent" title="Create Group Chat" onClick={openGroupModal}>
-                  <Users size={20} />
-                </button>
+                {userRole !== "EMPLOYEE" ? (
+                  <button className="chat-icon-btn accent" title="Create Group Chat" onClick={openGroupModal}>
+                    <Users size={20} />
+                  </button>
+                ) : (
+                  <button
+                    className="chat-icon-btn opacity-50"
+                    title="Only Admins can create group chats"
+                    onClick={() => alert("Only Administrators and HR Managers are authorized to create group chats.")}
+                  >
+                    <Users size={20} />
+                  </button>
+                )}
               </div>
             </div>
 

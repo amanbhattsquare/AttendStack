@@ -8,6 +8,7 @@ from django.shortcuts import get_object_or_404
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 
+from employees.models import Employee
 from .models import Conversation, ConversationMember, Message, Attachment
 from .serializers import (
     ConversationSerializer,
@@ -50,6 +51,14 @@ class ConversationViewSet(viewsets.ModelViewSet):
 
         target_user = get_object_or_404(User, id=target_user_id)
 
+        # Enforce active user & employee status check via Employee model lookup by email
+        emp = Employee.objects.filter(email=target_user.email).first()
+        if not target_user.is_active or (emp and emp.status in ['INACTIVE', 'TERMINATED']):
+            return Response(
+                {"error": "You can only start a chat with active team members."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         # Check if direct conversation already exists between these 2 users
         existing_conv = Conversation.objects.filter(
             type=Conversation.ConversationType.DIRECT,
@@ -78,6 +87,15 @@ class ConversationViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'], url_path='group')
     def create_group(self, request):
+        # Only Admins and HR Managers are authorized to create group chats
+        user_role = getattr(request.user, 'role', '')
+        is_admin_or_hr = user_role in ['SUPER_ADMIN', 'HR'] or request.user.is_staff or request.user.is_superuser
+        if not is_admin_or_hr:
+            return Response(
+                {"error": "Only Administrators and HR Managers are authorized to create group chats."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
         serializer = CreateGroupConversationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         name = serializer.validated_data['name']
@@ -210,7 +228,17 @@ class ConversationViewSet(viewsets.ModelViewSet):
         message.is_deleted = True
         message.content = "This message was deleted"
         message.save()
-        message.attachments.all().delete()
+
+        # Delete physical files from storage disk before removing database attachment entries
+        attachments = list(message.attachments.all())
+        for attachment in attachments:
+            if attachment.file:
+                try:
+                    attachment.file.delete(save=False)
+                except Exception as e:
+                    import logging
+                    logging.warning(f"Failed to delete storage file for attachment {attachment.id}: {e}")
+            attachment.delete()
 
         msg_data = MessageSerializer(message, context={'request': request}).data
 
@@ -251,7 +279,15 @@ class ChatUserViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = UserMinimalSerializer
 
     def get_queryset(self):
+        # Base active users queryset
         queryset = User.objects.exclude(id=self.request.user.id).filter(is_active=True)
+
+        # Exclude emails belonging to inactive or terminated employees
+        inactive_emails = Employee.objects.filter(
+            status__in=['INACTIVE', 'TERMINATED']
+        ).values_list('email', flat=True)
+        queryset = queryset.exclude(email__in=inactive_emails)
+
         search = self.request.query_params.get('search', '').strip()
         if search:
             queryset = queryset.filter(

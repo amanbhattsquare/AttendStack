@@ -14,7 +14,7 @@ const Chart = dynamic(() => import("react-apexcharts"), { ssr: false });
 const BASE_URL = `${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1`;
 
 const authHeaders = (): HeadersInit => {
-  const token = localStorage.getItem("authToken");
+  const token = typeof window !== "undefined" ? localStorage.getItem("authToken") : null;
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
@@ -24,7 +24,7 @@ const formatDate = (value: string) =>
 const formatTime = (value?: string | null) =>
   value ? new Intl.DateTimeFormat("en-IN", { hour: "2-digit", minute: "2-digit" }).format(new Date(value)) : "--";
 
-const HomePage = () => {
+const DashboardPage = () => {
   const [todayRecords, setTodayRecords] = useState<any[]>([]);
   const [recentEmployees, setRecentEmployees] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -452,4 +452,4 @@ const HomePage = () => {
   );
 };
 
-export default HomePage;
+export default DashboardPage;

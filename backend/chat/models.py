@@ -92,6 +92,16 @@ class Message(models.Model):
     )
     is_edited = models.BooleanField(default=False)
     is_deleted = models.BooleanField(default=False)
+    is_announcement = models.BooleanField(default=False)
+    pinned = models.BooleanField(default=False)
+    target_type = models.CharField(max_length=20, default='EVERYONE')
+    department_target = models.CharField(max_length=100, blank=True, null=True)
+    requires_acknowledgement = models.BooleanField(default=False)
+    acknowledged_by = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        blank=True,
+        related_name='acknowledged_announcements'
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

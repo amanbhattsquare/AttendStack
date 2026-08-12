@@ -8,10 +8,11 @@ User = get_user_model()
 class UserMinimalSerializer(serializers.ModelSerializer):
     name = serializers.SerializerMethodField()
     status = serializers.SerializerMethodField()
+    profile_photo_url = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ['id', 'email', 'first_name', 'last_name', 'name', 'role', 'employee_id', 'is_active', 'status']
+        fields = ['id', 'email', 'first_name', 'last_name', 'name', 'role', 'employee_id', 'is_active', 'status', 'profile_photo_url']
 
     def get_name(self, obj):
         full_name = f"{getattr(obj, 'first_name', '')} {getattr(obj, 'last_name', '')}".strip()
@@ -28,6 +29,28 @@ class UserMinimalSerializer(serializers.ModelSerializer):
         except Exception:
             pass
         return "ACTIVE"
+
+    def get_profile_photo_url(self, obj):
+        request = self.context.get('request')
+        # 1. Check employee profile_photo (primary source)
+        try:
+            from employees.models import Employee
+            emp = Employee.objects.filter(email=obj.email).first()
+            if emp and emp.profile_photo:
+                if request:
+                    return request.build_absolute_uri(emp.profile_photo.url)
+                return emp.profile_photo.url
+        except Exception:
+            pass
+        # 2. Fall back to User.avatar
+        try:
+            if obj.avatar:
+                if request:
+                    return request.build_absolute_uri(obj.avatar.url)
+                return obj.avatar.url
+        except Exception:
+            pass
+        return None
 
 
 class AttachmentSerializer(serializers.ModelSerializer):
@@ -50,15 +73,29 @@ class AttachmentSerializer(serializers.ModelSerializer):
 class MessageSerializer(serializers.ModelSerializer):
     sender = UserMinimalSerializer(read_only=True)
     attachments = AttachmentSerializer(many=True, read_only=True)
+    acknowledged_count = serializers.SerializerMethodField()
+    is_acknowledged_by_me = serializers.SerializerMethodField()
 
     class Meta:
         model = Message
         fields = [
             'id', 'conversation', 'sender', 'content',
             'message_type', 'is_edited', 'is_deleted',
+            'is_announcement', 'pinned', 'target_type',
+            'department_target', 'requires_acknowledgement',
+            'acknowledged_count', 'is_acknowledged_by_me',
             'created_at', 'attachments'
         ]
         read_only_fields = ['id', 'conversation', 'sender', 'is_edited', 'is_deleted', 'created_at']
+
+    def get_acknowledged_count(self, obj):
+        return obj.acknowledged_by.count()
+
+    def get_is_acknowledged_by_me(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            return obj.acknowledged_by.filter(id=request.user.id).exists()
+        return False
 
 
 class ConversationMemberSerializer(serializers.ModelSerializer):
@@ -74,6 +111,7 @@ class ConversationSerializer(serializers.ModelSerializer):
     last_message = serializers.SerializerMethodField()
     unread_count = serializers.SerializerMethodField()
     display_name = serializers.SerializerMethodField()
+    avatar = serializers.SerializerMethodField()
 
     class Meta:
         model = Conversation
@@ -82,6 +120,26 @@ class ConversationSerializer(serializers.ModelSerializer):
             'avatar', 'created_at', 'updated_at',
             'members', 'last_message', 'unread_count'
         ]
+
+    def get_avatar(self, obj):
+        request = self.context.get('request')
+        if obj.type == Conversation.ConversationType.GROUP:
+            if obj.avatar:
+                return request.build_absolute_uri(obj.avatar.url) if request else obj.avatar.url
+            return None
+        if request and request.user and request.user.is_authenticated:
+            other_member = obj.members.exclude(user=request.user).first()
+            if other_member and other_member.user:
+                try:
+                    from employees.models import Employee
+                    emp = Employee.objects.filter(email=other_member.user.email).first()
+                    if emp and emp.profile_photo:
+                        return request.build_absolute_uri(emp.profile_photo.url) if request else emp.profile_photo.url
+                except Exception:
+                    pass
+                if getattr(other_member.user, 'avatar', None):
+                    return request.build_absolute_uri(other_member.user.avatar.url) if request else other_member.user.avatar.url
+        return None
 
     def get_last_message(self, obj):
         last_msg = obj.messages.order_by('-created_at').first()

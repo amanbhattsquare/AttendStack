@@ -272,6 +272,89 @@ class ConversationViewSet(viewsets.ModelViewSet):
                 member.save(update_fields=['last_read_message'])
         return Response({"status": "read marked"}, status=status.HTTP_200_OK)
 
+    @action(detail=True, methods=['post'], url_path='clear')
+    def clear_chat(self, request, pk=None):
+        conversation = self.get_object()
+        messages = conversation.messages.all()
+        for msg in messages:
+            msg.is_deleted = True
+            msg.content = "This message was cleared"
+            msg.save()
+            for attachment in list(msg.attachments.all()):
+                if attachment.file:
+                    try:
+                        attachment.file.delete(save=False)
+                    except Exception:
+                        pass
+                attachment.delete()
+        return Response({"status": "Chat cleared successfully"}, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=['post'], url_path='announcement')
+    def send_announcement(self, request):
+        user_role = getattr(request.user, 'role', '')
+        is_admin_or_hr = user_role in ['SUPER_ADMIN', 'HR'] or request.user.is_staff or request.user.is_superuser
+        if not is_admin_or_hr:
+            return Response(
+                {"error": "Only Administrators and HR Managers are authorized to send announcements."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        content = request.data.get('content', '')
+        target_type = request.data.get('target_type', 'EVERYONE')
+        department_target = request.data.get('department_target', '')
+        pinned = request.data.get('pinned', True)
+        requires_ack = request.data.get('requires_acknowledgement', False)
+
+        # Get or create company announcements group (handle old emoji name too)
+        conv = Conversation.objects.filter(
+            type=Conversation.ConversationType.GROUP,
+            name__in=["Company Announcements", "\U0001f4e2 Company Announcements"]
+        ).first()
+
+        if conv and conv.name != "Company Announcements":
+            conv.name = "Company Announcements"
+            conv.save(update_fields=["name"])
+
+        if not conv:
+            conv = Conversation.objects.create(
+                type=Conversation.ConversationType.GROUP,
+                name="Company Announcements"
+            )
+            ConversationMember.objects.create(
+                conversation=conv,
+                user=request.user,
+                role=ConversationMember.Role.ADMIN
+            )
+            # Add all active users to company announcements
+            active_users = User.objects.filter(is_active=True).exclude(id=request.user.id)
+            for u in active_users:
+                ConversationMember.objects.create(conversation=conv, user=u)
+        else:
+            # Ensure sender is in member list
+            if not conv.members.filter(user=request.user).exists():
+                ConversationMember.objects.create(conversation=conv, user=request.user, role=ConversationMember.Role.ADMIN)
+
+        message = Message.objects.create(
+            conversation=conv,
+            sender=request.user,
+            content=content,
+            message_type=Message.MessageType.TEXT,
+            is_announcement=True,
+            pinned=pinned,
+            target_type=target_type,
+            department_target=department_target,
+            requires_acknowledgement=requires_ack
+        )
+        conv.save()
+        msg_data = MessageSerializer(message, context={'request': request}).data
+        return Response(msg_data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['post'], url_path='acknowledge')
+    def acknowledge_announcement(self, request, pk=None):
+        message = get_object_or_404(Message, id=pk)
+        message.acknowledged_by.add(request.user)
+        return Response({"status": "acknowledged"}, status=status.HTTP_200_OK)
+
 
 
 class ChatUserViewSet(viewsets.ReadOnlyModelViewSet):
@@ -282,11 +365,20 @@ class ChatUserViewSet(viewsets.ReadOnlyModelViewSet):
         # Base active users queryset
         queryset = User.objects.exclude(id=self.request.user.id).filter(is_active=True)
 
-        # Exclude emails belonging to inactive or terminated employees
-        inactive_emails = Employee.objects.filter(
-            status__in=['INACTIVE', 'TERMINATED']
-        ).values_list('email', flat=True)
-        queryset = queryset.exclude(email__in=inactive_emails)
+        # Scope by Organization: Match employees in the same company
+        current_emp = Employee.objects.filter(email=self.request.user.email).first()
+        if current_emp and current_emp.organization_id:
+            org_emails = Employee.objects.filter(
+                organization=current_emp.organization,
+                status='ACTIVE'
+            ).values_list('email', flat=True)
+            queryset = queryset.filter(email__in=org_emails)
+        else:
+            # Fallback: Exclude emails belonging to inactive or terminated employees
+            inactive_emails = Employee.objects.filter(
+                status__in=['INACTIVE', 'TERMINATED']
+            ).values_list('email', flat=True)
+            queryset = queryset.exclude(email__in=inactive_emails)
 
         search = self.request.query_params.get('search', '').strip()
         if search:

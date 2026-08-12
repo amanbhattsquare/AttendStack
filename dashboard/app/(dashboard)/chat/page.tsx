@@ -10,6 +10,8 @@ import {
   Spinner,
   Image as BSImage,
   Dropdown,
+  Row,
+  Col,
 } from "react-bootstrap";
 import {
   Send,
@@ -31,6 +33,10 @@ import {
   CornerUpRight,
   Copy,
   Smile,
+  Megaphone,
+  Bell,
+  Pin,
+  AtSign,
 } from "lucide-react";
 import {
   useQuery,
@@ -51,6 +57,9 @@ import {
   markConversationAsRead,
   connectChatWebSocket,
   deleteMessage,
+  clearChatHistory,
+  sendAnnouncement,
+  acknowledgeAnnouncement,
 } from "../../../helper/chatApi";
 
 // Redux for sidebar control
@@ -182,6 +191,54 @@ export default function ChatPage() {
   const [showEmojiPicker, setShowEmojiPicker] = useState<boolean>(false);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
 
+  // Clear Chat modal & state
+  const [showClearModal, setShowClearModal] = useState<boolean>(false);
+  const clearChatMutation = useMutation({
+    mutationFn: () => clearChatHistory(activeConversation!.id),
+    onSuccess: () => {
+      setShowClearModal(false);
+      refetchMessages();
+      refetchConversations();
+    },
+  });
+
+  // Announcement modal & state
+  const [showAnnouncementModal, setShowAnnouncementModal] = useState<boolean>(false);
+  const [announcementText, setAnnouncementText] = useState<string>("");
+  const [announcementTarget, setAnnouncementTarget] = useState<string>("EVERYONE");
+  const [announcementDept, setAnnouncementDept] = useState<string>("");
+  const [announcementPinned, setAnnouncementPinned] = useState<boolean>(true);
+  const [announcementRequiresAck, setAnnouncementRequiresAck] = useState<boolean>(true);
+
+  const sendAnnouncementMutation = useMutation({
+    mutationFn: () =>
+      sendAnnouncement({
+        content: announcementText.trim(),
+        target_type: announcementTarget,
+        department_target: announcementDept.trim(),
+        pinned: announcementPinned,
+        requires_acknowledgement: announcementRequiresAck,
+      }),
+    onSuccess: () => {
+      setShowAnnouncementModal(false);
+      setAnnouncementText("");
+      refetchConversations();
+      refetchMessages();
+    },
+  });
+
+  // Acknowledge Announcement mutation
+  const acknowledgeMutation = useMutation({
+    mutationFn: (messageId: string) => acknowledgeAnnouncement(messageId),
+    onSuccess: () => {
+      refetchMessages();
+    },
+  });
+
+  // Group @Mentions state
+  const [showMentionSuggestions, setShowMentionSuggestions] = useState<boolean>(false);
+  const [mentionQuery, setMentionQuery] = useState<string>("");
+
   const EMOJI_LIST = [
     "😊", "😂", "🥰", "😍", "😎", "😅", "🤔", "🥳",
     "👍", "👏", "🙌", "🙏", "❤️", "🔥", "✨", "🎉",
@@ -305,6 +362,16 @@ export default function ChatPage() {
     () => conversations.find((c) => c.id === activeConversationId) || null,
     [conversations, activeConversationId]
   );
+
+  const filteredMentionMembers = useMemo(() => {
+    if (!activeConversation?.members) return [];
+    return activeConversation.members
+      .map((m) => m.user)
+      .filter((u) => {
+        const name = (u.name || u.email).toLowerCase();
+        return name.includes(mentionQuery);
+      });
+  }, [activeConversation, mentionQuery]);
 
   // TanStack Query: Fetch Messages for active conversation
   const {
@@ -589,6 +656,54 @@ export default function ChatPage() {
     });
   }, [userSearchResults]);
 
+  // Helper to render text with highlighted @mentions
+  const renderTextWithMentions = (content: string) => {
+    if (!content) return null;
+    const parts = content.split(/(@[A-Za-z0-9._-]+(?:\s+[A-Za-z0-9._-]+)?)/g);
+    return parts.map((part, idx) => {
+      if (part.startsWith("@")) {
+        return (
+          <span
+            key={idx}
+            className="badge bg-primary-subtle text-primary border border-primary-subtle font-monospace fw-bold px-2 py-0.5 me-1 rounded-pill"
+            style={{ fontSize: "11px" }}
+          >
+            {part}
+          </span>
+        );
+      }
+      return part;
+    });
+  };
+
+  // Input change handler supporting @mentions
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const val = e.target.value;
+    setInputContent(val);
+
+    const cursorPos = e.target.selectionStart;
+    const textBeforeCursor = val.slice(0, cursorPos);
+    const words = textBeforeCursor.split(/\s+/);
+    const lastWord = words[words.length - 1];
+
+    if (lastWord.startsWith("@") && activeConversation?.type === "GROUP") {
+      setMentionQuery(lastWord.slice(1).toLowerCase());
+      setShowMentionSuggestions(true);
+    } else {
+      setShowMentionSuggestions(false);
+    }
+  };
+
+  const handleSelectMentionMember = (member: UserMinimal) => {
+    const memberName = member.name || member.email;
+    const words = inputContent.split(/\s+/);
+    words.pop();
+    const newText = [...words, `@${memberName}`].join(" ") + " ";
+    setInputContent(newText);
+    setShowMentionSuggestions(false);
+    if (inputRef.current) inputRef.current.focus();
+  };
+
   // Render date separators & message bubbles in clean flex container
   const renderMessagesWithDateSeparators = () => {
     const elements: React.ReactNode[] = [];
@@ -684,9 +799,63 @@ export default function ChatPage() {
               </span>
             )}
 
-            {/* Text message content */}
-            {msg.content && (
-              <p className="chat-text">{msg.content}</p>
+            {/* Announcement Banner or Regular Text */}
+            {msg.is_announcement ? (
+              <div
+                className="p-3 mb-1 rounded-3 border w-100"
+                style={{ background: "linear-gradient(135deg, #f0fdf4 0%, #e0e7ff 100%)", borderColor: "#a5b4fc" }}
+              >
+                <div className="d-flex align-items-center justify-content-between mb-2">
+                  <div className="d-flex align-items-center gap-2">
+                    <Megaphone size={16} className="text-primary" />
+                    <span className="fw-bold text-dark small text-uppercase" style={{ letterSpacing: "0.05em" }}>
+                      Company Announcement
+                    </span>
+                  </div>
+                  {msg.pinned && (
+                    <span className="badge bg-primary-subtle text-primary rounded-pill px-2" style={{ fontSize: "10px" }}>
+                      Pinned
+                    </span>
+                  )}
+                </div>
+                <p className="mb-2 text-dark fw-medium" style={{ fontSize: "14px", lineHeight: "1.5" }}>
+                  {renderTextWithMentions(msg.content || "")}
+                </p>
+                {msg.requires_acknowledgement && (
+                  <div className="d-flex align-items-center justify-content-between pt-2 border-top mt-1">
+                    <small className="text-muted" style={{ fontSize: "11px" }}>
+                      {msg.acknowledged_count || 0} acknowledged
+                    </small>
+                    {msg.is_acknowledged_by_me ? (
+                      <span className="badge bg-success-subtle text-success border border-success-subtle rounded-pill px-2 py-1" style={{ fontSize: "11px" }}>
+                        Acknowledged
+                      </span>
+                    ) : (
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        className="rounded-pill px-3 border-0"
+                        style={{ backgroundColor: "#6366f1", fontSize: "12px" }}
+                        onClick={() => acknowledgeMutation.mutate(msg.id)}
+                        disabled={acknowledgeMutation.isPending}
+                      >
+                        Acknowledge
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              msg.content && !msg.is_deleted && (
+                <p className="chat-text">{renderTextWithMentions(msg.content)}</p>
+              )
+            )}
+
+            {/* Deleted message placeholder */}
+            {msg.is_deleted && (
+              <p className="chat-text fst-italic text-muted" style={{ fontSize: "13px" }}>
+                This message was deleted
+              </p>
             )}
 
             {/* Attachments */}
@@ -820,6 +989,11 @@ export default function ChatPage() {
                 <button className="chat-icon-btn" title="New Direct Message" onClick={openDirectModal}>
                   <PlusCircle size={20} />
                 </button>
+                {userRole !== "EMPLOYEE" && (
+                  <button className="chat-icon-btn text-warning" title="Send Company Announcement" onClick={() => setShowAnnouncementModal(true)}>
+                    <Megaphone size={18} />
+                  </button>
+                )}
                 {userRole !== "EMPLOYEE" ? (
                   <button className="chat-icon-btn accent" title="Create Group Chat" onClick={openGroupModal}>
                     <Users size={20} />
@@ -972,6 +1146,14 @@ export default function ChatPage() {
                       <Dropdown.Item onClick={() => refetchMessages()}>
                         Refresh Messages
                       </Dropdown.Item>
+                      {/* {userRole !== "EMPLOYEE" && (
+                        <Dropdown.Item onClick={() => setShowAnnouncementModal(true)}>
+                          <Megaphone size={14} className="me-2 text-primary" /> Broadcast Announcement
+                        </Dropdown.Item>
+                      )} */}
+                      <Dropdown.Item className="text-danger" onClick={() => setShowClearModal(true)}>
+                        Clear Chat History
+                      </Dropdown.Item>
                       <Dropdown.Item onClick={() => setMobileView("list")}>
                         Back to Conversations
                       </Dropdown.Item>
@@ -1045,8 +1227,32 @@ export default function ChatPage() {
                 </div>
               )}
 
-              {/* Message Input */}
-              <div className="chat-input-area">
+              {/* Message Input Area */}
+              <div className="chat-input-area position-relative">
+                {/* Floating Mention Suggestions Overlay */}
+                {showMentionSuggestions && filteredMentionMembers.length > 0 && (
+                  <div className="mention-suggestions-popup shadow-lg rounded-3 border bg-white p-2 mb-2" style={{ maxHeight: "180px", overflowY: "auto", position: "absolute", bottom: "100%", left: "16px", zIndex: 1050, minWidth: "220px" }}>
+                    <small className="text-muted fw-semibold d-block px-2 py-1 border-bottom mb-1" style={{ fontSize: "11px" }}>
+                      Mention Group Member:
+                    </small>
+                    {filteredMentionMembers.map((user) => (
+                      <div
+                        key={user.id}
+                        className="d-flex align-items-center gap-2 p-2 rounded-2 hover-bg-light cursor-pointer"
+                        onClick={() => handleSelectMentionMember(user)}
+                      >
+                        <div
+                          className="rounded-circle text-white fw-bold d-flex align-items-center justify-content-center"
+                          style={{ width: "24px", height: "24px", fontSize: "11px", backgroundColor: getAvatarColor(user.name || user.email) }}
+                        >
+                          {(user.name || user.email)[0].toUpperCase()}
+                        </div>
+                        <span className="small fw-semibold text-dark">{user.name || user.email}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 <input
                   type="file"
                   ref={fileInputRef}
@@ -1426,6 +1632,120 @@ export default function ChatPage() {
         </Modal.Footer>
       </Modal>
 
+      {/* CLEAR CHAT CONFIRMATION MODAL */}
+      <Modal show={showClearModal} onHide={() => setShowClearModal(false)} centered size="sm">
+        <Modal.Header closeButton className="border-0 pb-0">
+          <Modal.Title className="h6 fw-bold text-dark d-flex align-items-center gap-2">
+            <Trash2 size={18} className="text-danger" /> Clear Chat History
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body className="p-3">
+          <p className="small text-muted mb-0">
+            Are you sure you want to clear all message history in this chat? Physical media attachments will be deleted from storage.
+          </p>
+        </Modal.Body>
+        <Modal.Footer className="border-0 pt-0">
+          <Button variant="light" size="sm" className="rounded-pill px-3" onClick={() => setShowClearModal(false)}>
+            Cancel
+          </Button>
+          <Button
+            variant="danger"
+            size="sm"
+            className="rounded-pill px-3"
+            disabled={clearChatMutation.isPending}
+            onClick={() => clearChatMutation.mutate()}
+          >
+            {clearChatMutation.isPending ? "Clearing..." : "Clear Chat"}
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* SEND ANNOUNCEMENT MODAL */}
+      <Modal show={showAnnouncementModal} onHide={() => setShowAnnouncementModal(false)} centered>
+        <Modal.Header closeButton className="border-0 pb-0">
+          <Modal.Title className="h6 fw-bold text-dark d-flex align-items-center gap-2">
+            <Megaphone size={20} className="text-primary" /> Send Company Announcement
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body className="p-3">
+          <Form.Group className="mb-3">
+            <Form.Label className="small fw-semibold text-muted">Announcement Content</Form.Label>
+            <Form.Control
+              as="textarea"
+              rows={3}
+              placeholder="e.g. Office Holiday Announcement: The office will remain closed on 15 August..."
+              className="rounded-3 shadow-none border small"
+              value={announcementText}
+              onChange={(e) => setAnnouncementText(e.target.value)}
+            />
+          </Form.Group>
+
+          <Row className="g-3 mb-3">
+            <Col sm={6}>
+              <Form.Group>
+                <Form.Label className="small fw-semibold text-muted">Send Target</Form.Label>
+                <Form.Select
+                  size="sm"
+                  className="rounded-3 shadow-none border"
+                  value={announcementTarget}
+                  onChange={(e) => setAnnouncementTarget(e.target.value)}
+                >
+                  <option value="EVERYONE">Send to Everyone</option>
+                  <option value="DEPARTMENT">Send to Department</option>
+                  <option value="SPECIFIC">Specific Employees</option>
+                </Form.Select>
+              </Form.Group>
+            </Col>
+            {announcementTarget === "DEPARTMENT" && (
+              <Col sm={6}>
+                <Form.Group>
+                  <Form.Label className="small fw-semibold text-muted">Department</Form.Label>
+                  <Form.Control
+                    size="sm"
+                    placeholder="e.g. HR, Engineering..."
+                    className="rounded-3 shadow-none border"
+                    value={announcementDept}
+                    onChange={(e) => setAnnouncementDept(e.target.value)}
+                  />
+                </Form.Group>
+              </Col>
+            )}
+          </Row>
+
+          <div className="d-flex flex-column gap-2 p-3 bg-light rounded-3 border">
+            <Form.Check
+              type="checkbox"
+              id="ann-pin"
+              label={<span className="small fw-semibold text-dark">Pin Announcement to top</span>}
+              checked={announcementPinned}
+              onChange={(e) => setAnnouncementPinned(e.target.checked)}
+            />
+            <Form.Check
+              type="checkbox"
+              id="ann-ack"
+              label={<span className="small fw-semibold text-dark">Require Mandatory Employee Acknowledgement</span>}
+              checked={announcementRequiresAck}
+              onChange={(e) => setAnnouncementRequiresAck(e.target.checked)}
+            />
+          </div>
+        </Modal.Body>
+        <Modal.Footer className="border-0">
+          <Button variant="light" size="sm" className="rounded-pill px-3" onClick={() => setShowAnnouncementModal(false)}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            className="rounded-pill px-4 border-0"
+            style={{ backgroundColor: "#6366f1" }}
+            disabled={!announcementText.trim() || sendAnnouncementMutation.isPending}
+            onClick={() => sendAnnouncementMutation.mutate()}
+          >
+            {sendAnnouncementMutation.isPending ? "Broadcasting..." : "Broadcast Announcement"}
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
       {/* MEDIA LIGHTBOX MODAL */}
       <Modal show={!!previewMediaUrl} onHide={() => setPreviewMediaUrl(null)} centered size="lg">
         <Modal.Body className="p-0 bg-dark rounded-3 overflow-hidden position-relative">
@@ -1502,7 +1822,7 @@ export default function ChatPage() {
         }
 
         .chat-icon-accent {
-          color: #6366f1;
+          color: #16a34a;
         }
 
         .chat-sidebar-actions {
@@ -1525,19 +1845,19 @@ export default function ChatPage() {
         }
 
         .chat-icon-btn:hover {
-          background: #f1f5f9;
-          color: #6366f1;
-          border-color: #c7d2fe;
+          background: #f0fdf4;
+          color: #16a34a;
+          border-color: #86efac;
         }
 
         .chat-icon-btn.accent {
-          background: #6366f1;
+          background: #16a34a;
           color: white;
-          border-color: #6366f1;
+          border-color: #16a34a;
         }
 
         .chat-icon-btn.accent:hover {
-          background: #4f46e5;
+          background: #15803d;
         }
 
         /* Search box */
@@ -1601,7 +1921,7 @@ export default function ChatPage() {
         }
 
         .chat-conv-item.active {
-          background: #eef2ff;
+          background: #dcfce7;
         }
 
         .chat-conv-avatar-wrap {
@@ -1654,7 +1974,7 @@ export default function ChatPage() {
         }
 
         .chat-conv-item.active .chat-conv-name {
-          color: #4338ca;
+          color: #15803d;
         }
 
         .chat-conv-time {
@@ -1894,7 +2214,7 @@ export default function ChatPage() {
         }
 
         .bubble-sent {
-          background: #6366f1;
+          background: #16a34a;
           color: #fff;
           border-bottom-right-radius: 4px;
         }
@@ -1909,7 +2229,7 @@ export default function ChatPage() {
         .chat-sender-name {
           font-size: 11px;
           font-weight: 700;
-          color: #6366f1;
+          color: #16a34a;
           margin-bottom: 2px;
           line-height: 1.2;
         }
@@ -1939,7 +2259,7 @@ export default function ChatPage() {
         }
 
         .bubble-sent .chat-read-icon {
-          color: #c7d2fe;
+          color: #bbf7d0;
         }
 
         .bubble-received .chat-read-icon {
@@ -2011,7 +2331,7 @@ export default function ChatPage() {
           width: 6px;
           height: 6px;
           border-radius: 50%;
-          background: #6366f1;
+          background: #16a34a;
           animation: typingBounce 1.4s infinite both;
         }
 
@@ -2124,8 +2444,8 @@ export default function ChatPage() {
 
         .chat-input-icon-btn:hover,
         .chat-input-icon-btn.active {
-          background: #e0e7ff;
-          color: #6366f1;
+          background: #dcfce7;
+          color: #16a34a;
         }
 
         .chat-emoji-wrapper {
@@ -2238,7 +2558,7 @@ export default function ChatPage() {
         }
 
         .chat-input-wrapper textarea:focus {
-          border-color: #a5b4fc;
+          border-color: #86efac;
           background: #fff;
         }
 
@@ -2262,9 +2582,9 @@ export default function ChatPage() {
         }
 
         .chat-send-btn.active {
-          background: #6366f1;
+          background: #16a34a;
           color: #fff;
-          box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+          box-shadow: 0 2px 8px rgba(22, 163, 74, 0.3);
         }
 
         .chat-send-btn:disabled {

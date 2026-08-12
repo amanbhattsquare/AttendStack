@@ -29,6 +29,13 @@ export interface Message {
   message_type: 'TEXT' | 'IMAGE' | 'VIDEO' | 'FILE' | 'SYSTEM';
   is_edited: boolean;
   is_deleted: boolean;
+  is_announcement?: boolean;
+  pinned?: boolean;
+  target_type?: string;
+  department_target?: string;
+  requires_acknowledgement?: boolean;
+  acknowledged_count?: number;
+  is_acknowledged_by_me?: boolean;
   created_at: string;
   attachments: Attachment[];
 }
@@ -119,6 +126,25 @@ export const deleteMessage = async (conversationId: string, messageId: string): 
   await apiClient.post(`/api/v1/chat/conversations/${conversationId}/delete-message/`, {
     message_id: messageId,
   });
+};
+
+export const clearChatHistory = async (conversationId: string): Promise<void> => {
+  await apiClient.post(`/api/v1/chat/conversations/${conversationId}/clear/`);
+};
+
+export const sendAnnouncement = async (payload: {
+  content: string;
+  target_type: string;
+  department_target?: string;
+  pinned: boolean;
+  requires_acknowledgement: boolean;
+}): Promise<Message> => {
+  const response = await apiClient.post('/api/v1/chat/conversations/announcement/', payload);
+  return response.data;
+};
+
+export const acknowledgeAnnouncement = async (messageId: string): Promise<void> => {
+  await apiClient.post(`/api/v1/chat/conversations/${messageId}/acknowledge/`);
 };
 
 

@@ -153,8 +153,9 @@ export default function ChatPage() {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [filePreviews, setFilePreviews] = useState<{ url: string; type: string; name: string; size: string }[]>([]);
 
-  // Search and Modal states
+  // Search, Filter and Modal states
   const [searchQuery, setSearchQuery] = useState<string>("");
+  const [convFilter, setConvFilter] = useState<"all" | "direct" | "group">("all");
   const [showDirectModal, setShowDirectModal] = useState<boolean>(false);
   const [showGroupModal, setShowGroupModal] = useState<boolean>(false);
   const [userSearchResults, setUserSearchResults] = useState<UserMinimal[]>([]);
@@ -182,8 +183,8 @@ export default function ChatPage() {
   const emojiPickerRef = useRef<HTMLDivElement>(null);
 
   const EMOJI_LIST = [
-    "😊", "😂", "🥰", "😍", "😎", "😅", "🤔", "🥳", 
-    "👍", "👏", "🙌", "🙏", "❤️", "🔥", "✨", "🎉", 
+    "😊", "😂", "🥰", "😍", "😎", "😅", "🤔", "🥳",
+    "👍", "👏", "🙌", "🙏", "❤️", "🔥", "✨", "🎉",
     "🚀", "💡", "💯", "✅", "⭐", "📌", "💬", "🤝",
     "😭", "🙈", "💪", "✌️", "👌", "🎯", "🌟", "⚡"
   ];
@@ -220,8 +221,10 @@ export default function ChatPage() {
     setTimeout(() => setCopiedMsgId(null), 2000);
   };
 
-  // Current user ID
+  // Current user info & DP
   const [currentUserId, setCurrentUserId] = useState<string | number | null>(null);
+  const [myProfilePhoto, setMyProfilePhoto] = useState<string | null>(null);
+  const [myUserName, setMyUserName] = useState<string>("");
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const wsRef = useRef<any>(null);
@@ -238,17 +241,45 @@ export default function ChatPage() {
     };
   }, [dispatch]);
 
-  // Load current user
+  // Load current user and fetch DP (profile photo)
   useEffect(() => {
-    try {
-      const storedUser = localStorage.getItem("user");
-      if (storedUser) {
-        const parsed = JSON.parse(storedUser);
-        if (parsed?.id) setCurrentUserId(parsed.id);
+    const loadUserData = async () => {
+      try {
+        const storedUser = localStorage.getItem("user");
+        const token = localStorage.getItem("authToken");
+        if (storedUser) {
+          const parsed = JSON.parse(storedUser);
+          if (parsed?.id) setCurrentUserId(parsed.id);
+          if (parsed?.full_name || parsed?.name || parsed?.username) {
+            setMyUserName(parsed.full_name || parsed.name || parsed.username);
+          }
+
+          if (token) {
+            if (parsed.role === "EMPLOYEE") {
+              const res = await fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/employees/me/`, {
+                headers: { Authorization: `Bearer ${token}` },
+              });
+              if (res.ok) {
+                const data = await res.json();
+                if (data.profile_photo_url) setMyProfilePhoto(data.profile_photo_url);
+              }
+            } else {
+              const res = await fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/accounts/profile/`, {
+                headers: { Authorization: `Bearer ${token}` },
+              });
+              if (res.ok) {
+                const data = await res.json();
+                if (data.avatar) setMyProfilePhoto(data.avatar);
+                else if (data.profile_photo_url) setMyProfilePhoto(data.profile_photo_url);
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.error("Error reading stored user or profile photo:", e);
       }
-    } catch (e) {
-      console.error("Error reading stored user:", e);
-    }
+    };
+    loadUserData();
   }, []);
 
   // TanStack Query: Fetch Conversations
@@ -532,11 +563,25 @@ export default function ChatPage() {
 
   const filteredConversations = useMemo(
     () =>
-      conversations.filter((c) =>
-        (c.display_name || c.name || "").toLowerCase().includes(searchQuery.toLowerCase())
-      ),
-    [conversations, searchQuery]
+      conversations.filter((c) => {
+        const matchesSearch = (c.display_name || c.name || "").toLowerCase().includes(searchQuery.toLowerCase());
+        if (!matchesSearch) return false;
+        if (convFilter === "direct") return c.type === "DIRECT";
+        if (convFilter === "group") return c.type === "GROUP";
+        return true;
+      }),
+    [conversations, searchQuery, convFilter]
   );
+
+  // Active members only filter for user search
+  const activeUserSearchResults = useMemo(() => {
+    return userSearchResults.filter((u) => {
+      if (u.is_active === false) return false;
+      if (u.status && (u.status.toUpperCase() === "INACTIVE" || u.status.toUpperCase() === "TERMINATED")) return false;
+      if (u.employment_status && (u.employment_status.toUpperCase() === "INACTIVE" || u.employment_status.toUpperCase() === "TERMINATED")) return false;
+      return true;
+    });
+  }, [userSearchResults]);
 
   // Render date separators & message bubbles in clean flex container
   const renderMessagesWithDateSeparators = () => {
@@ -598,6 +643,8 @@ export default function ChatPage() {
         </Dropdown>
       );
 
+      const senderPhoto = (msg.sender as any)?.profile_photo_url || (msg.sender as any)?.avatar || (isMe ? myProfilePhoto : null);
+
       elements.push(
         <div
           key={msg.id}
@@ -610,8 +657,13 @@ export default function ChatPage() {
               style={{
                 backgroundColor: getAvatarColor(msg.sender?.name || msg.sender?.email || "U"),
               }}
+              title={msg.sender?.name || msg.sender?.email || "User"}
             >
-              {(msg.sender?.name || msg.sender?.email || "U")[0].toUpperCase()}
+              {senderPhoto ? (
+                <BSImage src={senderPhoto} className="w-100 h-100 rounded-circle" style={{ objectFit: "cover" }} />
+              ) : (
+                (msg.sender?.name || msg.sender?.email || "U")[0].toUpperCase()
+              )}
             </div>
           )}
 
@@ -700,6 +752,23 @@ export default function ChatPage() {
               {isMe && <CheckCheck size={13} className="chat-read-icon" />}
             </div>
           </div>
+
+          {/* My DP Avatar for sent messages */}
+          {isMe && (
+            <div
+              className="chat-msg-avatar chat-msg-avatar-sent"
+              style={{
+                backgroundColor: getAvatarColor(msg.sender?.name || myUserName || "Me"),
+              }}
+              title={myUserName || "You"}
+            >
+              {myProfilePhoto ? (
+                <BSImage src={myProfilePhoto} alt="My DP" className="w-100 h-100 rounded-circle" style={{ objectFit: "cover" }} />
+              ) : (
+                (msg.sender?.name || myUserName || "M")[0].toUpperCase()
+              )}
+            </div>
+          )}
         </div>
       );
     });
@@ -715,11 +784,30 @@ export default function ChatPage() {
           {/* Sidebar Header */}
           <div className="chat-sidebar-header">
             <div className="chat-sidebar-title-row">
-              <div className="chat-sidebar-title">
-                <MessageSquare size={22} className="chat-icon-accent" />
+              <div className="chat-sidebar-title d-flex align-items-center gap-2">
+                {myProfilePhoto ? (
+                  <BSImage
+                    src={myProfilePhoto}
+                    alt="My DP"
+                    className="rounded-circle shadow-sm border border-2 border-white flex-shrink-0"
+                    style={{ width: "38px", height: "38px", objectFit: "cover" }}
+                  />
+                ) : (
+                  <div
+                    className="rounded-circle shadow-sm border border-2 border-white flex-shrink-0 d-flex align-items-center justify-content-center fw-bold text-white"
+                    style={{
+                      width: "38px",
+                      height: "38px",
+                      backgroundColor: getAvatarColor(myUserName || "User"),
+                      fontSize: "14px",
+                    }}
+                  >
+                    {(myUserName || "U")[0].toUpperCase()}
+                  </div>
+                )}
                 <div>
-                  <h2>Chats</h2>
-                  <span className="chat-count">{conversations.length} conversations</span>
+                  <h2 className="mb-0 fs-5 fw-bold text-dark">Chats</h2>
+                  <span className="chat-count text-muted small">{conversations.length} conversations</span>
                 </div>
               </div>
               <div className="chat-sidebar-actions">
@@ -782,7 +870,9 @@ export default function ChatPage() {
                         className="chat-conv-avatar"
                         style={{ backgroundColor: avatarBg }}
                       >
-                        {conv.type === "GROUP" ? (
+                        {conv.avatar ? (
+                          <BSImage src={conv.avatar} alt="avatar" className="w-100 h-100 rounded-circle" style={{ objectFit: "cover" }} />
+                        ) : conv.type === "GROUP" ? (
                           <Users size={18} />
                         ) : (
                           (conv.display_name || "U")[0].toUpperCase()
@@ -838,7 +928,9 @@ export default function ChatPage() {
                     className="chat-header-avatar"
                     style={{ backgroundColor: getAvatarColor(activeConversation.display_name || "Chat") }}
                   >
-                    {activeConversation.type === "GROUP" ? (
+                    {activeConversation.avatar ? (
+                      <BSImage src={activeConversation.avatar} alt="avatar" className="w-100 h-100 rounded-circle" style={{ objectFit: "cover" }} />
+                    ) : activeConversation.type === "GROUP" ? (
                       <Users size={18} />
                     ) : (
                       (activeConversation.display_name || "C")[0].toUpperCase()
@@ -1050,13 +1142,13 @@ export default function ChatPage() {
         </Modal.Header>
         <Modal.Body className="p-3">
           <Form.Group className="mb-3">
-            <Form.Label className="small fw-semibold text-muted">Search Employee / User</Form.Label>
+            <Form.Label className="small fw-semibold text-muted">Search Active Employees</Form.Label>
             <InputGroup className="bg-light rounded-3 border">
               <InputGroup.Text className="bg-transparent border-0">
                 <Search size={16} className="text-muted" />
               </InputGroup.Text>
               <Form.Control
-                placeholder="Search by name, email, or employee ID..."
+                placeholder="Search active members by name or email..."
                 className="bg-transparent border-0 shadow-none small"
                 value={userQuery}
                 onChange={(e) => handleSearchUsers(e.target.value)}
@@ -1067,16 +1159,16 @@ export default function ChatPage() {
           {userSearchLoading ? (
             <div className="text-center py-4">
               <Spinner animation="border" size="sm" variant="primary" />
-              <p className="text-muted small mt-2">Fetching employees...</p>
+              <p className="text-muted small mt-2">Fetching active members...</p>
             </div>
-          ) : userSearchResults.length === 0 ? (
+          ) : activeUserSearchResults.length === 0 ? (
             <div className="text-center py-4">
               <User size={32} className="text-muted opacity-50 mb-2" />
-              <p className="text-muted mb-0 small">No employees found.</p>
+              <p className="text-muted mb-0 small">No active employees found.</p>
             </div>
           ) : (
             <div className="list-group" style={{ maxHeight: "280px", overflowY: "auto" }}>
-              {userSearchResults.map((user) => (
+              {activeUserSearchResults.map((user) => (
                 <div
                   key={user.id}
                   className="list-group-item list-group-item-action d-flex align-items-center justify-content-between p-3 border-0 rounded-3 mb-1 cursor-pointer"
@@ -1095,7 +1187,12 @@ export default function ChatPage() {
                       {(user.name || user.email)[0].toUpperCase()}
                     </div>
                     <div>
-                      <h6 className="mb-0 small fw-bold text-dark">{user.name || user.email}</h6>
+                      <div className="d-flex align-items-center gap-2">
+                        <h6 className="mb-0 small fw-bold text-dark">{user.name || user.email}</h6>
+                        <span className="badge bg-success-subtle text-success border border-success-subtle rounded-pill px-2 py-0.5" style={{ fontSize: "9px" }}>
+                          Active
+                        </span>
+                      </div>
                       <small className="text-muted" style={{ fontSize: "11px" }}>
                         {user.email}
                       </small>
@@ -1205,13 +1302,13 @@ export default function ChatPage() {
           </Form.Group>
 
           <Form.Group className="mb-3">
-            <Form.Label className="small fw-semibold text-muted">Add Members</Form.Label>
+            <Form.Label className="small fw-semibold text-muted">Add Active Members</Form.Label>
             <InputGroup className="bg-light rounded-3 border">
               <InputGroup.Text className="bg-transparent border-0">
                 <Search size={16} className="text-muted" />
               </InputGroup.Text>
               <Form.Control
-                placeholder="Search employees to add..."
+                placeholder="Search active employees to add..."
                 className="bg-transparent border-0 shadow-none small"
                 value={userQuery}
                 onChange={(e) => handleSearchUsers(e.target.value)}
@@ -1246,18 +1343,17 @@ export default function ChatPage() {
             <div className="text-center py-4">
               <Spinner animation="border" size="sm" variant="primary" />
             </div>
-          ) : userSearchResults.length === 0 ? (
-            <p className="text-muted text-center py-3 mb-0 small">No employees found.</p>
+          ) : activeUserSearchResults.length === 0 ? (
+            <p className="text-muted text-center py-3 mb-0 small">No active employees found.</p>
           ) : (
             <div className="list-group" style={{ maxHeight: "220px", overflowY: "auto" }}>
-              {userSearchResults.map((user) => {
+              {activeUserSearchResults.map((user) => {
                 const isSelected = selectedGroupMembers.some((m) => m.id === user.id);
                 return (
                   <div
                     key={user.id}
-                    className={`list-group-item list-group-item-action d-flex align-items-center justify-content-between p-3 border-0 rounded-3 mb-1 cursor-pointer ${
-                      isSelected ? "bg-primary-subtle" : ""
-                    }`}
+                    className={`list-group-item list-group-item-action d-flex align-items-center justify-content-between p-3 border-0 rounded-3 mb-1 cursor-pointer ${isSelected ? "bg-primary-subtle" : ""
+                      }`}
                     onClick={() => {
                       if (isSelected) {
                         setSelectedGroupMembers((prev) => prev.filter((m) => m.id !== user.id));
@@ -1279,7 +1375,12 @@ export default function ChatPage() {
                         {(user.name || user.email)[0].toUpperCase()}
                       </div>
                       <div>
-                        <h6 className="mb-0 small fw-bold text-dark">{user.name || user.email}</h6>
+                        <div className="d-flex align-items-center gap-2">
+                          <h6 className="mb-0 small fw-bold text-dark">{user.name || user.email}</h6>
+                          <span className="badge bg-success-subtle text-success border border-success-subtle rounded-pill px-2 py-0.5" style={{ fontSize: "9px" }}>
+                            Active
+                          </span>
+                        </div>
                         <small className="text-muted" style={{ fontSize: "11px" }}>
                           {user.email}
                         </small>
@@ -1330,13 +1431,14 @@ export default function ChatPage() {
         /* ===== CHAT APP LAYOUT ===== */
         .chat-app-container {
           display: flex;
-          height: calc(100vh - 110px);
-          min-height: 500px;
-          background: #fff;
-          border-radius: 12px;
+          height: 100%;
+          width: 100%;
+          background: #ffffff;
+          border-radius: 0;
           overflow: hidden;
-          box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 6px 16px rgba(0,0,0,0.04);
-          border: 1px solid #e5e7eb;
+          border: none;
+          box-shadow: none;
+          margin: 0;
         }
 
         /* ===== SIDEBAR ===== */
@@ -1742,7 +1844,7 @@ export default function ChatPage() {
           background: rgba(148, 163, 184, 0.18) !important;
         }
 
-        /* Avatar for received */
+        /* Avatar for received / sent */
         .chat-msg-avatar {
           width: 28px;
           height: 28px;
@@ -1755,6 +1857,12 @@ export default function ChatPage() {
           font-size: 11px;
           flex-shrink: 0;
           margin-bottom: 2px;
+          overflow: hidden;
+        }
+
+        .chat-msg-avatar-sent {
+          margin-left: 2px;
+          margin-right: 0;
         }
 
         /* Clean message bubble */

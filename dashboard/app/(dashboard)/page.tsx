@@ -5,6 +5,7 @@ import { Badge, Card, Col, Row, Table, Spinner, Button } from "react-bootstrap";
 import { IconUsers, IconListCheck, IconClock, IconSnowboarding, IconRefresh } from "@tabler/icons-react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
+import UpcomingIncrementsChartWidget from "components/UpcomingIncrementsChartWidget";
 import { ApexOptions } from "apexcharts";
 
 // SSR safe dynamic import for ApexCharts
@@ -353,7 +354,7 @@ const HomePage = () => {
               </Link>
             </Card.Header>
             <Card.Body className="p-0">
-              <Table hover responsive className="text-nowrap align-middle mb-0">
+              <Table hover size="sm" responsive className="text-nowrap align-middle mb-0">
                 <thead className="table-light">
                   <tr>
                     <th>Employee</th>
@@ -444,6 +445,9 @@ const HomePage = () => {
           </Card>
         </Col>
       </Row>
+
+      {/* Upcoming Employee Salary Increments Strategy Line Chart */}
+      <UpcomingIncrementsChartWidget />
     </Fragment>
   );
 };

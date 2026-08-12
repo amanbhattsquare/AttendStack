@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Container, Card, Row, Col, Button, Form, Alert, Badge, Spinner, InputGroup } from "react-bootstrap";
 import {
@@ -21,7 +21,7 @@ import {
 import axios from "axios";
 import Link from "next/link";
 
-export default function EmployeeJoinPage() {
+function EmployeeJoinContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -303,5 +303,13 @@ export default function EmployeeJoinPage() {
         </Row>
       </Container>
     </div>
+  );
+}
+
+export default function EmployeeJoinPage() {
+  return (
+    <Suspense fallback={<div className="text-center py-5"><Spinner animation="border" variant="success" /></div>}>
+      <EmployeeJoinContent />
+    </Suspense>
   );
 }

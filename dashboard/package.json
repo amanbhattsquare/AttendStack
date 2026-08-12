@@ -4,7 +4,7 @@
   "private": false,
   "homepage": "https://themewagon.github.io/dasher-ui",
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --port 3000",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
@@ -14,7 +14,7 @@
   "dependencies": {
     "@prisma/client": "^7.8.0",
     "@reduxjs/toolkit": "^2.8.2",
-    "@tabler/icons-react": "^3.34.0",
+    "@tabler/icons-react": "^3.46.0",
     "@tabler/icons-webfont": "^3.34.0",
     "@tanstack/react-query": "^5.101.4",
     "@tanstack/react-table": "^8.21.3",

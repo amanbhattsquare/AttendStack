@@ -127,6 +127,36 @@ class Employee(models.Model):
         validators=[MinValueValidator(0), MaxValueValidator(365)],
         help_text="Optional annual Sick Leave entitlement. Blank uses company policy.",
     )
+
+    # Increment Management Override & Schedule Fields
+    override_increment_policy = models.BooleanField(
+        default=False,
+        help_text="If checked, this employee uses custom increment settings instead of company defaults."
+    )
+    custom_increment_months = models.PositiveIntegerField(
+        null=True, blank=True,
+        help_text="Custom increment cycle interval in months."
+    )
+    custom_increment_type = models.CharField(
+        max_length=20,
+        choices=[("PERCENTAGE", "Percentage"), ("FLAT_AMOUNT", "Flat Amount (Rupees)")],
+        null=True, blank=True,
+        help_text="Custom calculation method for employee increment."
+    )
+    custom_increment_value = models.DecimalField(
+        max_digits=10, decimal_places=2,
+        null=True, blank=True,
+        help_text="Custom increment value (percentage or rupee amount)."
+    )
+    increment_status = models.CharField(
+        max_length=20,
+        choices=[("ENABLED", "Enabled"), ("DISABLED", "Disabled")],
+        default="ENABLED",
+        help_text="Controls if increment processing is active for this employee."
+    )
+    last_increment_date = models.DateField(null=True, blank=True, help_text="Date of last approved increment.")
+    next_increment_date = models.DateField(null=True, blank=True, help_text="Next expected due date for increment.")
+
     pay_frequency = models.CharField(
         max_length=20,
         choices=PayFrequency.choices,

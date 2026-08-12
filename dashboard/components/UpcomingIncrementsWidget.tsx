@@ -65,7 +65,7 @@ const UpcomingIncrementsWidget: React.FC = () => {
   });
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>("");
-  const [filterStatus, setFilterStatus] = useState<string>("PENDING");
+  const [filterStatus, setFilterStatus] = useState<string>("");
 
   // Reschedule Modal State
   const [showRescheduleModal, setShowRescheduleModal] = useState<boolean>(false);
@@ -115,17 +115,22 @@ const UpcomingIncrementsWidget: React.FC = () => {
 
   // Handle Accept / Approve
   const handleApprove = (inc: EmployeeIncrementItem) => {
-    const formattedAmount = Number(inc.calculated_increment_amount).toLocaleString("en-IN");
-    const formattedNewSal = Number(inc.new_salary).toLocaleString("en-IN");
+    const isAnnual = Number(inc.current_salary) > 50000;
+    const monthlyCurrent = isAnnual ? Math.round(Number(inc.current_salary) / 12) : Number(inc.current_salary);
+    const monthlyNew = isAnnual ? Math.round(Number(inc.new_salary) / 12) : Number(inc.new_salary);
+    const monthlyRaise = isAnnual ? Math.round(Number(inc.calculated_increment_amount) / 12) : Number(inc.calculated_increment_amount);
+
+    const formattedAmount = monthlyRaise.toLocaleString("en-IN");
+    const formattedNewSal = monthlyNew.toLocaleString("en-IN");
 
     Swal.fire({
       title: "Approve Salary Increment?",
       html: `
         <div style="text-align: left; font-size: 14px;">
           <p><strong>Employee:</strong> ${inc.employee_details?.full_name} (${inc.employee_details?.employee_id})</p>
-          <p><strong>Current Annual Salary:</strong> ₹${Number(inc.current_salary).toLocaleString("en-IN")}</p>
-          <p><strong>Raise:</strong> ${inc.increment_type === "PERCENTAGE" ? `${inc.increment_value}% (+₹${formattedAmount})` : `+₹${formattedAmount}`}</p>
-          <p style="color: #198754; font-weight: bold; font-size: 16px;">New Salary: ₹${formattedNewSal} / year</p>
+          <p><strong>Current Monthly Salary:</strong> ₹${monthlyCurrent.toLocaleString("en-IN")} / month</p>
+          <p><strong>Raise:</strong> ${inc.increment_type === "PERCENTAGE" ? `${inc.increment_value}% (+₹${formattedAmount}/mo)` : `+₹${formattedAmount}/mo`}</p>
+          <p style="color: #198754; font-weight: bold; font-size: 16px;">New Salary: ₹${formattedNewSal} / month</p>
         </div>
       `,
       icon: "question",
@@ -351,13 +356,13 @@ const UpcomingIncrementsWidget: React.FC = () => {
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
             >
-              <option value="NEXT_MONTH">🗓️ Due Next Month {summary.next_month_name ? `(${summary.next_month_name})` : ""}</option>
-              <option value="THIS_MONTH">📅 Due This Month</option>
+              <option value="">All Increments</option>
+              <option value="NEXT_MONTH">Due Next Month {summary.next_month_name ? `(${summary.next_month_name})` : ""}</option>
+              <option value="THIS_MONTH">Due This Month</option>
               <option value="PENDING">Pending Review (All)</option>
               <option value="RESCHEDULED">Rescheduled</option>
               <option value="APPROVED">Approved</option>
               <option value="REJECTED">Rejected</option>
-              <option value="">All Increments</option>
             </Form.Select>
 
             <Button variant="outline-secondary" size="sm" onClick={fetchIncrements} disabled={loading}>
@@ -398,6 +403,10 @@ const UpcomingIncrementsWidget: React.FC = () => {
                   {increments.map((inc) => {
                     const emp = inc.employee_details;
                     const isPending = inc.status === "PENDING" || inc.status === "RESCHEDULED";
+                    const isAnnual = Number(inc.current_salary) > 50000;
+                    const monthlyCurrent = isAnnual ? Math.round(Number(inc.current_salary) / 12) : Number(inc.current_salary);
+                    const monthlyNew = isAnnual ? Math.round(Number(inc.new_salary) / 12) : Number(inc.new_salary);
+                    const monthlyRaiseAmount = isAnnual ? Math.round(Number(inc.calculated_increment_amount) / 12) : Number(inc.calculated_increment_amount);
 
                     return (
                       <tr key={inc.id}>
@@ -429,27 +438,27 @@ const UpcomingIncrementsWidget: React.FC = () => {
 
                         <td>
                           <div className="fw-semibold text-dark">
-                            ₹{Number(inc.current_salary).toLocaleString("en-IN")}
+                            ₹{monthlyCurrent.toLocaleString("en-IN")}
                           </div>
-                          <small className="text-muted">annual</small>
+                          <small className="text-muted">monthly</small>
                         </td>
 
                         <td>
                           <Badge bg="success" className="p-2">
                             {inc.increment_type === "PERCENTAGE"
                               ? `+${inc.increment_value}%`
-                              : `+₹${Number(inc.increment_value).toLocaleString("en-IN")}`}
+                              : `+₹${monthlyRaiseAmount.toLocaleString("en-IN")}`}
                           </Badge>
                           <div className="small text-muted mt-1">
-                            +₹{Number(inc.calculated_increment_amount).toLocaleString("en-IN")}
+                            +₹{monthlyRaiseAmount.toLocaleString("en-IN")}/mo
                           </div>
                         </td>
 
                         <td>
                           <div className="fw-bold text-success">
-                            ₹{Number(inc.new_salary).toLocaleString("en-IN")}
+                            ₹{monthlyNew.toLocaleString("en-IN")}
                           </div>
-                          <small className="text-muted">annual</small>
+                          <small className="text-muted">monthly</small>
                         </td>
 
                         <td>
@@ -469,31 +478,31 @@ const UpcomingIncrementsWidget: React.FC = () => {
                               <Button
                                 variant="success"
                                 size="sm"
-                                className="d-inline-flex align-items-center gap-1"
+                                className="p-1 px-2 d-inline-flex align-items-center justify-content-center"
                                 onClick={() => handleApprove(inc)}
                                 title="Accept & Apply Increment"
                               >
-                                <IconCheck size={16} /> Accept
+                                <IconCheck size={16} />
                               </Button>
 
                               <Button
                                 variant="outline-warning"
                                 size="sm"
-                                className="d-inline-flex align-items-center gap-1"
+                                className="p-1 px-2 d-inline-flex align-items-center justify-content-center"
                                 onClick={() => openRescheduleModal(inc)}
-                                title="Postpone / Reschedule"
+                                title="Reschedule Due Date"
                               >
-                                <IconCalendarTime size={16} /> Reschedule
+                                <IconCalendarTime size={16} />
                               </Button>
 
                               <Button
                                 variant="outline-danger"
                                 size="sm"
-                                className="d-inline-flex align-items-center gap-1"
+                                className="p-1 px-2 d-inline-flex align-items-center justify-content-center"
                                 onClick={() => openRejectModal(inc)}
                                 title="Reject Increment"
                               >
-                                <IconX size={16} /> Reject
+                                <IconX size={16} />
                               </Button>
                             </div>
                           ) : (

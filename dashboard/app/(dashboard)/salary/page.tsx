@@ -1,8 +1,8 @@
 "use client";
 
 import { Fragment, useState, useEffect } from "react";
-import { IconDownload, IconSearch, IconPlus, IconPencil, IconCheck, IconInfoCircle } from "@tabler/icons-react";
-import { Spinner, Alert, Modal, Button, Form, Badge, Table } from "react-bootstrap";
+import { IconDownload, IconSearch, IconPlus, IconPencil, IconCheck, IconInfoCircle, IconCurrencyRupee, IconTrendingUp } from "@tabler/icons-react";
+import { Spinner, Alert, Modal, Button, Form, Badge, Table, Nav } from "react-bootstrap";
 import Swal from "sweetalert2";
 import PayslipPreview from "components/payroll/PayslipPreview";
 import { downloadPayslipPdf } from "components/payroll/payslipPdf";
@@ -66,6 +66,9 @@ const SalaryPage = () => {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
+
+  // Tab state
+  const [activeTab, setActiveTab] = useState<"payroll" | "increments">("payroll");
 
   // Filter States
   const [searchTerm, setSearchTerm] = useState("");
@@ -288,12 +291,12 @@ const SalaryPage = () => {
 
   return (
     <Fragment>
-      <div className="mb-6 d-flex align-items-center justify-content-between">
+      <div className="mb-4 d-flex align-items-center justify-content-between flex-wrap gap-3">
         <div>
-          <h2 className="mb-0 fw-bold">Salary & Payroll</h2>
-          <p className="text-secondary mb-0">Manage employee salaries, generate payslips, and view payroll history.</p>
+          <h2 className="mb-0 fw-bold">Salary Management</h2>
+          <p className="text-secondary mb-0">Manage employee monthly salaries, generate payslips, and review upcoming salary increments.</p>
         </div>
-        {isAdmin && (
+        {isAdmin && activeTab === "payroll" && (
           <button
             className="btn btn-primary d-flex align-items-center gap-2 shadow-sm"
             onClick={() => setShowGenerateModal(true)}
@@ -303,9 +306,40 @@ const SalaryPage = () => {
         )}
       </div>
 
+      {/* Two Main Section Tabs */}
+      <div className="card border-0 shadow-sm mb-4">
+        <div className="card-body p-2">
+          <Nav variant="pills" className="nav-custom-pills gap-2">
+            <Nav.Item>
+              <Nav.Link
+                as="button"
+                active={activeTab === "payroll"}
+                onClick={() => setActiveTab("payroll")}
+                className="fw-semibold px-4 py-2 cursor-pointer d-flex align-items-center gap-2 border-0"
+              >
+                <IconCurrencyRupee size={18} />
+                Salary & Payroll
+              </Nav.Link>
+            </Nav.Item>
+            <Nav.Item>
+              <Nav.Link
+                as="button"
+                active={activeTab === "increments"}
+                onClick={() => setActiveTab("increments")}
+                className="fw-semibold px-4 py-2 cursor-pointer d-flex align-items-center gap-2 border-0"
+              >
+                <IconTrendingUp size={18} />
+                Employee Salary Increment Management
+              </Nav.Link>
+            </Nav.Item>
+          </Nav>
+        </div>
+      </div>
+
       {error && <Alert variant="danger">{error}</Alert>}
 
-      <div className="card border-0 shadow-sm mb-6">
+      {activeTab === "payroll" && (
+        <div className="card border-0 shadow-sm mb-6">
         <div className="card-header bg-white border-bottom-0 pt-4 pb-0">
           <div className="row g-3 align-items-center">
             {/* Search */}
@@ -485,6 +519,11 @@ const SalaryPage = () => {
           </div>
         </div>
       </div>
+      )}
+
+      {activeTab === "increments" && (
+        <UpcomingIncrementsWidget />
+      )}
 
       {/* Generate Payroll Modal */}
       <Modal show={showGenerateModal} onHide={() => setShowGenerateModal(false)} centered>
@@ -693,8 +732,6 @@ const SalaryPage = () => {
           </Button>
         </Modal.Footer>
       </Modal>
-      {/* Salary Increment Management Section */}
-      <UpcomingIncrementsWidget />
     </Fragment>
   );
 };

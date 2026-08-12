@@ -5,6 +5,11 @@ export interface UserMinimal {
   username: string;
   email: string;
   name: string;
+  is_active?: boolean;
+  status?: string;
+  employment_status?: string;
+  profile_photo_url?: string;
+  avatar?: string;
 }
 
 export interface Attachment {

@@ -344,8 +344,10 @@ export default function ChatPage() {
     }
 
     const controller = connectChatWebSocket(activeConversationId, (data) => {
+      console.log('Received WebSocket data in chat page:', data);
       if (data.type === "new_message") {
         const newMsg: Message = data.message;
+        console.log('Adding new message to cache:', newMsg);
 
         // Append to current messages query cache
         queryClient.setQueryData<Message[]>(["messages", activeConversationId], (old = []) => {
@@ -374,9 +376,19 @@ export default function ChatPage() {
           setTypingUser(null);
         }
       }
+    }, (err) => {
+      console.error('WebSocket error in chat page:', err);
     });
 
     wsRef.current = controller;
+
+    // Cleanup function to close WebSocket when unmounting or conversation changes
+    return () => {
+      if (wsRef.current) {
+        console.log('Cleaning up WebSocket connection');
+        wsRef.current.close();
+      }
+    };
 
     return () => {
       if (controller) controller.close();

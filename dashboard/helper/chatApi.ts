@@ -143,34 +143,46 @@ export const connectChatWebSocket = (
     const rawBackend = (process.env.NEXT_PUBLIC_API_ENDPOINT || 'http://127.0.0.1:8000').trim();
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     
-    let host = '127.0.0.1:8000';
+    let host;
     try {
       const urlObj = new URL(rawBackend);
       host = urlObj.host;
+      console.log('WebSocket connecting to:', host);
     } catch (e) {
-      host = window.location.host;
+      // If URL parsing fails, extract host from rawBackend string
+      host = rawBackend.replace(/^https?:\/\//, '').replace(/\/$/, '');
+      console.warn('Failed to parse backend URL, extracted host:', host, 'Error:', e);
     }
 
     const wsUrl = `${wsProtocol}//${host}/ws/chat/${conversationId}/?token=${encodeURIComponent(token)}`;
+    console.log('Full WebSocket URL:', wsUrl);
     const ws = new WebSocket(wsUrl);
     activeWs = ws;
+
+    ws.onopen = () => {
+      console.log('WebSocket connection established successfully');
+    };
 
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
+        console.log('Received WebSocket message:', data);
         onMessage(data);
       } catch (err) {
         console.error('Failed to parse WS message:', err);
       }
     };
 
-    if (onError) {
-      ws.onerror = onError;
-    }
+    ws.onerror = (err) => {
+      console.error('WebSocket error occurred:', err);
+      if (onError) onError(err);
+    };
 
     ws.onclose = (event) => {
+      console.log('WebSocket closed with code:', event.code, 'reason:', event.reason);
       if (!isClosedManually && event.code !== 1000 && event.code !== 4001 && event.code !== 4003) {
         // Attempt auto-reconnect after 2s if closed unexpectedly
+        console.log('Attempting to reconnect WebSocket...');
         reconnectTimeout = setTimeout(() => {
           connect();
         }, 2000);

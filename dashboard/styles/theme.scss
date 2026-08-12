@@ -1,26 +1,26 @@
 // Bootstrap functions
-@import "../node_modules/bootstrap/scss/functions";
+@import "bootstrap/scss/functions";
 
-//Tabler Webfont
-@import "../node_modules/@tabler/icons-webfont/dist/tabler-icons.min.css";
+// Tabler Webfont
+@import "@tabler/icons-webfont/dist/tabler-icons.min.css";
 
 // User Variables
-@import "user-variables";
+@import "./user-variables";
 
-// theme variabless
-@import "theme/variables";
-@import "theme/variables-dark";
+// theme variables
+@import "./theme/theme-variables";
+@import "./theme/theme-variables-dark";
 
-@import "theme/utilities";
+@import "./theme/utilities";
 
 // Bootstrap
-@import "../node_modules/bootstrap/scss/bootstrap";
+@import "bootstrap/scss/bootstrap";
 
 // Theme
-@import "theme/theme";
+@import "./theme/theme";
 
 // User
-@import "user";
+@import "./user";
 
 // Simplebar
 @import "simplebar-react/dist/simplebar.min.css";

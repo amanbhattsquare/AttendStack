@@ -1,17 +1,14 @@
-//import modules libraries
 import type { Metadata } from "next";
 import { Public_Sans } from "next/font/google";
 
-//import custom components
 import ClientWrapper from "components/common/ClientWrapper";
 
-// Import Swiper styles
+import "@tabler/icons-webfont/dist/tabler-icons.min.css";
+import "simplebar-react/dist/simplebar.min.css";
 import "swiper/swiper-bundle.css";
-
-// import main theme scss
 import "styles/theme.scss";
-import { ToastContainer } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
+import { ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 const publicSans = Public_Sans({
   variable: "--font-public-sans",
@@ -36,7 +33,10 @@ export default function RootLayout({
   return (
     <ClientWrapper>
       <html lang="en" className="expanded" data-scroll-behavior="smooth">
-        <body className={`${publicSans.variable}`}>{children}</body>
+        <body className={`${publicSans.variable}`}>
+          {children}
+          <ToastContainer />
+        </body>
       </html>
     </ClientWrapper>
   );

@@ -57,6 +57,7 @@ import {
   markConversationAsRead,
   connectChatWebSocket,
   deleteMessage,
+  deleteConversation,
   clearChatHistory,
   sendAnnouncement,
   acknowledgeAnnouncement,
@@ -479,6 +480,30 @@ export default function ChatPage() {
     }
   };
 
+  // TanStack Mutation: Delete Conversation from Sidebar
+  const deleteConversationMutation = useMutation({
+    mutationFn: async (convId: string) => {
+      await deleteConversation(convId);
+    },
+    onSuccess: (_, convId) => {
+      queryClient.setQueryData<Conversation[]>(["conversations"], (old = []) =>
+        old.filter((c) => c.id !== convId)
+      );
+      if (activeConversationId === convId) {
+        const remaining = conversations.filter((c) => c.id !== convId);
+        setActiveConversationId(remaining[0]?.id || null);
+      }
+      refetchConversations();
+    },
+  });
+
+  const handleDeleteConversation = (e: React.MouseEvent, convId: string) => {
+    e.stopPropagation();
+    if (window.confirm("Are you sure you want to delete this conversation?")) {
+      deleteConversationMutation.mutate(convId);
+    }
+  };
+
   // TanStack Mutation: Forward Message
   const forwardMessageMutation = useMutation({
     mutationFn: async ({ targetConvId, content }: { targetConvId: string; content: string }) => {
@@ -601,6 +626,32 @@ export default function ChatPage() {
     },
   });
 
+  const handleStartDirectChat = (user: UserMinimal) => {
+    // 1. Check if a direct conversation already exists in active conversation list
+    const existingConv = conversations.find((c) => {
+      if (c.type !== "DIRECT") return false;
+      if (c.other_user && String(c.other_user.id) === String(user.id)) return true;
+      if (
+        c.members &&
+        c.members.some(
+          (m) => String(m.user.id) === String(user.id) && String(m.user.id) !== String(currentUserId)
+        )
+      ) {
+        return true;
+      }
+      return false;
+    });
+
+    if (existingConv) {
+      setShowDirectModal(false);
+      selectConversation(existingConv);
+      return;
+    }
+
+    // 2. Only if no existing conversation is found locally, call API mutation
+    createDirectChatMutation.mutate(user);
+  };
+
   // Group chat creation mutation
   const createGroupChatMutation = useMutation({
     mutationFn: () => {
@@ -634,17 +685,33 @@ export default function ChatPage() {
     handleSearchUsers("");
   };
 
-  const filteredConversations = useMemo(
-    () =>
-      conversations.filter((c) => {
-        const matchesSearch = (c.display_name || c.name || "").toLowerCase().includes(searchQuery.toLowerCase());
-        if (!matchesSearch) return false;
-        if (convFilter === "direct") return c.type === "DIRECT";
-        if (convFilter === "group") return c.type === "GROUP";
-        return true;
-      }),
-    [conversations, searchQuery, convFilter]
-  );
+  const filteredConversations = useMemo(() => {
+    const seenDirectUserIds = new Set<string>();
+
+    return conversations.filter((c) => {
+      // Deduplicate DIRECT chats with the same target user in sidebar
+      if (c.type === "DIRECT") {
+        const otherUserId = c.other_user?.id
+          ? String(c.other_user.id)
+          : c.members?.find((m) => String(m.user.id) !== String(currentUserId))?.user?.id
+          ? String(c.members.find((m) => String(m.user.id) !== String(currentUserId))!.user.id)
+          : null;
+
+        if (otherUserId) {
+          if (seenDirectUserIds.has(otherUserId)) {
+            return false; // Skip duplicate conversation entry for the same target user!
+          }
+          seenDirectUserIds.add(otherUserId);
+        }
+      }
+
+      const matchesSearch = (c.display_name || c.name || "").toLowerCase().includes(searchQuery.toLowerCase());
+      if (!matchesSearch) return false;
+      if (convFilter === "direct") return c.type === "DIRECT";
+      if (convFilter === "group") return c.type === "GROUP";
+      return true;
+    });
+  }, [conversations, searchQuery, convFilter, currentUserId]);
 
   // Active members only filter for user search
   const activeUserSearchResults = useMemo(() => {
@@ -1092,6 +1159,18 @@ export default function ChatPage() {
                           <span className="chat-unread-badge">{conv.unread_count}</span>
                         )}
                       </div>
+                    </div>
+
+                    <div className="chat-conv-delete-wrap ms-1">
+                      <Button
+                        variant="link"
+                        size="sm"
+                        className="p-1 text-danger border-0 opacity-75"
+                        title="Delete conversation"
+                        onClick={(e) => handleDeleteConversation(e, conv.id)}
+                      >
+                        <Trash2 size={15} />
+                      </Button>
                     </div>
                   </div>
                 );
@@ -2664,6 +2743,14 @@ export default function ChatPage() {
         /* Dropdown caret fix */
         .no-caret::after {
           display: none !important;
+        }
+
+        .chat-conv-delete-wrap {
+          opacity: 0;
+          transition: opacity 0.2s ease;
+        }
+        .chat-conv-item:hover .chat-conv-delete-wrap {
+          opacity: 1;
         }
 
         /* ===== MOBILE RESPONSIVE ===== */

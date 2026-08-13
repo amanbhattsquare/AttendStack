@@ -39,7 +39,7 @@ const SuperAdminLayout: React.FC<SuperAdminLayoutProps> = ({ children }) => {
       if (parsedUser.role === "SUPER_ADMIN" || parsedUser.is_superuser) {
         setAuthorized(true);
       } else {
-        router.replace("/admin/dashboard");
+        router.replace("/dashboard");
       }
     } catch {
       router.replace("/super-admin/login");

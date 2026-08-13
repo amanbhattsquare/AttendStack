@@ -99,6 +99,51 @@ class OrganizationViewSet(viewsets.ModelViewSet):
                 break
         return Response(OrganizationSerializer(organization, context={"request": request}).data)
 
+    @action(detail=True, methods=["post"], url_path="link-simplyjob")
+    def link_simplyjob(self, request, pk=None):
+        organization = self.get_object()
+        user = request.user
+        if not (user.is_superuser or user.role == UserRole.SUPER_ADMIN or organization.owner_id == user.id):
+            raise PermissionDenied("Only organization owners or Super Admins can configure SimplyJob integration.")
+
+        simplyjob_org_id = request.data.get("simplyjob_org_id", "").strip()
+        if not simplyjob_org_id:
+            return Response({"detail": "SimplyJob Organization ID is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        organization.external_company_id = simplyjob_org_id
+        organization.external_source = "SIMPLYJOB"
+        organization.save(update_fields=["external_company_id", "external_source"])
+        return Response(OrganizationSerializer(organization, context={"request": request}).data)
+
+    @action(detail=True, methods=["get", "post"], url_path="generate-invite-link")
+    def generate_invite_link(self, request, pk=None):
+        organization = self.get_object()
+        user = request.user
+        if not (user.is_superuser or user.role == UserRole.SUPER_ADMIN or organization.owner_id == user.id):
+            raise PermissionDenied("Only organization owners or Super Admins can generate invitation links.")
+
+        # ENFORCE RULE: If company has not set their SimplyJob org_id / external_company_id, block invitation!
+        if not (organization.external_company_id or organization.external_source == "SIMPLYJOB"):
+            return Response(
+                {
+                    "error": "SIMPLYJOB_NOT_LINKED",
+                    "detail": "SimplyJob Organization ID is not configured. Please paste and save your SimplyJob Org ID before sending employee invitations.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from django.conf import settings
+        base_url = getattr(settings, "FRONTEND_URL", "http://localhost:3000")
+        invite_url = f"{base_url}/register?org_id={organization.invite_code}&source=simplyjob"
+        return Response({
+            "organization_id": organization.id,
+            "organization_name": organization.name,
+            "invite_code": organization.invite_code,
+            "simplyjob_org_id": organization.external_company_id,
+            "invite_url": invite_url,
+            "is_simplyjob_linked": True,
+        })
+
     @action(detail=True, methods=["get"], url_path="stats")
     def stats(self, request, pk=None):
         organization = self.get_object()

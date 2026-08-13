@@ -32,16 +32,18 @@ const SignInPage = () => {
       });
 
       if (response.data && response.data.access) {
+        localStorage.removeItem("authToken");
+        localStorage.removeItem("refreshToken");
+        localStorage.removeItem("user");
+
         localStorage.setItem("authToken", response.data.access);
         localStorage.setItem("refreshToken", response.data.refresh);
         localStorage.setItem("user", JSON.stringify(response.data.user));
         const role = response.data.user?.role;
-        if (role === "SUPER_ADMIN") {
-          router.push("/super-admin/dashboard");
-        } else if (role === "EMPLOYEE") {
+        if (role === "EMPLOYEE") {
           router.push("/employee-dashboard");
         } else {
-          router.push("/admin/dashboard");
+          router.push("/dashboard");
         }
       } else {
         setError("Login failed. Please check your credentials.");

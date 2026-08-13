@@ -51,11 +51,19 @@ const authHeaders = (): HeadersInit => {
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
-const formatDate = (value: string) =>
-  new Intl.DateTimeFormat("en-IN", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(value));
+const formatDate = (value?: string | null) => {
+  if (!value) return "--";
+  const date = new Date(value);
+  if (isNaN(date.getTime())) return "--";
+  return new Intl.DateTimeFormat("en-IN", { day: "2-digit", month: "short", year: "numeric" }).format(date);
+};
 
-const formatTime = (value?: string | null) =>
-  value ? new Intl.DateTimeFormat("en-IN", { hour: "2-digit", minute: "2-digit" }).format(new Date(value)) : "--:--";
+const formatTime = (value?: string | null) => {
+  if (!value) return "--:--";
+  const date = new Date(value);
+  if (isNaN(date.getTime())) return "--:--";
+  return new Intl.DateTimeFormat("en-IN", { hour: "2-digit", minute: "2-digit" }).format(date);
+};
 
 const getStatusBadge = (status: string) => {
   switch (status) {

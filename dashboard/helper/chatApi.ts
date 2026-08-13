@@ -58,6 +58,7 @@ export interface Conversation {
   members: ConversationMember[];
   last_message: Message | null;
   unread_count: number;
+  other_user?: UserMinimal;
 }
 
 export const fetchConversations = async (): Promise<Conversation[]> => {
@@ -130,6 +131,10 @@ export const deleteMessage = async (conversationId: string, messageId: string): 
 
 export const clearChatHistory = async (conversationId: string): Promise<void> => {
   await apiClient.post(`/api/v1/chat/conversations/${conversationId}/clear/`);
+};
+
+export const deleteConversation = async (conversationId: string): Promise<void> => {
+  await apiClient.delete(`/api/v1/chat/conversations/${conversationId}/`);
 };
 
 export const sendAnnouncement = async (payload: {

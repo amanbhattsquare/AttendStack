@@ -11,6 +11,7 @@ class OrganizationSerializer(serializers.ModelSerializer):
     employee_count = serializers.SerializerMethodField()
     active_employee_count = serializers.SerializerMethodField()
     today_attendance_count = serializers.SerializerMethodField()
+    is_simplyjob_linked = serializers.SerializerMethodField()
 
     class Meta:
         model = Organization
@@ -18,6 +19,9 @@ class OrganizationSerializer(serializers.ModelSerializer):
             "id",
             "name",
             "invite_code",
+            "external_company_id",
+            "external_source",
+            "is_simplyjob_linked",
             "owner",
             "owner_name",
             "owner_email",
@@ -29,6 +33,9 @@ class OrganizationSerializer(serializers.ModelSerializer):
             "today_attendance_count",
         ]
         read_only_fields = ["id", "created_at", "owner_name", "owner_email", "invite_code"]
+
+    def get_is_simplyjob_linked(self, obj):
+        return bool(obj.external_company_id or obj.external_source == "SIMPLYJOB")
 
     def get_can_manage_invite_code(self, obj):
         request = self.context.get("request")

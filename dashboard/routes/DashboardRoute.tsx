@@ -29,25 +29,8 @@ export const DashboardMenu: MenuItemType[] = [
   {
     id: uuid(),
     title: "Admin Dashboard",
-    link: "/admin/dashboard",
+    link: "/dashboard",
     icon: <IconLayoutDashboard size={20} strokeWidth={1.5} />,
-  },
-  {
-    id: uuid(),
-    title: "SUPER ADMIN PANEL",
-    grouptitle: true,
-  },
-  {
-    id: uuid(),
-    title: "Manage Companies",
-    link: "/admin/organizations",
-    icon: <IconBuildingSkyscraper size={20} strokeWidth={1.5} />,
-  },
-  {
-    id: uuid(),
-    title: "Administrators & HRs",
-    link: "/admin/administrators",
-    icon: <IconShieldCheck size={20} strokeWidth={1.5} />,
   },
   {
     id: uuid(),

@@ -113,20 +113,10 @@ const UserMenu = () => {
     : [
         {
           id: "admin-home",
-          title: "Admin Dashboard",
-          link: "/admin/dashboard/",
+          title: "Dashboard",
+          link: "/dashboard",
           icon: <IconHome2 size={18} strokeWidth={1.5} className="text-secondary" />,
         },
-        ...(user?.role === "SUPER_ADMIN"
-          ? [
-              {
-                id: "super-admin-companies",
-                title: "Super Admin (Manage Companies)",
-                link: "/admin/organizations",
-                icon: <IconBuildingSkyscraper size={18} strokeWidth={1.5} className="text-warning" />,
-              },
-            ]
-          : []),
         {
           id: "admin-employees",
           title: "Manage Employees",

@@ -1,4 +1,6 @@
-from rest_framework import viewsets, permissions
+from django.contrib.auth import get_user_model
+from django.utils import timezone
+from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import IsAdminUser
@@ -6,45 +8,86 @@ from rest_framework.response import Response
 
 from accounts.models import UserRole
 from accounts.permissions import IsAdminOrHR, IsSuperAdmin
+from attendance.models import AttendanceRecord, LeaveRequest
+from employees.models import Employee, EmployeeStatus
 from .models import Organization
 from .serializers import OrganizationSerializer, AdministratorSerializer
-from employees.models import Employee
+
+User = get_user_model()
+
 
 class OrganizationViewSet(viewsets.ModelViewSet):
-    queryset = Organization.objects.all()
+    queryset = Organization.objects.all().order_by("-created_at")
     serializer_class = OrganizationSerializer
 
     def get_permissions(self):
-        if self.action == "create":
+        if self.action in ["create", "update", "partial_update", "destroy", "toggle_status", "superadmin_overview", "stats"]:
             return [IsAdminOrHR()]
-        if self.action == "destroy":
-            return [IsSuperAdmin()]
         return [permissions.IsAuthenticated()]
 
     def get_queryset(self):
         user = self.request.user
-        if user.is_superuser:
-            return Organization.objects.all()
+        if not user.is_authenticated:
+            return Organization.objects.none()
+        if user.is_superuser or user.role == UserRole.SUPER_ADMIN:
+            return Organization.objects.all().order_by("-created_at")
         if user.role == UserRole.HR:
             return (Organization.objects.filter(owner=user) | Organization.objects.filter(
                 employees__email__iexact=user.email
-            )).distinct()
+            )).distinct().order_by("-created_at")
         return Organization.objects.none()
 
     def perform_create(self, serializer):
-        serializer.save(owner=self.request.user)
+        owner = self.request.user
+        owner_email = self.request.data.get("owner_email")
+        if owner_email and (self.request.user.is_superuser or self.request.user.role == UserRole.SUPER_ADMIN):
+            target_user = User.objects.filter(email__iexact=owner_email.strip()).first()
+            if target_user:
+                owner = target_user
+            else:
+                owner = User.objects.create_hr(
+                    email=owner_email.strip(),
+                    password="OrgOwner@123",
+                    first_name=self.request.data.get("owner_first_name", "HR"),
+                    last_name=self.request.data.get("owner_last_name", "Manager"),
+                )
+        serializer.save(owner=owner)
 
     def perform_update(self, serializer):
         organization = self.get_object()
-        if not (self.request.user.is_superuser or organization.owner_id == self.request.user.id):
-            raise PermissionDenied("Only the organization owner can change organization settings.")
+        user = self.request.user
+        if not (user.is_superuser or user.role == UserRole.SUPER_ADMIN or organization.owner_id == user.id):
+            raise PermissionDenied("Only the organization owner or Super Admin can edit organization details.")
+        
+        owner_id = self.request.data.get("owner_id")
+        if owner_id and (user.is_superuser or user.role == UserRole.SUPER_ADMIN):
+            new_owner = User.objects.filter(id=owner_id).first()
+            if new_owner:
+                serializer.save(owner=new_owner)
+                return
+
         serializer.save()
+
+    def perform_destroy(self, instance):
+        user = self.request.user
+        if not (user.is_superuser or user.role == UserRole.SUPER_ADMIN):
+            raise PermissionDenied("Only Super Admins can delete an organization.")
+        instance.delete()
+
+    @action(detail=True, methods=["post"], url_path="toggle-status")
+    def toggle_status(self, request, pk=None):
+        organization = self.get_object()
+        if not (request.user.is_superuser or request.user.role == UserRole.SUPER_ADMIN):
+            raise PermissionDenied("Only Super Admins can toggle organization status.")
+        organization.is_active = not organization.is_active
+        organization.save(update_fields=["is_active"])
+        return Response(OrganizationSerializer(organization, context={"request": request}).data)
 
     @action(detail=True, methods=["post"], url_path="regenerate-invite-code")
     def regenerate_invite_code(self, request, pk=None):
         organization = self.get_object()
-        if not (request.user.is_superuser or organization.owner_id == request.user.id):
-            raise PermissionDenied("Only the organization owner can regenerate its invite code.")
+        if not (request.user.is_superuser or request.user.role == UserRole.SUPER_ADMIN or organization.owner_id == request.user.id):
+            raise PermissionDenied("Only the organization owner or Super Admin can regenerate its invite code.")
 
         from .models import generate_invite_code
 
@@ -54,7 +97,97 @@ class OrganizationViewSet(viewsets.ModelViewSet):
                 organization.invite_code = invite_code
                 organization.save(update_fields=["invite_code"])
                 break
-        return Response(OrganizationSerializer(organization).data)
+        return Response(OrganizationSerializer(organization, context={"request": request}).data)
+
+    @action(detail=True, methods=["get"], url_path="stats")
+    def stats(self, request, pk=None):
+        organization = self.get_object()
+        user = request.user
+        if not (user.is_superuser or user.role == UserRole.SUPER_ADMIN or organization.owner_id == user.id):
+            raise PermissionDenied("Access restricted to Super Admins and Organization owner.")
+
+        today = timezone.localdate()
+        employees = organization.employees.all()
+        employee_count = employees.count()
+        active_employees = employees.filter(status=EmployeeStatus.ACTIVE).count()
+        
+        today_records = AttendanceRecord.objects.filter(employee__organization=organization, date=today)
+        present_count = today_records.filter(status__in=["PRESENT", "HALF_DAY"]).count()
+        late_count = today_records.filter(status="LATE").count()
+        absent_count = today_records.filter(status="ABSENT").count()
+        on_leave_count = today_records.filter(status__in=["LEAVE", "PAID_LEAVE"]).count()
+
+        pending_leaves = LeaveRequest.objects.filter(employee__organization=organization, status="PENDING").count()
+
+        employees_list = [
+            {
+                "id": str(emp.id),
+                "employee_id": emp.employee_id,
+                "full_name": emp.full_name,
+                "email": emp.email,
+                "department": emp.department,
+                "designation": emp.designation,
+                "status": emp.status,
+                "joining_date": emp.joining_date,
+            }
+            for emp in employees[:50]
+        ]
+
+        return Response({
+            "id": organization.id,
+            "name": organization.name,
+            "invite_code": organization.invite_code,
+            "is_active": organization.is_active,
+            "created_at": organization.created_at,
+            "owner_name": organization.owner.get_full_name() if organization.owner else None,
+            "owner_email": organization.owner.email if organization.owner else None,
+            "employee_count": employee_count,
+            "active_employees": active_employees,
+            "today_attendance": {
+                "present": present_count,
+                "late": late_count,
+                "absent": absent_count,
+                "on_leave": on_leave_count,
+            },
+            "pending_leaves": pending_leaves,
+            "employees": employees_list,
+        })
+
+    @action(detail=False, methods=["get"], url_path="superadmin-overview")
+    def superadmin_overview(self, request):
+        user = request.user
+        if not (user.is_superuser or user.role == UserRole.SUPER_ADMIN):
+            raise PermissionDenied("Only Super Admins can access platform overview.")
+
+        today = timezone.localdate()
+        orgs = Organization.objects.all().order_by("-created_at")
+        total_companies = orgs.count()
+        active_companies = orgs.filter(is_active=True).count()
+        inactive_companies = orgs.filter(is_active=False).count()
+
+        total_users = User.objects.count()
+        total_hrs = User.objects.filter(role=UserRole.HR).count()
+        total_employees = Employee.objects.count()
+
+        today_attendance = AttendanceRecord.objects.filter(date=today, status__in=["PRESENT", "LATE", "HALF_DAY"]).count()
+        total_pending_leaves = LeaveRequest.objects.filter(status="PENDING").count()
+
+        orgs_serialized = OrganizationSerializer(orgs, many=True, context={"request": request}).data
+
+        return Response({
+            "summary": {
+                "total_companies": total_companies,
+                "active_companies": active_companies,
+                "inactive_companies": inactive_companies,
+                "total_users": total_users,
+                "total_hrs": total_hrs,
+                "total_employees": total_employees,
+                "today_attendance": today_attendance,
+                "pending_leaves": total_pending_leaves,
+            },
+            "organizations": orgs_serialized,
+        })
+
 
 class AdministratorViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Employee.objects.filter(designation="Administrator")
@@ -64,6 +197,7 @@ class AdministratorViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         user = self.request.user
         queryset = Employee.objects.filter(designation="Administrator")
-        if user.is_superuser:
+        if user.is_superuser or user.role == UserRole.SUPER_ADMIN:
             return queryset
         return queryset.filter(organization__owner=user)
+

@@ -51,8 +51,11 @@ const AdminSignIn = () => {
         if (user && (user.role === "SUPER_ADMIN" || user.role === "HR")) {
           localStorage.setItem("authToken", response.data.access);
           localStorage.setItem("refreshToken", response.data.refresh);
-          localStorage.setItem("user", JSON.stringify(user));
-          router.push("/admin/dashboard");
+          if (user.role === "SUPER_ADMIN") {
+            router.push("/super-admin/dashboard");
+          } else {
+            router.push("/admin/dashboard");
+          }
         } else {
           setError("Access denied. Use an organization owner or HR account.");
         }

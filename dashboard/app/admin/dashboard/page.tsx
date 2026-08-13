@@ -15,6 +15,8 @@ import {
   IconListDetails,
   IconListCheck,
   IconUsers,
+  IconBuildingSkyscraper,
+  IconShieldCheck,
 } from "@tabler/icons-react";
 import DashboardStats from "components/dashboard/DashboardStats";
 import ActivityLog from "components/dashboard/ActivityLog";
@@ -169,10 +171,23 @@ const AdminDashboard = () => {
   const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
   const [payrolls, setPayrolls] = useState<PayrollRecord[]>([]);
   const [tasks, setTasks] = useState<TaskRecord[]>([]);
+  const [superAdminOverview, setSuperAdminOverview] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
 
   const router = useRouter();
+
+  const isSuperAdmin = useMemo(() => {
+    if (typeof window === "undefined") return false;
+    const userData = localStorage.getItem("user");
+    if (!userData) return false;
+    try {
+      const u = JSON.parse(userData);
+      return u.role === "SUPER_ADMIN" || u.is_superuser;
+    } catch {
+      return false;
+    }
+  }, []);
 
   useEffect(() => {
     const token = localStorage.getItem("authToken");
@@ -211,9 +226,17 @@ const AdminDashboard = () => {
       setLeaves(toArray(leavesRes.data));
       setPayrolls(toArray(payrollRes.data));
       setTasks(toArray(tasksRes.data));
+
+      if (isSuperAdmin) {
+        try {
+          const superRes = await axios.get(`${API_URL}/api/v1/organizations/superadmin-overview/`, authConfig());
+          setSuperAdminOverview(superRes.data);
+        } catch {
+          // Ignore if superadmin endpoint not reachable for normal user
+        }
+      }
     } catch (loadError: any) {
       console.error("Failed to load admin dashboard.", loadError);
-      // If we get a 401 Unauthorized, clear the token and redirect to login
       if (loadError.response?.status === 401) {
         localStorage.removeItem("authToken");
         router.replace("/");
@@ -357,6 +380,35 @@ const AdminDashboard = () => {
 
   return (
     <div className="admin-dashboard-page">
+      {/* Super Admin Top Control Banner */}
+      {isSuperAdmin && (
+        <Card className="border-0 shadow-sm mb-4 bg-gradient text-white" style={{ background: "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)", borderRadius: 14 }}>
+          <Card.Body className="p-4 d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
+            <div>
+              <div className="d-flex align-items-center gap-2 mb-1">
+                <Badge bg="warning" text="dark" className="fw-bold px-2.5 py-1 rounded-pill">
+                  SUPER ADMIN
+                </Badge>
+                <span className="text-white-50 small">Multi-tenant Control Hub</span>
+              </div>
+              <h4 className="fw-bold text-white mb-1 d-flex align-items-center gap-2">
+                <IconBuildingSkyscraper size={24} className="text-warning" />
+                Manage All Registered Companies
+              </h4>
+              <p className="text-white-50 mb-0 small">
+                You have platform-wide access. Oversee {superAdminOverview?.summary?.total_companies ?? "all"} companies, HR managers, and global workforce operations.
+              </p>
+            </div>
+            <div className="d-flex align-items-center gap-2">
+              <Link href="/admin/organizations" className="btn btn-warning fw-semibold px-4 py-2 shadow-sm d-flex align-items-center gap-2 text-dark">
+                <IconShieldCheck size={18} />
+                Manage Every Company Panel
+              </Link>
+            </div>
+          </Card.Body>
+        </Card>
+      )}
+
       <div className="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-5">
         <div>
           <div className="d-flex align-items-center gap-2 mb-2">
@@ -380,6 +432,7 @@ const AdminDashboard = () => {
           </Card.Body>
         </Card>
       </div>
+
 
       {error && (
         <Alert variant="danger" className="border-0 shadow-sm d-flex align-items-center gap-2">

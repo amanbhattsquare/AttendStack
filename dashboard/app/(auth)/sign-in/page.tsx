@@ -36,7 +36,13 @@ const SignInPage = () => {
         localStorage.setItem("refreshToken", response.data.refresh);
         localStorage.setItem("user", JSON.stringify(response.data.user));
         const role = response.data.user?.role;
-        router.push(role === "EMPLOYEE" ? "/employee-dashboard" : "/");
+        if (role === "SUPER_ADMIN") {
+          router.push("/super-admin/dashboard");
+        } else if (role === "EMPLOYEE") {
+          router.push("/employee-dashboard");
+        } else {
+          router.push("/admin/dashboard");
+        }
       } else {
         setError("Login failed. Please check your credentials.");
       }

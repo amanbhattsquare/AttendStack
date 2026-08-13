@@ -48,6 +48,9 @@ export default function MarketingHeader() {
         </nav>
 
         <div className={styles.navActions}>
+          <Link href="/super-admin/login" className={styles.companyLogin} style={{ color: "#d97706" }}>
+            Super Admin
+          </Link>
           <Link href="/admin/sign-in" className={styles.companyLogin}>
             Company login
           </Link>
@@ -100,6 +103,14 @@ export default function MarketingHeader() {
             >
               <IconBuilding size={17} />
               Company login
+            </Link>
+            <Link
+              href="/super-admin/login"
+              className={styles.mobileCompanyLogin}
+              onClick={closeMenu}
+              style={{ color: "#d97706" }}
+            >
+              Super Admin login
             </Link>
           </div>
         </div>

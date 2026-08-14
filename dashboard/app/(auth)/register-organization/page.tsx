@@ -154,8 +154,8 @@ function OrganizationRegistrationContent() {
       const firstError =
         data && typeof data === "object"
           ? Object.values(data)
-              .flat()
-              .find((value) => typeof value === "string")
+            .flat()
+            .find((value) => typeof value === "string")
           : null;
       setError(
         typeof firstError === "string"

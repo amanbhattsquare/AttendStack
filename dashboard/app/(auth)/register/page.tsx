@@ -266,6 +266,16 @@ export default function EmployeeRegistrationPage() {
   const removeProfilePhoto = () => updateFile("profile_photo");
 
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const urlOrgId = params.get("org_id") || params.get("code") || params.get("invite_code");
+      if (urlOrgId) {
+        setForm((current) => ({ ...current, organization_code: urlOrgId.trim().toUpperCase() }));
+      }
+    }
+  }, []);
+
+  useEffect(() => {
     if (!success) return;
     const redirectTimer = window.setTimeout(() => router.replace("/sign-in"), 3000);
     return () => window.clearTimeout(redirectTimer);

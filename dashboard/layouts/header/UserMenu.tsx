@@ -113,8 +113,8 @@ const UserMenu = () => {
     : [
         {
           id: "admin-home",
-          title: "Admin Dashboard",
-          link: "/admin/dashboard/",
+          title: "Dashboard",
+          link: "/dashboard",
           icon: <IconHome2 size={18} strokeWidth={1.5} className="text-secondary" />,
         },
         {

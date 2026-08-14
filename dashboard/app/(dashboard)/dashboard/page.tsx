@@ -529,7 +529,7 @@ const DashboardPage = () => {
         <Modal.Body className="p-4">
           <div className="text-center mb-4">
             <Badge bg="success-subtle" text="success" className="mb-2 px-3 py-2 fs-6 rounded-pill fw-semibold">
-              ✨ Company Account Ready
+              Company Account Ready
             </Badge>
             <h3 className="fw-bold text-dark mb-1">{organization?.name || "Your Company Workspace"}</h3>
             <p className="text-secondary small">
@@ -540,7 +540,7 @@ const DashboardPage = () => {
           <Card className="border-primary border-2 bg-primary-subtle text-center p-4 mb-4 shadow-sm">
             <div className="text-uppercase small fw-bold text-primary mb-2">Your AttendStack Organization ID</div>
             <div className="display-6 font-monospace fw-bold text-primary mb-3 letter-spacing-1">
-              {organization?.invite_code || "ORG-YJ2ND9VS"}
+              {organization?.invite_code || "Generating..."}
             </div>
             <div className="d-flex justify-content-center gap-2 flex-wrap">
               <Button
@@ -563,7 +563,8 @@ const DashboardPage = () => {
                   if (organization?.invite_code) {
                     navigator.clipboard.writeText(organization.invite_code);
                   }
-                  window.open("http://localhost:3000/company/hired-employees", "_blank");
+                  const simplyJobUrl = process.env.NEXT_PUBLIC_SIMPLYJOB_URL || (typeof window !== "undefined" && window.location.hostname === "localhost" ? "http://localhost:3009" : "https://simplyjob.in");
+                  window.open(`${simplyJobUrl}/company/hired-employees`, "_blank");
                 }}
               >
                 <IconExternalLink size={18} className="me-1" /> Copy & Open SimplyJob
@@ -574,7 +575,7 @@ const DashboardPage = () => {
           <div className="bg-light p-3 rounded border">
             <h6 className="fw-bold mb-2 text-dark">📋 3 Quick Steps to Link SimplyJob:</h6>
             <ol className="small text-secondary mb-0 ps-3">
-              <li className="mb-1">Click <strong>Copy Org ID</strong> above (<code>{organization?.invite_code || "ORG-YJ2ND9VS"}</code>).</li>
+              <li className="mb-1">Click <strong>Copy Org ID</strong> above{organization?.invite_code ? <> (<code>{organization.invite_code}</code>)</> : null}.</li>
               <li className="mb-1">Open <strong>SimplyJob Hired Employees</strong> workspace.</li>
               <li className="mb-1">Paste this Org ID in the <strong>AttendStack Organization ID</strong> field and click <strong>Save Org ID</strong>.</li>
               <li>Now when you hire candidates on SimplyJob, clicking <strong>Invite</strong> will auto-fill your company Org ID!</li>

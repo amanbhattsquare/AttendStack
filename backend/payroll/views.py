@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from django.db.models import Q
 from attendance.permissions import IsAdminOrReadOnly
 from employees.models import Employee
+from organizations.models import Organization
 from .models import Payroll, PayrollStatus
 from .serializers import PayrollSerializer
 from .services import build_employee_payroll_summary, calculate_attendance_payroll, payable_employment_dates, payroll_period_end
@@ -12,6 +13,17 @@ class PayrollViewSet(viewsets.ModelViewSet):
     queryset = Payroll.objects.select_related("employee").all()
     serializer_class = PayrollSerializer
     permission_classes = [IsAdminOrReadOnly]
+
+    def _organization_for_user(self):
+        user = self.request.user
+        if not user.is_authenticated or user.is_superuser or getattr(user, 'role', '') == "SUPER_ADMIN":
+            return None
+        org = Organization.objects.filter(owner=user).first()
+        if not org:
+            emp = Employee.objects.filter(email__iexact=user.email).first()
+            if emp:
+                org = emp.organization
+        return org
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -28,11 +40,17 @@ class PayrollViewSet(viewsets.ModelViewSet):
 
         # Enforce secure employee data isolation
         user = self.request.user
-        if user.is_authenticated and user.role not in ["SUPER_ADMIN", "HR"] and not user.is_staff:
+        if user.is_authenticated and getattr(user, 'role', '') not in ["SUPER_ADMIN", "HR"] and not user.is_staff:
             try:
                 employee = Employee.objects.get(email=user.email)
                 queryset = queryset.filter(employee=employee)
             except Employee.DoesNotExist:
+                queryset = queryset.none()
+        elif user.is_authenticated and not (user.is_superuser or getattr(user, 'role', '') == "SUPER_ADMIN"):
+            org = self._organization_for_user()
+            if org:
+                queryset = queryset.filter(employee__organization=org)
+            else:
                 queryset = queryset.none()
 
         return queryset
@@ -57,9 +75,14 @@ class PayrollViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        org = self._organization_for_user()
         employees = Employee.objects.filter(
             joining_date__lte=payroll_period_end(month, year),
         )
+        if org:
+            employees = employees.filter(organization=org)
+        elif not (request.user.is_superuser or getattr(request.user, 'role', '') == "SUPER_ADMIN"):
+            employees = employees.none()
         generated_count = 0
         updated_count = 0
         skipped_count = 0

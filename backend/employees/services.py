@@ -166,17 +166,33 @@ def sync_employee_from_simplyjob(*, company_data, employee_data):
     if owner_email:
         owner = User.objects.filter(email__iexact=owner_email).first()
 
-    organization_defaults = {
-        "name": company_name,
-        "external_source": "simplyjob",
-    }
-    if owner is not None:
-        organization_defaults["owner"] = owner
+    org_code = str(company_data.get("invite_code", "") or company_data.get("attendstack_invite_code", "")).strip()
+    organization = None
+    if org_code:
+        organization = Organization.objects.filter(invite_code__iexact=org_code).first()
+    if organization is None and owner is not None:
+        organization = Organization.objects.filter(owner=owner).first()
+    if organization is None and source_company_id:
+        organization = Organization.objects.filter(external_company_id=source_company_id).first()
 
-    organization, _ = Organization.objects.update_or_create(
-        external_company_id=source_company_id,
-        defaults=organization_defaults,
-    )
+    if organization is not None:
+        if not organization.external_company_id and source_company_id:
+            organization.external_company_id = source_company_id
+            organization.save(update_fields=["external_company_id"])
+        if owner is not None and not organization.owner:
+            organization.owner = owner
+            organization.save(update_fields=["owner"])
+    else:
+        organization_defaults = {
+            "name": company_name,
+            "external_source": "simplyjob",
+        }
+        if owner is not None:
+            organization_defaults["owner"] = owner
+        organization, _ = Organization.objects.update_or_create(
+            external_company_id=source_company_id,
+            defaults=organization_defaults,
+        )
 
     joining_date = employee_data.get("joining_date") or timezone.localdate()
     if isinstance(joining_date, str):

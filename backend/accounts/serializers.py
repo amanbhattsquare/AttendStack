@@ -204,6 +204,12 @@ class OrganizationRegistrationSerializer(serializers.Serializer):
     phone = serializers.RegexField(r"^\+?[0-9]{10,15}$")
     password = serializers.CharField(write_only=True, validators=[validate_password])
     confirm_password = serializers.CharField(write_only=True)
+    api_key = serializers.CharField(max_length=128, required=False, allow_blank=True, allow_null=True)
+    source_company_id = serializers.CharField(max_length=64, required=False, allow_blank=True, allow_null=True)
+    website = serializers.URLField(required=False, allow_blank=True, allow_null=True)
+    location = serializers.CharField(max_length=255, required=False, allow_blank=True, allow_null=True)
+    industry = serializers.CharField(max_length=120, required=False, allow_blank=True, allow_null=True)
+    plan_name = serializers.CharField(max_length=100, required=False, allow_blank=True, allow_null=True)
 
     def validate_organization_name(self, value):
         value = value.strip()
@@ -213,8 +219,8 @@ class OrganizationRegistrationSerializer(serializers.Serializer):
 
     def validate_full_name(self, value):
         value = value.strip()
-        if len(value.split()) < 2:
-            raise serializers.ValidationError("Enter your first and last name.")
+        if not value:
+            raise serializers.ValidationError("Enter your full name.")
         return value
 
     def validate_email(self, value):
@@ -234,6 +240,13 @@ class OrganizationRegistrationSerializer(serializers.Serializer):
         from organizations.models import Organization
 
         validated_data.pop("confirm_password")
+        source_company_id = validated_data.pop("source_company_id", None) or None
+        api_key = validated_data.pop("api_key", None) or None
+        website = validated_data.pop("website", None) or None
+        location = validated_data.pop("location", None) or None
+        industry = validated_data.pop("industry", None) or None
+        plan_name = validated_data.pop("plan_name", None) or None
+
         first_name, last_name = _split_full_name(validated_data["full_name"])
         with transaction.atomic():
             owner = User.objects.create_hr(
@@ -243,19 +256,52 @@ class OrganizationRegistrationSerializer(serializers.Serializer):
                 last_name=last_name,
                 phone=validated_data["phone"],
             )
-            organization = Organization.objects.create(
-                name=validated_data["organization_name"],
-                owner=owner,
-            )
+            organization = None
+            if source_company_id:
+                organization = Organization.objects.filter(external_company_id=source_company_id).first()
+                if organization:
+                    organization.name = validated_data["organization_name"]
+                    organization.owner = owner
+                    organization.external_source = "SIMPLYJOB"
+                    if api_key:
+                        organization.api_key = api_key
+                    organization.phone = validated_data["phone"]
+                    organization.email = validated_data["email"]
+                    if website:
+                        organization.website = website
+                    if location:
+                        organization.location = location
+                    if industry:
+                        organization.industry = industry
+                    if plan_name:
+                        organization.plan_name = plan_name
+                    organization.save()
+
+            if organization is None:
+                organization = Organization.objects.create(
+                    name=validated_data["organization_name"],
+                    owner=owner,
+                    external_source="SIMPLYJOB" if (source_company_id or api_key) else "",
+                    external_company_id=source_company_id,
+                    api_key=api_key,
+                    phone=validated_data["phone"],
+                    email=validated_data["email"],
+                    website=website,
+                    location=location,
+                    industry=industry,
+                    plan_name=plan_name,
+                )
             # The owner also receives an employee record so organization scoping works
             # consistently across the HR and workforce modules.
-            Employee.objects.create(
+            Employee.objects.update_or_create(
                 organization=organization,
-                full_name=validated_data["full_name"],
                 email=validated_data["email"],
-                phone=validated_data["phone"],
-                department="Management",
-                designation="Organization Owner",
+                defaults={
+                    "full_name": validated_data["full_name"],
+                    "phone": validated_data["phone"],
+                    "department": "Management",
+                    "designation": "Organization Owner",
+                },
             )
         return organization
 
@@ -300,8 +346,8 @@ class EmployeeSelfRegistrationSerializer(serializers.Serializer):
 
     def validate_full_name(self, value):
         value = value.strip()
-        if len(value.split()) < 2:
-            raise serializers.ValidationError("Enter your first and last name.")
+        if not value:
+            raise serializers.ValidationError("Enter your full name.")
         return value
 
     def validate_profile_photo(self, value):

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo, useCallback } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import {
   Alert,
   Badge,
@@ -9,6 +10,8 @@ import {
   Card,
   Col,
   Container,
+  Form,
+  Modal,
   Row,
   Spinner,
   Table,
@@ -18,7 +21,6 @@ import {
   IconBuildingSkyscraper,
   IconShieldCheck,
   IconUsers,
-  IconUserCheck,
   IconCalendarEvent,
   IconPlus,
   IconRefresh,
@@ -26,10 +28,13 @@ import {
   IconActivity,
   IconCheck,
   IconAlertTriangle,
-  IconEye,
   IconCopy,
+  IconChartBar,
 } from "@tabler/icons-react";
+import { ApexOptions } from "apexcharts";
 import apiClient from "app/services/api";
+
+const Chart = dynamic(() => import("react-apexcharts"), { ssr: false });
 
 type OverviewData = {
   summary: {
@@ -62,13 +67,27 @@ export default function SuperAdminDashboardPage() {
   const [error, setError] = useState("");
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
+  // Modal States
+  const [showOnboardModal, setShowOnboardModal] = useState(false);
+  const [onboardName, setOnboardName] = useState("");
+  const [onboardLoading, setOnboardLoading] = useState(false);
+  const [onboardSuccessMsg, setOnboardSuccessMsg] = useState("");
+
+  const [showAdminModal, setShowAdminModal] = useState(false);
+  const [adminName, setAdminName] = useState("");
+  const [adminEmail, setAdminEmail] = useState("");
+  const [adminPassword, setAdminPassword] = useState("");
+  const [selectedOrgId, setSelectedOrgId] = useState("");
+  const [adminLoading, setAdminLoading] = useState(false);
+  const [adminSuccessMsg, setAdminSuccessMsg] = useState("");
+
   const loadOverview = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
       const response = await apiClient.get("/api/v1/organizations/superadmin-overview/");
       setData(response.data);
-    } catch (err: any) {
+    } catch {
       setError("Unable to load live Super Admin statistics. Please refresh or verify credentials.");
     } finally {
       setLoading(false);
@@ -92,6 +111,102 @@ export default function SuperAdminDashboardPage() {
     return Math.round((data.summary.today_attendance / data.summary.total_employees) * 100);
   }, [data]);
 
+  // Chart data setup for tenant companies
+  const companyChartLabels = useMemo(() => {
+    return (data?.organizations || []).slice(0, 6).map((o) => o.name);
+  }, [data]);
+
+  const companyWorkforceSeries = useMemo(() => {
+    const workforce = (data?.organizations || []).slice(0, 6).map((o) => o.employee_count);
+    const checkIns = (data?.organizations || []).slice(0, 6).map((o) => o.today_attendance_count);
+    return [
+      { name: "Total Staff", data: workforce },
+      { name: "Today Check-ins", data: checkIns },
+    ];
+  }, [data]);
+
+  const companyChartOptions: ApexOptions = {
+    chart: {
+      type: "bar",
+      toolbar: { show: false },
+      fontFamily: "Inter, sans-serif",
+    },
+    plotOptions: {
+      bar: {
+        horizontal: false,
+        columnWidth: "45%",
+        borderRadius: 6,
+      },
+    },
+    colors: ["#3b82f6", "#10b981"],
+    dataLabels: { enabled: false },
+    stroke: { show: true, width: 2, colors: ["transparent"] },
+    xaxis: {
+      categories: companyChartLabels,
+      labels: { style: { fontSize: "12px", fontWeight: 500 } },
+    },
+    yaxis: {
+      title: { text: "Employees" },
+    },
+    fill: { opacity: 1 },
+    tooltip: {
+      y: { formatter: (val: number) => `${val} staff members` },
+    },
+    grid: {
+      borderColor: "#f1f5f9",
+      strokeDashArray: 4,
+    },
+    legend: {
+      position: "top",
+      horizontalAlign: "right",
+    },
+  };
+
+  // Onboard Company Handler
+  const handleOnboardSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!onboardName.trim()) return;
+    setOnboardLoading(true);
+    setOnboardSuccessMsg("");
+    try {
+      const response = await apiClient.post("/api/v1/organizations/", {
+        name: onboardName.trim(),
+      });
+      setOnboardSuccessMsg(`Company "${response.data.name}" successfully onboarded! Invite Code: ${response.data.invite_code}`);
+      setOnboardName("");
+      loadOverview();
+    } catch {
+      alert("Failed to onboard company. Please try again.");
+    } finally {
+      setOnboardLoading(false);
+    }
+  };
+
+  // Add HR Admin Handler
+  const handleAdminSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!adminEmail.trim() || !adminPassword.trim() || !selectedOrgId) return;
+    setAdminLoading(true);
+    setAdminSuccessMsg("");
+    try {
+      await apiClient.post(`/api/v1/organizations/${selectedOrgId}/assign_owner/`, {
+        name: adminName.trim() || adminEmail.split("@")[0],
+        email: adminEmail.trim(),
+        password: adminPassword.trim(),
+      });
+      setAdminSuccessMsg(`HR Owner account created and assigned successfully for ${adminEmail}!`);
+      setAdminName("");
+      setAdminEmail("");
+      setAdminPassword("");
+      setSelectedOrgId("");
+      loadOverview();
+    } catch {
+      alert("Failed to create HR Administrator account. Verify details and try again.");
+    } finally {
+      setAdminLoading(false);
+    }
+  };
+
   return (
     <Container fluid className="py-4 super-admin-dashboard-page">
       {/* Top Banner Control Hub */}
@@ -112,14 +227,30 @@ export default function SuperAdminDashboardPage() {
             </p>
           </div>
           <div className="d-flex flex-wrap align-items-center gap-2.5">
-            <Link href="/super-admin/companies" className="btn btn-warning btn-lg fw-bold px-4 py-2.5 shadow-sm d-flex align-items-center gap-2 text-dark rounded-3">
+            <Button
+              variant="warning"
+              size="lg"
+              className="fw-bold px-4 py-2.5 shadow-sm d-flex align-items-center gap-2 text-dark rounded-3"
+              onClick={() => {
+                setOnboardSuccessMsg("");
+                setShowOnboardModal(true);
+              }}
+            >
               <IconPlus size={20} />
               Onboard Company
-            </Link>
-            <Link href="/super-admin/admins" className="btn btn-outline-light btn-lg fw-semibold px-4 py-2.5 d-flex align-items-center gap-2 rounded-3">
+            </Button>
+            <Button
+              variant="outline-light"
+              size="lg"
+              className="fw-semibold px-4 py-2.5 d-flex align-items-center gap-2 rounded-3"
+              onClick={() => {
+                setAdminSuccessMsg("");
+                setShowAdminModal(true);
+              }}
+            >
               <IconShieldCheck size={20} />
               Add HR Administrator
-            </Link>
+            </Button>
           </div>
         </Card.Body>
       </Card>
@@ -194,6 +325,31 @@ export default function SuperAdminDashboardPage() {
         </Col>
       </Row>
 
+      {/* Analytics Chart Row */}
+      <Card className="border-0 shadow-sm mb-4">
+        <Card.Header className="bg-white border-0 py-3.5 d-flex align-items-center justify-content-between">
+          <div>
+            <h5 className="fw-bold text-dark mb-0 d-flex align-items-center gap-2">
+              <IconChartBar className="text-primary" size={22} />
+              Tenant Workforce & Attendance Performance Graph
+            </h5>
+            <span className="text-secondary small">Comparison of registered workforce vs today's check-ins per tenant</span>
+          </div>
+        </Card.Header>
+        <Card.Body className="pt-2 pb-4">
+          {companyChartLabels.length > 0 ? (
+            <Chart
+              options={companyChartOptions}
+              series={companyWorkforceSeries}
+              type="bar"
+              height={260}
+            />
+          ) : (
+            <div className="text-center py-4 text-secondary">No tenant company analytics available yet.</div>
+          )}
+        </Card.Body>
+      </Card>
+
       {/* Main Content Grid */}
       <Row className="g-4 mb-4">
         {/* Managed Companies Quick Directory */}
@@ -224,9 +380,9 @@ export default function SuperAdminDashboardPage() {
               ) : !data?.organizations || data.organizations.length === 0 ? (
                 <div className="text-center py-5">
                   <p className="text-secondary mb-2">No tenant companies created yet.</p>
-                  <Link href="/super-admin/companies" className="btn btn-primary btn-sm">
+                  <Button size="sm" variant="primary" onClick={() => setShowOnboardModal(true)}>
                     Onboard First Company
-                  </Link>
+                  </Button>
                 </div>
               ) : (
                 <Table responsive hover className="align-middle mb-0">
@@ -329,7 +485,7 @@ export default function SuperAdminDashboardPage() {
                 <div className="d-flex align-items-center justify-content-between p-2.5 border rounded">
                   <div className="d-flex align-items-center gap-2">
                     <div className="rounded-circle bg-success p-1" />
-                    <span className="fw-semibold text-dark small">Database (SQLite/PostgreSQL)</span>
+                    <span className="fw-semibold text-dark small">Database Engine</span>
                   </div>
                   <Badge bg="success-subtle" text="success">Healthy</Badge>
                 </div>
@@ -372,6 +528,102 @@ export default function SuperAdminDashboardPage() {
         </Col>
       </Row>
 
+      {/* Onboard Company Modal */}
+      <Modal show={showOnboardModal} onHide={() => setShowOnboardModal(false)} centered>
+        <Modal.Header closeButton className="border-0 pb-0">
+          <Modal.Title className="fw-bold">Onboard New Company Tenant</Modal.Title>
+        </Modal.Header>
+        <Form onSubmit={handleOnboardSubmit}>
+          <Modal.Body className="pt-3">
+            {onboardSuccessMsg && <Alert variant="success">{onboardSuccessMsg}</Alert>}
+            <Form.Group className="mb-3">
+              <Form.Label className="fw-semibold small">Company Name</Form.Label>
+              <Form.Control
+                type="text"
+                placeholder="e.g. Acme Corporation"
+                value={onboardName}
+                onChange={(e) => setOnboardName(e.target.value)}
+                required
+              />
+              <Form.Text className="text-muted">
+                An automatic Onboarding Code (ORG-XXXXXXXX) will be generated.
+              </Form.Text>
+            </Form.Group>
+          </Modal.Body>
+          <Modal.Footer className="border-0 pt-0">
+            <Button variant="secondary" size="sm" onClick={() => setShowOnboardModal(false)}>
+              Close
+            </Button>
+            <Button variant="warning" size="sm" type="submit" disabled={onboardLoading} className="fw-bold text-dark">
+              {onboardLoading ? <Spinner size="sm" /> : "Onboard Company"}
+            </Button>
+          </Modal.Footer>
+        </Form>
+      </Modal>
+
+      {/* Add HR Administrator Modal */}
+      <Modal show={showAdminModal} onHide={() => setShowAdminModal(false)} centered>
+        <Modal.Header closeButton className="border-0 pb-0">
+          <Modal.Title className="fw-bold">Create & Assign HR Administrator</Modal.Title>
+        </Modal.Header>
+        <Form onSubmit={handleAdminSubmit}>
+          <Modal.Body className="pt-3">
+            {adminSuccessMsg && <Alert variant="success">{adminSuccessMsg}</Alert>}
+            <Form.Group className="mb-3">
+              <Form.Label className="fw-semibold small">Select Company Tenant</Form.Label>
+              <Form.Select
+                value={selectedOrgId}
+                onChange={(e) => setSelectedOrgId(e.target.value)}
+                required
+              >
+                <option value="">-- Choose Company --</option>
+                {(data?.organizations || []).map((org) => (
+                  <option key={org.id} value={org.id}>
+                    {org.name} ({org.invite_code})
+                  </option>
+                ))}
+              </Form.Select>
+            </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label className="fw-semibold small">Full Name</Form.Label>
+              <Form.Control
+                type="text"
+                placeholder="e.g. Jane Doe"
+                value={adminName}
+                onChange={(e) => setAdminName(e.target.value)}
+              />
+            </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label className="fw-semibold small">Email Address</Form.Label>
+              <Form.Control
+                type="email"
+                placeholder="admin@company.com"
+                value={adminEmail}
+                onChange={(e) => setAdminEmail(e.target.value)}
+                required
+              />
+            </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label className="fw-semibold small">Initial Password</Form.Label>
+              <Form.Control
+                type="password"
+                placeholder="Enter password"
+                value={adminPassword}
+                onChange={(e) => setAdminPassword(e.target.value)}
+                required
+              />
+            </Form.Group>
+          </Modal.Body>
+          <Modal.Footer className="border-0 pt-0">
+            <Button variant="secondary" size="sm" onClick={() => setShowAdminModal(false)}>
+              Close
+            </Button>
+            <Button variant="primary" size="sm" type="submit" disabled={adminLoading} className="fw-bold">
+              {adminLoading ? <Spinner size="sm" /> : "Create & Assign HR Owner"}
+            </Button>
+          </Modal.Footer>
+        </Form>
+      </Modal>
     </Container>
   );
 }

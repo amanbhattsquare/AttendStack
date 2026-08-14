@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import Swal from "sweetalert2";
 import {
   Form,
   Button,
@@ -200,6 +201,16 @@ export default function ChatPage() {
       setShowClearModal(false);
       refetchMessages();
       refetchConversations();
+      Swal.fire({
+        title: "Chat Cleared",
+        text: "The chat history has been cleared.",
+        icon: "success",
+        timer: 1500,
+        showConfirmButton: false,
+        customClass: {
+          popup: "rounded-4 shadow",
+        },
+      });
     },
   });
 
@@ -478,13 +489,41 @@ export default function ChatPage() {
         old.filter((m) => m.id !== messageId)
       );
       queryClient.invalidateQueries({ queryKey: ["conversations"] });
+      Swal.fire({
+        title: "Message Deleted",
+        text: "The message was deleted successfully.",
+        icon: "success",
+        timer: 1500,
+        showConfirmButton: false,
+        customClass: {
+          popup: "rounded-4 shadow",
+        },
+      });
     },
   });
 
   const handleDeleteMessage = (messageId: string) => {
-    if (window.confirm("Are you sure you want to delete this message?")) {
-      deleteMessageMutation.mutate(messageId);
-    }
+    Swal.fire({
+      title: "Delete Message?",
+      text: "Are you sure you want to delete this message?",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#ef4444",
+      cancelButtonColor: "#64748b",
+      confirmButtonText: "Yes, delete",
+      cancelButtonText: "Cancel",
+      reverseButtons: true,
+      customClass: {
+        popup: "rounded-4 shadow-lg",
+        confirmButton: "btn btn-danger px-4 py-2 rounded-pill fw-bold",
+        cancelButton: "btn btn-secondary px-4 py-2 rounded-pill fw-bold me-2",
+      },
+      buttonsStyling: false,
+    }).then((result) => {
+      if (result.isConfirmed) {
+        deleteMessageMutation.mutate(messageId);
+      }
+    });
   };
 
   // TanStack Mutation: Delete Conversation from Sidebar
@@ -501,14 +540,42 @@ export default function ChatPage() {
         setActiveConversationId(remaining[0]?.id || null);
       }
       refetchConversations();
+      Swal.fire({
+        title: "Deleted!",
+        text: "The conversation has been deleted successfully.",
+        icon: "success",
+        timer: 2000,
+        showConfirmButton: false,
+        customClass: {
+          popup: "rounded-4 shadow",
+        },
+      });
     },
   });
 
   const handleDeleteConversation = (e: React.MouseEvent, convId: string) => {
     e.stopPropagation();
-    if (window.confirm("Are you sure you want to delete this conversation?")) {
-      deleteConversationMutation.mutate(convId);
-    }
+    Swal.fire({
+      title: "Delete Conversation?",
+      text: "Are you sure you want to delete this conversation? This will remove the chat history from your view.",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#ef4444",
+      cancelButtonColor: "#64748b",
+      confirmButtonText: "Yes, delete it",
+      cancelButtonText: "Cancel",
+      reverseButtons: true,
+      customClass: {
+        popup: "rounded-4 shadow-lg",
+        confirmButton: "btn btn-danger px-4 py-2 rounded-pill fw-bold",
+        cancelButton: "btn btn-secondary px-4 py-2 rounded-pill fw-bold me-2",
+      },
+      buttonsStyling: false,
+    }).then((result) => {
+      if (result.isConfirmed) {
+        deleteConversationMutation.mutate(convId);
+      }
+    });
   };
 
   // TanStack Mutation: Forward Message

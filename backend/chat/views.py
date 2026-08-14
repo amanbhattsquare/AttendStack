@@ -65,9 +65,7 @@ class ConversationViewSet(viewsets.ModelViewSet):
             members__user=request.user
         ).filter(
             members__user=target_user
-        ).annotate(
-            member_count=Count('members')
-        ).filter(member_count=2).first()
+        ).first()
 
         if existing_conv:
             return Response(

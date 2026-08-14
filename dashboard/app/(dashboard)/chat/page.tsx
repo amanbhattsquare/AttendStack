@@ -455,8 +455,15 @@ export default function ChatPage() {
 
   // Select conversation
   const selectConversation = (conv: Conversation) => {
+    if (!conv || !conv.id) return;
     setActiveConversationId(conv.id);
     setMobileView("chat");
+    setShowDirectModal(false);
+    setShowGroupModal(false);
+    markConversationAsRead(conv.id);
+    queryClient.setQueryData<Conversation[]>(["conversations"], (old = []) =>
+      old.map((c) => (c.id === conv.id ? { ...c, unread_count: 0 } : c))
+    );
   };
 
   // TanStack Mutation: Delete Message
@@ -627,28 +634,36 @@ export default function ChatPage() {
   });
 
   const handleStartDirectChat = (user: UserMinimal) => {
-    // 1. Check if a direct conversation already exists in active conversation list
+    // 1. Check if a direct conversation already exists in active conversation list with this employee
     const existingConv = conversations.find((c) => {
       if (c.type !== "DIRECT") return false;
-      if (c.other_user && String(c.other_user.id) === String(user.id)) return true;
-      if (
-        c.members &&
-        c.members.some(
-          (m) => String(m.user.id) === String(user.id) && String(m.user.id) !== String(currentUserId)
-        )
-      ) {
-        return true;
+
+      // Match by other_user
+      if (c.other_user) {
+        if (String(c.other_user.id) === String(user.id)) return true;
+        if (c.other_user.email && user.email && c.other_user.email.toLowerCase() === user.email.toLowerCase()) return true;
       }
+
+      // Match by members
+      if (c.members && c.members.length > 0) {
+        const otherMember = c.members.find(
+          (m) => String(m.user?.id) !== String(currentUserId)
+        );
+        if (otherMember) {
+          if (String(otherMember.user?.id) === String(user.id)) return true;
+          if (otherMember.user?.email && user.email && otherMember.user?.email?.toLowerCase() === user.email?.toLowerCase()) return true;
+        }
+      }
+
       return false;
     });
 
     if (existingConv) {
-      setShowDirectModal(false);
       selectConversation(existingConv);
       return;
     }
 
-    // 2. Only if no existing conversation is found locally, call API mutation
+    // 2. Otherwise trigger API mutation (backend returns existing or creates new)
     createDirectChatMutation.mutate(user);
   };
 
@@ -1473,7 +1488,7 @@ export default function ChatPage() {
                 <div
                   key={user.id}
                   className="list-group-item list-group-item-action d-flex align-items-center justify-content-between p-3 border-0 rounded-3 mb-1 cursor-pointer"
-                  onClick={() => createDirectChatMutation.mutate(user)}
+                  onClick={() => handleStartDirectChat(user)}
                 >
                   <div className="d-flex align-items-center gap-3">
                     <div

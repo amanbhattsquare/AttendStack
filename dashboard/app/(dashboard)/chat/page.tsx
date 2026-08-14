@@ -1332,8 +1332,23 @@ export default function ChatPage() {
                   </div>
                 ) : messages.length === 0 ? (
                   <div className="chat-empty-state" style={{ marginTop: "auto", marginBottom: "auto" }}>
-                    <div className="chat-empty-icon accent">
-                      <Sparkles size={32} />
+                    <div
+                      className="chat-mascot-wrapper"
+                      style={{
+                        width: "120px",
+                        height: "120px",
+                        margin: "0 auto 12px",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        filter: "drop-shadow(0 8px 16px rgba(245, 158, 11, 0.2))",
+                      }}
+                    >
+                      <img
+                        src="/smiling-mascot.svg"
+                        alt="Smiling Mascot"
+                        style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                      />
                     </div>
                     <h6>No messages yet</h6>
                     <p>Send a message to start the conversation with {activeConversation.display_name}</p>
@@ -1497,8 +1512,23 @@ export default function ChatPage() {
             /* No conversation selected placeholder */
             <div className="chat-no-selection">
               <div className="chat-no-selection-content">
-                <div className="chat-empty-icon large">
-                  <MessageSquare size={48} />
+                <div
+                  className="chat-mascot-wrapper"
+                  style={{
+                    width: "140px",
+                    height: "140px",
+                    margin: "0 auto 16px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    filter: "drop-shadow(0 10px 20px rgba(245, 158, 11, 0.25))",
+                  }}
+                >
+                  <img
+                    src="/smiling-mascot.svg"
+                    alt="Welcome to Chat"
+                    style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                  />
                 </div>
                 <h4>Welcome to Chat</h4>
                 <p>Select a conversation or start a new one to begin messaging your team.</p>

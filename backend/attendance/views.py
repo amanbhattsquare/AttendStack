@@ -16,6 +16,7 @@ from ipware import get_client_ip
 from geopy.distance import geodesic
 
 from accounts.permissions import IsAdminOrHR
+from organizations.models import Organization
 from employees.models import (
     ATTENDANCE_ELIGIBLE_STATUSES,
     ATTENDANCE_WORKING_STATUSES,
@@ -87,6 +88,17 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
             return [IsAuthenticated()]
         return super().get_permissions()
 
+    def _organization_for_user(self):
+        user = self.request.user
+        if not user.is_authenticated or user.is_superuser or getattr(user, 'role', '') == "SUPER_ADMIN":
+            return None
+        org = Organization.objects.filter(owner=user).first()
+        if not org:
+            emp = Employee.objects.filter(email__iexact=user.email).first()
+            if emp:
+                org = emp.organization
+        return org
+
     def get_queryset(self):
         queryset = attendance_eligible_records(super().get_queryset())
         user = self.request.user
@@ -105,20 +117,22 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
         if self.action == "list" and not any([date_from, date_to, year, month, day, search]):
             queryset = queryset.filter(date=timezone.now().date())
 
+        # Enforce organization data isolation
+        if not (user.is_superuser or getattr(user, 'role', '') == "SUPER_ADMIN"):
+            org = self._organization_for_user()
+            if org:
+                queryset = queryset.filter(employee__organization=org)
+            else:
+                queryset = queryset.none()
+
         # Enforce data isolation: Employees can only view their own records
-        if user.is_authenticated and user.role == "EMPLOYEE":
+        if user.is_authenticated and getattr(user, 'role', '') == "EMPLOYEE":
             queryset = queryset.filter(employee__email__iexact=user.email)
 
         queryset = queryset.filter(
             date__lte=timezone.now().date(),
             date__gte=F("employee__joining_date"),
         )
-
-        # if year and month:
-        #     try:
-        #         auto_mark_calendar_days(int(month), int(year))
-        #     except (TypeError, ValueError):
-        #         pass
 
         if date_from:
             queryset = queryset.filter(date__gte=date_from)
@@ -210,14 +224,27 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
     def today(self, request):
         today = timezone.localdate()
         auto_mark_calendar_days(today.month, today.year)
-        records = {
-            record.employee.id: record
-            for record in AttendanceRecord.objects.select_related("employee").filter(date=today)
-        }
-        employees = Employee.objects.attendance_eligible_on(today).filter(
+        
+        user = request.user
+        org = self._organization_for_user()
+
+        records_qs = AttendanceRecord.objects.select_related("employee").filter(date=today)
+        employees_qs = Employee.objects.attendance_eligible_on(today).filter(
             joining_date__lte=today,
         ).order_by("full_name")
-        payload = [self._today_payload(employee, records.get(employee.id)) for employee in employees]
+
+        if org:
+            records_qs = records_qs.filter(employee__organization=org)
+            employees_qs = employees_qs.filter(organization=org)
+        elif not (user.is_superuser or getattr(user, 'role', '') == "SUPER_ADMIN"):
+            records_qs = records_qs.none()
+            employees_qs = employees_qs.none()
+
+        records = {
+            record.employee.id: record
+            for record in records_qs
+        }
+        payload = [self._today_payload(employee, records.get(employee.id)) for employee in employees_qs]
         serializer = TodayAttendanceSerializer(payload, many=True)
         return Response(serializer.data)
 
@@ -717,6 +744,17 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(
                 Q(employee__email__iexact=user.email) | Q(employee__employee_id=user.employee_id)
             )
+        elif user.is_authenticated and not (user.is_superuser or getattr(user, 'role', '') == "SUPER_ADMIN"):
+            org = Organization.objects.filter(owner=user).first()
+            if not org:
+                emp = Employee.objects.filter(email__iexact=user.email).first()
+                if emp:
+                    org = emp.organization
+            if org:
+                queryset = queryset.filter(employee__organization=org)
+            else:
+                queryset = queryset.none()
+
         return queryset.filter(end_date__gte=F("employee__joining_date"))
 
     def _raise_if_leave_overlaps(self, employee, start_date, end_date, instance=None):

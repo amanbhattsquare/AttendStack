@@ -26,6 +26,18 @@ class Organization(models.Model):
         null=True,
         db_index=True,
     )
+    api_key = models.CharField(
+        max_length=128,
+        blank=True,
+        null=True,
+        db_index=True,
+    )
+    phone = models.CharField(max_length=40, blank=True, null=True)
+    email = models.EmailField(blank=True, null=True)
+    website = models.URLField(blank=True, null=True)
+    location = models.CharField(max_length=255, blank=True, null=True)
+    industry = models.CharField(max_length=120, blank=True, null=True)
+    plan_name = models.CharField(max_length=100, blank=True, null=True)
     invite_code = models.CharField(
         max_length=12,
         unique=True,

@@ -18,6 +18,7 @@ from .views import (
     SimplyJobEmployeeOnboardingView,
     SSOLoginView,
     UserProfileView,
+    VerifyRegistrationTokenView,
 )
 
 app_name = "accounts"
@@ -26,6 +27,7 @@ urlpatterns = [
     # Auth
     path("login/", LoginView.as_view(), name="login"),
     path("sso-login/", SSOLoginView.as_view(), name="sso_login"),
+    path("verify-registration-token/", VerifyRegistrationTokenView.as_view(), name="verify_registration_token"),
     path("register-organization/", OrganizationRegistrationView.as_view(), name="register_organization"),
 
     path("register-employee/", EmployeeSelfRegistrationView.as_view(), name="register_employee"),

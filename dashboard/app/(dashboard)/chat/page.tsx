@@ -910,12 +910,13 @@ export default function ChatPage() {
     });
   }, [conversations, searchQuery, convFilter, currentUserId]);
 
-  // Active members only filter for user search
+  // Active members only filter for user search (excludes admins from employee chat popup)
   const activeUserSearchResults = useMemo(() => {
     return userSearchResults.filter((u) => {
       if (u.is_active === false) return false;
       if (u.status && u.status.toUpperCase() !== "ACTIVE") return false;
       if (u.employment_status && u.employment_status.toUpperCase() !== "ACTIVE") return false;
+      if (u.role === "SUPER_ADMIN" || u.role === "ADMIN") return false;
       return true;
     });
   }, [userSearchResults]);

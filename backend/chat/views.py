@@ -363,6 +363,9 @@ class ChatUserViewSet(viewsets.ReadOnlyModelViewSet):
         # Base active users queryset
         queryset = User.objects.exclude(id=self.request.user.id).filter(is_active=True)
 
+        # Do not show super admins/admins in employee chat popup
+        queryset = queryset.exclude(role='SUPER_ADMIN').exclude(is_superuser=True)
+
         # Scope by Organization: Match employees in the same company
         current_emp = Employee.objects.filter(email=self.request.user.email).first()
         if current_emp and current_emp.organization_id:

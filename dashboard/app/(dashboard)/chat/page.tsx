@@ -458,10 +458,6 @@ export default function ChatPage() {
         wsRef.current.close();
       }
     };
-
-    return () => {
-      if (controller) controller.close();
-    };
   }, [activeConversationId, queryClient]);
 
   // Select conversation

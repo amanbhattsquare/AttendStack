@@ -166,18 +166,28 @@ export const connectChatWebSocket = (
     const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
     if (!token || isClosedManually) return;
 
-    const rawBackend = (process.env.NEXT_PUBLIC_API_ENDPOINT || 'http://127.0.0.1:8000').trim();
+    const rawBackend = (process.env.NEXT_PUBLIC_API_ENDPOINT || '').trim();
+    if (!rawBackend) {
+      console.error("NEXT_PUBLIC_API_ENDPOINT is not set. WebSocket connection aborted.");
+      return;
+    }
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     
     let host;
     try {
-      const urlObj = new URL(rawBackend);
-      host = urlObj.host;
+      // If the endpoint is a full URL, extract the host.
+      // Otherwise, assume the endpoint is the host itself.
+      if (rawBackend.startsWith('http')) {
+        const urlObj = new URL(rawBackend);
+        host = urlObj.host;
+      } else {
+        host = rawBackend;
+      }
       console.log('WebSocket connecting to:', host);
     } catch (e) {
-      // If URL parsing fails, extract host from rawBackend string
+      // Fallback for any unexpected parsing errors
       host = rawBackend.replace(/^https?:\/\//, '').replace(/\/$/, '');
-      console.warn('Failed to parse backend URL, extracted host:', host, 'Error:', e);
+      console.warn('Could not parse backend URL, falling back to host:', host, 'Error:', e);
     }
 
     const wsUrl = `${wsProtocol}//${host}/ws/chat/${conversationId}/?token=${encodeURIComponent(token)}`;

@@ -3,8 +3,10 @@ accounts – views
 Login, profile, and user management views
 """
 
+import base64
 import hashlib
 import hmac
+import json
 from datetime import timedelta
 from urllib.parse import urlencode
 
@@ -48,6 +50,91 @@ class LoginView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
 
 
+class VerifyRegistrationTokenView(APIView):
+    """Verify signed registration token from SimplyJob and return pre-fill data."""
+
+    authentication_classes = []
+    permission_classes = [permissions.AllowAny]
+
+    def _verify(self, payload_b64, signature):
+        if not payload_b64 or not signature:
+            return None, "Missing payload or signature."
+
+        secret = (
+            getattr(settings, "SIMPLYJOB_ONBOARDING_SECRET", "")
+            or getattr(settings, "ATTENDSTACK_ONBOARDING_SECRET", "")
+            or "simplyjob_attendstack_secret_key_2026"
+        ).strip()
+
+        try:
+            payload_bytes = base64.urlsafe_b64decode(payload_b64.encode("utf-8"))
+            expected_sig = hmac.new(secret.encode("utf-8"), payload_bytes, hashlib.sha256).hexdigest()
+            # Also try secondary fallback if secret didn't match
+            if not hmac.compare_digest(signature, expected_sig):
+                fallback_secret = "91ec6cfae00e9301ba57a1d2db2ad0aff280dc8efe2fc44affc76c66d64373a0"
+                expected_fallback = hmac.new(fallback_secret.encode("utf-8"), payload_bytes, hashlib.sha256).hexdigest()
+                if not hmac.compare_digest(signature, expected_fallback):
+                    return None, "Invalid signature."
+
+            payload_data = json.loads(payload_bytes.decode("utf-8"))
+        except Exception as exc:
+            return None, f"Malformed token payload: {exc}"
+
+        timestamp = payload_data.get("timestamp", 0)
+        current_time = int(timezone.now().timestamp())
+        # 24 hour validity for registration token
+        if abs(current_time - timestamp) > 86400:
+            return None, "Registration link has expired. Please open registration again from SimplyJob."
+
+        return payload_data, None
+
+    def get(self, request):
+        payload_b64 = str(request.query_params.get("payload", "")).strip()
+        signature = str(request.query_params.get("signature", "")).strip()
+        data, err = self._verify(payload_b64, signature)
+        if err:
+            return Response({"valid": False, "detail": err}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({
+            "valid": True,
+            "source": "SIMPLYJOB",
+            "data": {
+                "source_company_id": str(data.get("source_company_id", "")),
+                "organization_name": data.get("company_name", ""),
+                "full_name": data.get("full_name", ""),
+                "email": data.get("email", "") or data.get("owner_email", ""),
+                "phone": data.get("phone", ""),
+                "website": data.get("website", ""),
+                "location": data.get("location", ""),
+                "industry": data.get("industry", ""),
+                "api_key": data.get("api_key", ""),
+                "plan_name": data.get("plan_name", "SimplyJob Integrated Plan"),
+            }
+        })
+
+    def post(self, request):
+        payload_b64 = str(request.data.get("payload", "")).strip()
+        signature = str(request.data.get("signature", "")).strip()
+        data, err = self._verify(payload_b64, signature)
+        if err:
+            return Response({"valid": False, "detail": err}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({
+            "valid": True,
+            "source": "SIMPLYJOB",
+            "data": {
+                "source_company_id": str(data.get("source_company_id", "")),
+                "organization_name": data.get("company_name", ""),
+                "full_name": data.get("full_name", ""),
+                "email": data.get("email", "") or data.get("owner_email", ""),
+                "phone": data.get("phone", ""),
+                "website": data.get("website", ""),
+                "location": data.get("location", ""),
+                "industry": data.get("industry", ""),
+                "api_key": data.get("api_key", ""),
+                "plan_name": data.get("plan_name", "SimplyJob Integrated Plan"),
+            }
+        })
+
+
 class OrganizationRegistrationView(generics.CreateAPIView):
     """Public organization setup. The created account is the organization's HR owner."""
 
@@ -66,6 +153,8 @@ class OrganizationRegistrationView(generics.CreateAPIView):
                     "id": organization.id,
                     "name": organization.name,
                     "invite_code": organization.invite_code,
+                    "api_key": organization.api_key,
+                    "is_simplyjob_linked": bool(organization.external_company_id or organization.external_source == "SIMPLYJOB"),
                 },
             },
             status=status.HTTP_201_CREATED,

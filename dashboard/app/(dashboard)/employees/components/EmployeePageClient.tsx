@@ -15,6 +15,11 @@ import {
   IconTrash,
   IconUserCheck,
   IconCalendarStats,
+  IconCopy,
+  IconMail,
+  IconAlertTriangle,
+  IconCheck,
+  IconBuildingSkyscraper,
 } from "@tabler/icons-react";
 import { Alert, Button, Dropdown, Form, Modal } from "react-bootstrap";
 import Link from "next/link";
@@ -108,13 +113,15 @@ const sortEmployeesByStatus = (employees: Employee[]) => [...employees].sort((fi
   || first.full_name.localeCompare(second.full_name)
 );
 
-const formatDate = (value: string) => {
+const formatDate = (value?: string | null) => {
   if (!value) return "-";
+  const date = new Date(value);
+  if (isNaN(date.getTime())) return "-";
   return new Intl.DateTimeFormat("en-IN", {
     day: "2-digit",
     month: "short",
     year: "numeric",
-  }).format(new Date(value));
+  }).format(date);
 };
 
 const toCamelCase = (s: string) => {
@@ -162,6 +169,47 @@ const EmployeePageClient = () => {
   const [editingEmployee, setEditingEmployee] = useState<Partial<EmployeeFormData> | null>(null);
   const [isEditModalLoading, setIsEditModalLoading] = useState(false);
   const router = useRouter();
+
+  // SimplyJob Invitation Modal State
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteData, setInviteData] = useState<{ invite_url: string; invite_code: string; simplyjob_org_id: string } | null>(null);
+  const [inviteError, setInviteError] = useState("");
+  const [isGeneratingInvite, setIsGeneratingInvite] = useState(false);
+
+  const handleOpenInviteModal = async () => {
+    setShowInviteModal(true);
+    setIsGeneratingInvite(true);
+    setInviteError("");
+    setInviteData(null);
+
+    try {
+      const token = localStorage.getItem("authToken");
+      const orgRes = await fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/organizations/`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (orgRes.ok) {
+        const orgs = await orgRes.json();
+        const myOrg = Array.isArray(orgs) ? orgs[0] : orgs.results?.[0];
+        if (myOrg) {
+          const res = await fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/organizations/${myOrg.id}/generate-invite-link/`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const data = await res.json();
+          if (res.ok) {
+            setInviteData(data);
+          } else {
+            setInviteError(data.detail || "SimplyJob Organization ID is not configured. Please paste and save your SimplyJob Org ID in Settings before sending invitations.");
+          }
+        } else {
+          setInviteError("No organization workspace found for this account.");
+        }
+      }
+    } catch {
+      setInviteError("Failed to generate invitation link. Please check your backend connection.");
+    } finally {
+      setIsGeneratingInvite(false);
+    }
+  };
 
   const loadEmployees = async () => {
     setIsLoading(true);
@@ -509,9 +557,14 @@ const EmployeePageClient = () => {
           <h2 className="mb-0 fw-bold">Employees</h2>
           <p className="text-secondary mb-0">Manage your workforce, view profiles, and update details.</p>
         </div>
-        <Link href="/employees/add" className="btn btn-primary d-flex align-items-center gap-2">
-          <IconPlus size={18} /> Add Employee
-        </Link>
+        <div className="d-flex align-items-center gap-2">
+          <Button variant="outline-primary" className="d-flex align-items-center gap-2 fw-semibold" onClick={handleOpenInviteModal}>
+            <IconMail size={18} /> Invite Candidate (SimplyJob)
+          </Button>
+          <Link href="/employees/add" className="btn btn-primary d-flex align-items-center gap-2">
+            <IconPlus size={18} /> Add Employee
+          </Link>
+        </div>
       </div>
 
       <div className="card border-0 shadow-sm mb-6">
@@ -836,6 +889,77 @@ const EmployeePageClient = () => {
               />
           )}
         </Modal.Body>
+      </Modal>
+
+      {/* SimplyJob Employee Invitation Modal */}
+      <Modal show={showInviteModal} onHide={() => setShowInviteModal(false)} centered backdrop="static">
+        <Modal.Header closeButton>
+          <Modal.Title className="fw-bold d-flex align-items-center gap-2">
+            <IconMail className="text-primary" size={22} />
+            Invite Candidate from SimplyJob
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body className="py-3">
+          {isGeneratingInvite ? (
+            <div className="text-center py-4">
+              <span className="spinner-border spinner-border-sm text-primary me-2" />
+              Checking SimplyJob integration & generating URL with Org ID...
+            </div>
+          ) : inviteError ? (
+            <div>
+              <Alert variant="warning" className="border-0 shadow-xs mb-3">
+                <div className="fw-bold mb-1 d-flex align-items-center gap-1">
+                  <IconAlertTriangle size={18} /> Integration Required:
+                </div>
+                <div className="small">{inviteError}</div>
+              </Alert>
+              <div className="p-3 bg-light border rounded text-secondary small mb-3">
+                <strong>Enforcement Rule:</strong> To invite hired employees from SimplyJob, your company must copy your AttendStack Org ID and paste your SimplyJob Org ID in Settings.
+              </div>
+              <div className="d-flex justify-content-end gap-2">
+                <Button variant="outline-secondary" onClick={() => setShowInviteModal(false)}>
+                  Close
+                </Button>
+                <Link href="/settings" className="btn btn-primary fw-semibold" onClick={() => setShowInviteModal(false)}>
+                  Go to Settings to Link Org ID
+                </Link>
+              </div>
+            </div>
+          ) : inviteData ? (
+            <div>
+              <p className="text-secondary small mb-3">
+                Send this official onboarding link to your candidate hired on SimplyJob. The link includes your <strong>Org ID ({inviteData.invite_code})</strong> so the employee is automatically connected to your company.
+              </p>
+
+              <Form.Group className="mb-3">
+                <Form.Label className="fw-semibold small">Invitation URL (with Org ID)</Form.Label>
+                <div className="input-group">
+                  <Form.Control value={inviteData.invite_url} readOnly className="font-monospace small bg-light" />
+                  <Button
+                    variant="primary"
+                    onClick={() => {
+                      navigator.clipboard.writeText(inviteData.invite_url);
+                      alert("Invitation URL with Org ID copied to clipboard!");
+                    }}
+                  >
+                    <IconCopy size={16} className="me-1" /> Copy Link
+                  </Button>
+                </div>
+              </Form.Group>
+
+              <div className="p-3 bg-success-subtle border border-success-subtle rounded text-success small mb-3">
+                <IconCheck size={16} className="me-1" /> SimplyJob Connected: Org ID <strong>{inviteData.simplyjob_org_id}</strong> is verified.
+              </div>
+            </div>
+          ) : null}
+        </Modal.Body>
+        {!inviteError && inviteData && (
+          <Modal.Footer>
+            <Button variant="secondary" onClick={() => setShowInviteModal(false)}>
+              Done
+            </Button>
+          </Modal.Footer>
+        )}
       </Modal>
 
       <style jsx global>{`

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, useMemo } from "react";
+import React, { useCallback, useEffect, useState, useMemo } from "react";
 import {
   Alert,
   Badge,
@@ -30,13 +30,34 @@ import {
   IconUserCheck,
   IconCheck,
   IconAlertTriangle,
-  IconShieldCheck,
-  IconClock,
   IconCalendarEvent,
   IconMail,
-  IconUser,
+  IconDotsVertical,
 } from "@tabler/icons-react";
 import apiClient from "app/services/api";
+
+interface ActionToggleProps {
+  children?: React.ReactNode;
+  onClick?: (e: React.MouseEvent<HTMLButtonElement>) => void;
+}
+
+const ActionToggle = React.forwardRef<HTMLButtonElement, ActionToggleProps>(
+  ({ children, onClick }, ref) => (
+    <button
+      ref={ref}
+      onClick={(e) => {
+        e.preventDefault();
+        onClick?.(e);
+      }}
+      className="btn btn-light btn-sm p-1 border shadow-xs d-inline-flex align-items-center justify-content-center text-secondary"
+      style={{ width: 32, height: 32 }}
+      aria-label="Actions"
+    >
+      {children}
+    </button>
+  )
+);
+ActionToggle.displayName = "ActionToggle";
 
 type Organization = {
   id: number;
@@ -82,7 +103,7 @@ type CompanyStats = {
   }>;
 };
 
-export default function OrganizationsPage() {
+export default function SuperAdminCompaniesPage() {
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<number | null>(null);
@@ -91,7 +112,7 @@ export default function OrganizationsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"ALL" | "ACTIVE" | "SUSPENDED">("ALL");
 
-  // Modals state
+  // Modals
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
@@ -101,7 +122,7 @@ export default function OrganizationsPage() {
   const [companyStats, setCompanyStats] = useState<CompanyStats | null>(null);
   const [loadingStats, setLoadingStats] = useState(false);
 
-  // Form states
+  // Forms
   const [createForm, setCreateForm] = useState({
     name: "",
     owner_email: "",
@@ -120,8 +141,8 @@ export default function OrganizationsPage() {
     try {
       const response = await apiClient.get("/api/v1/organizations/");
       setOrganizations(Array.isArray(response.data) ? response.data : response.data.results || []);
-    } catch (err: any) {
-      setError("Failed to load companies. Please check your credentials or refresh.");
+    } catch {
+      setError("Failed to load company accounts. Please check your network connection.");
     } finally {
       setLoading(false);
     }
@@ -131,7 +152,6 @@ export default function OrganizationsPage() {
     loadOrganizations();
   }, [loadOrganizations]);
 
-  // Derived statistics across all companies
   const statsSummary = useMemo(() => {
     const totalCompanies = organizations.length;
     const activeCompanies = organizations.filter((org) => org.is_active).length;
@@ -148,7 +168,6 @@ export default function OrganizationsPage() {
     };
   }, [organizations]);
 
-  // Filtered organizations list
   const filteredOrganizations = useMemo(() => {
     return organizations.filter((org) => {
       const matchesSearch =
@@ -168,7 +187,7 @@ export default function OrganizationsPage() {
 
   const copyCode = async (code: string) => {
     await navigator.clipboard.writeText(code);
-    setNotice("Organization invite code copied to clipboard.");
+    setNotice("Onboarding code copied to clipboard.");
   };
 
   const toggleStatus = async (org: Organization) => {
@@ -177,7 +196,7 @@ export default function OrganizationsPage() {
     try {
       const response = await apiClient.post(`/api/v1/organizations/${org.id}/toggle-status/`);
       setOrganizations((current) => current.map((item) => (item.id === org.id ? response.data : item)));
-      setNotice(`Organization "${org.name}" status updated to ${response.data.is_active ? "Active" : "Suspended"}.`);
+      setNotice(`Company "${org.name}" status set to ${response.data.is_active ? "Active" : "Suspended"}.`);
     } catch {
       setError(`Failed to toggle status for ${org.name}. Super Admin permission required.`);
     } finally {
@@ -186,13 +205,13 @@ export default function OrganizationsPage() {
   };
 
   const regenerateCode = async (org: Organization) => {
-    if (!window.confirm(`Generate a new invite code for "${org.name}"? The previous code will stop working.`)) return;
+    if (!window.confirm(`Regenerate invite code for "${org.name}"? Previous code will immediately expire.`)) return;
     setBusyId(org.id);
     setError("");
     try {
       const response = await apiClient.post(`/api/v1/organizations/${org.id}/regenerate-invite-code/`);
       setOrganizations((current) => current.map((item) => (item.id === org.id ? response.data : item)));
-      setNotice(`New invite code generated for ${org.name}: ${response.data.invite_code}`);
+      setNotice(`New invite code for ${org.name}: ${response.data.invite_code}`);
     } catch {
       setError("Failed to regenerate invite code.");
     } finally {
@@ -217,9 +236,9 @@ export default function OrganizationsPage() {
       setOrganizations((current) => [response.data, ...current]);
       setShowCreateModal(false);
       setCreateForm({ name: "", owner_email: "", owner_first_name: "", owner_last_name: "" });
-      setNotice(`Company "${response.data.name}" created successfully! Invite Code: ${response.data.invite_code}`);
+      setNotice(`Company "${response.data.name}" created! Onboarding Code: ${response.data.invite_code}`);
     } catch (err: any) {
-      setError(err.response?.data?.detail || "Failed to create company. Please check input values.");
+      setError(err.response?.data?.detail || "Failed to create company.");
     } finally {
       setSubmitting(false);
     }
@@ -250,7 +269,7 @@ export default function OrganizationsPage() {
       setShowEditModal(false);
       setNotice(`Company "${response.data.name}" updated successfully.`);
     } catch (err: any) {
-      setError(err.response?.data?.detail || "Failed to update company details.");
+      setError(err.response?.data?.detail || "Failed to edit company.");
     } finally {
       setSubmitting(false);
     }
@@ -286,9 +305,9 @@ export default function OrganizationsPage() {
       await apiClient.delete(`/api/v1/organizations/${selectedOrg.id}/`);
       setOrganizations((current) => current.filter((item) => item.id !== selectedOrg.id));
       setShowDeleteModal(false);
-      setNotice(`Company "${selectedOrg.name}" has been deleted.`);
+      setNotice(`Company "${selectedOrg.name}" deleted.`);
     } catch {
-      setError("Failed to delete company. Ensure you have Super Admin privileges.");
+      setError("Failed to delete company.");
     } finally {
       setSubmitting(false);
     }
@@ -296,20 +315,20 @@ export default function OrganizationsPage() {
 
   return (
     <Container fluid className="py-4 super-admin-companies-page">
-      {/* Header Title & Actions */}
+      {/* Header Bar */}
       <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
         <div>
           <div className="d-flex align-items-center gap-2 mb-1">
-            <Badge bg="primary-subtle" text="primary" className="border border-primary-subtle px-3 py-1.5 rounded-pill font-monospace">
+            <Badge bg="warning" text="dark" className="font-monospace px-3 py-1 rounded-pill">
               SUPER ADMIN PANEL
             </Badge>
-            <span className="text-secondary small">Multi-tenant Company Management</span>
+            <span className="text-secondary small">Tenant Company Directory</span>
           </div>
           <h2 className="h3 mb-1 fw-bold text-dark d-flex align-items-center gap-2">
             <IconBuildingSkyscraper className="text-primary" size={32} />
-            Company Workspaces Dashboard
+            Companies & Workspaces Manager
           </h2>
-          <p className="text-secondary mb-0">Manage all registered companies, owner credentials, employee access codes, and live operational status.</p>
+          <p className="text-secondary mb-0">Create, manage, inspect, activate, or suspend any tenant company workspace across the platform.</p>
         </div>
         <div className="d-flex align-items-center gap-2">
           <Button variant="outline-secondary" onClick={loadOrganizations} disabled={loading} className="d-flex align-items-center gap-1.5 shadow-sm">
@@ -323,77 +342,72 @@ export default function OrganizationsPage() {
         </div>
       </div>
 
-      {/* Global Alerts */}
       {error && (
-        <Alert variant="danger" dismissible onClose={() => setError("")} className="border-0 shadow-sm d-flex align-items-center gap-2">
+        <Alert variant="danger" dismissible onClose={() => setError("")} className="border-0 shadow-sm d-flex align-items-center gap-2 mb-3">
           <IconAlertTriangle size={20} />
           {error}
         </Alert>
       )}
       {notice && (
-        <Alert variant="success" dismissible onClose={() => setNotice("")} className="border-0 shadow-sm d-flex align-items-center gap-2">
+        <Alert variant="success" dismissible onClose={() => setNotice("")} className="border-0 shadow-sm d-flex align-items-center gap-2 mb-3">
           <IconCheck size={20} />
           {notice}
         </Alert>
       )}
 
-      {/* Super Admin Stats Overview Row */}
+      {/* Summary Cards */}
       <Row className="g-3 mb-4">
         <Col xs={12} sm={6} lg={3}>
-          <Card className="border-0 shadow-sm h-100 stat-card text-dark">
+          <Card className="border-0 shadow-sm h-100">
             <Card.Body className="d-flex align-items-center gap-3 p-3.5">
-              <div className="rounded-3 p-3 bg-primary-subtle text-primary d-flex align-items-center justify-content-center">
-                <IconBuildingSkyscraper size={28} />
+              <div className="rounded-3 p-3 bg-primary-subtle text-primary">
+                <IconBuildingSkyscraper size={26} />
               </div>
               <div>
-                <span className="text-secondary small fw-semibold text-uppercase d-block">Total Companies</span>
+                <span className="text-secondary small fw-bold text-uppercase d-block">Total Companies</span>
                 <h3 className="mb-0 fw-bold">{statsSummary.totalCompanies}</h3>
-                <span className="text-success small fw-medium">{statsSummary.activeCompanies} Active</span>
               </div>
             </Card.Body>
           </Card>
         </Col>
 
         <Col xs={12} sm={6} lg={3}>
-          <Card className="border-0 shadow-sm h-100 stat-card text-dark">
+          <Card className="border-0 shadow-sm h-100">
             <Card.Body className="d-flex align-items-center gap-3 p-3.5">
-              <div className="rounded-3 p-3 bg-success-subtle text-success d-flex align-items-center justify-content-center">
-                <IconUserCheck size={28} />
+              <div className="rounded-3 p-3 bg-success-subtle text-success">
+                <IconUserCheck size={26} />
               </div>
               <div>
-                <span className="text-secondary small fw-semibold text-uppercase d-block">Active Workspaces</span>
+                <span className="text-secondary small fw-bold text-uppercase d-block">Active Workspaces</span>
                 <h3 className="mb-0 fw-bold">{statsSummary.activeCompanies}</h3>
-                <span className="text-secondary small fw-medium">{statsSummary.suspendedCompanies} Suspended</span>
               </div>
             </Card.Body>
           </Card>
         </Col>
 
         <Col xs={12} sm={6} lg={3}>
-          <Card className="border-0 shadow-sm h-100 stat-card text-dark">
+          <Card className="border-0 shadow-sm h-100">
             <Card.Body className="d-flex align-items-center gap-3 p-3.5">
-              <div className="rounded-3 p-3 bg-info-subtle text-info d-flex align-items-center justify-content-center">
-                <IconUsers size={28} />
+              <div className="rounded-3 p-3 bg-info-subtle text-info">
+                <IconUsers size={26} />
               </div>
               <div>
-                <span className="text-secondary small fw-semibold text-uppercase d-block">Total Workforce</span>
+                <span className="text-secondary small fw-bold text-uppercase d-block">Total Workforce</span>
                 <h3 className="mb-0 fw-bold">{statsSummary.totalWorkforce}</h3>
-                <span className="text-info small fw-medium">Employees across orgs</span>
               </div>
             </Card.Body>
           </Card>
         </Col>
 
         <Col xs={12} sm={6} lg={3}>
-          <Card className="border-0 shadow-sm h-100 stat-card text-dark">
+          <Card className="border-0 shadow-sm h-100">
             <Card.Body className="d-flex align-items-center gap-3 p-3.5">
-              <div className="rounded-3 p-3 bg-warning-subtle text-warning d-flex align-items-center justify-content-center">
-                <IconCalendarEvent size={28} />
+              <div className="rounded-3 p-3 bg-warning-subtle text-warning">
+                <IconCalendarEvent size={26} />
               </div>
               <div>
-                <span className="text-secondary small fw-semibold text-uppercase d-block">Today's Check-ins</span>
+                <span className="text-secondary small fw-bold text-uppercase d-block">Today Check-ins</span>
                 <h3 className="mb-0 fw-bold">{statsSummary.totalTodayAttendance}</h3>
-                <span className="text-secondary small fw-medium">Live attendance today</span>
               </div>
             </Card.Body>
           </Card>
@@ -410,7 +424,7 @@ export default function OrganizationsPage() {
                   <IconSearch size={18} />
                 </InputGroup.Text>
                 <Form.Control
-                  placeholder="Search company by name, owner email, or onboarding code..."
+                  placeholder="Search by company name, owner email, or invite code..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="border-start-0 ps-0 shadow-none"
@@ -419,7 +433,7 @@ export default function OrganizationsPage() {
             </Col>
             <Col xs={12} md={6} lg={5}>
               <div className="d-flex align-items-center justify-content-md-end gap-2">
-                <span className="text-secondary small fw-semibold">Filter Status:</span>
+                <span className="text-secondary small fw-semibold">Filter:</span>
                 <div className="btn-group" role="group">
                   <Button
                     variant={statusFilter === "ALL" ? "primary" : "outline-secondary"}
@@ -463,25 +477,25 @@ export default function OrganizationsPage() {
               <h5 className="fw-bold text-dark mb-1">No companies found</h5>
               <p className="text-secondary small mb-3">
                 {searchQuery || statusFilter !== "ALL"
-                  ? "No company matched your search or status filter criteria."
-                  : "No company workspace has been created yet."}
+                  ? "No company matches your search or filter."
+                  : "No company workspace exists yet."}
               </p>
               <Button variant="primary" size="sm" onClick={() => setShowCreateModal(true)}>
-                <IconPlus size={16} className="me-1" /> Create First Company
+                <IconPlus size={16} className="me-1" /> Onboard First Company
               </Button>
             </div>
           ) : (
-            <Table responsive hover className="align-middle mb-0 company-table">
+            <Table responsive hover className="align-middle text-nowrap mb-0">
               <thead className="table-light">
-                <tr>
+                <tr className="text-nowrap">
                   <th className="ps-4">Company Name</th>
                   <th>HR Owner & Contact</th>
-                  <th>Employee Onboarding Code</th>
+                  <th>Invite Code</th>
                   <th>Workforce Size</th>
                   <th>Today Check-ins</th>
                   <th>Status</th>
                   <th>Created Date</th>
-                  <th className="text-end pe-4">Super Admin Actions</th>
+                  <th className="text-end pe-4">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -564,59 +578,33 @@ export default function OrganizationsPage() {
                     </td>
 
                     <td className="text-end pe-4">
-                      <div className="d-flex align-items-center justify-content-end gap-1.5">
-                        <Button
-                          size="sm"
-                          variant="outline-info"
-                          className="px-2 py-1"
-                          title="Inspect Detailed Analytics"
-                          onClick={() => handleOpenDetails(org)}
-                        >
-                          <IconEye size={15} />
-                        </Button>
-
-                        <Button
-                          size="sm"
-                          variant={org.is_active ? "outline-warning" : "outline-success"}
-                          className="px-2 py-1"
-                          title={org.is_active ? "Suspend Company" : "Activate Company"}
-                          disabled={busyId === org.id}
-                          onClick={() => toggleStatus(org)}
-                        >
-                          {busyId === org.id ? <Spinner size="sm" /> : <IconPower size={15} />}
-                        </Button>
-
-                        <Button
-                          size="sm"
-                          variant="outline-secondary"
-                          className="px-2 py-1"
-                          title="Edit Company Details"
-                          onClick={() => handleOpenEditModal(org)}
-                        >
-                          <IconEdit size={15} />
-                        </Button>
-
-                        <Button
-                          size="sm"
-                          variant="outline-danger"
-                          className="px-2 py-1"
-                          title="Delete Company"
-                          onClick={() => handleOpenDeleteModal(org)}
-                        >
-                          <IconTrash size={15} />
-                        </Button>
-
-                        <Dropdown align="end">
-                          <Dropdown.Toggle variant="light" size="sm" className="px-1.5 py-1 border shadow-xs no-caret">
-                            •••
-                          </Dropdown.Toggle>
-                          <Dropdown.Menu className="shadow border-0">
-                            <Dropdown.Item onClick={() => regenerateCode(org)}>
-                              <IconRefresh size={15} className="me-2 text-warning" /> Regenerate Invite Code
-                            </Dropdown.Item>
-                          </Dropdown.Menu>
-                        </Dropdown>
-                      </div>
+                      <Dropdown align="end">
+                        <Dropdown.Toggle as={ActionToggle}>
+                          <IconDotsVertical size={16} />
+                        </Dropdown.Toggle>
+                        <Dropdown.Menu className="shadow border-0">
+                          <Dropdown.Item onClick={() => handleOpenDetails(org)}>
+                            <IconEye size={15} className="me-2 text-info" /> Inspect Analytics & Details
+                          </Dropdown.Item>
+                          <Dropdown.Item onClick={() => handleOpenEditModal(org)}>
+                            <IconEdit size={15} className="me-2 text-primary" /> Edit Company Details
+                          </Dropdown.Item>
+                          <Dropdown.Item
+                            onClick={() => toggleStatus(org)}
+                            disabled={busyId === org.id}
+                          >
+                            <IconPower size={15} className={`me-2 ${org.is_active ? "text-warning" : "text-success"}`} />
+                            {org.is_active ? "Suspend Company" : "Activate Company"}
+                          </Dropdown.Item>
+                          <Dropdown.Item onClick={() => regenerateCode(org)}>
+                            <IconRefresh size={15} className="me-2 text-warning" /> Regenerate Invite Code
+                          </Dropdown.Item>
+                          <Dropdown.Divider />
+                          <Dropdown.Item onClick={() => handleOpenDeleteModal(org)} className="text-danger">
+                            <IconTrash size={15} className="me-2" /> Delete Company Tenant
+                          </Dropdown.Item>
+                        </Dropdown.Menu>
+                      </Dropdown>
                     </td>
                   </tr>
                 ))}
@@ -628,7 +616,7 @@ export default function OrganizationsPage() {
 
       {/* Modal 1: Create New Company Workspace */}
       <Modal show={showCreateModal} onHide={() => setShowCreateModal(false)} centered backdrop="static">
-        <Modal.Header closeButton className="border-bottom-0 pb-0">
+        <Modal.Header closeButton>
           <Modal.Title className="fw-bold d-flex align-items-center gap-2">
             <IconBuildingSkyscraper className="text-primary" size={24} />
             Create New Company Workspace
@@ -660,9 +648,6 @@ export default function OrganizationsPage() {
                 value={createForm.owner_email}
                 onChange={(e) => setCreateForm({ ...createForm, owner_email: e.target.value })}
               />
-              <Form.Text className="text-muted">
-                This account will be assigned as the primary HR owner of the workspace.
-              </Form.Text>
             </Form.Group>
 
             <Row className="g-2">
@@ -690,7 +675,7 @@ export default function OrganizationsPage() {
               </Col>
             </Row>
           </Modal.Body>
-          <Modal.Footer className="border-top-0 pt-0">
+          <Modal.Footer>
             <Button variant="outline-secondary" onClick={() => setShowCreateModal(false)}>
               Cancel
             </Button>
@@ -747,22 +732,21 @@ export default function OrganizationsPage() {
         <Modal.Header closeButton className="bg-light">
           <Modal.Title className="fw-bold d-flex align-items-center gap-2">
             <IconBuildingSkyscraper className="text-primary" size={24} />
-            Company Analytics & Overview: {selectedOrg?.name}
+            Company Analytics: {selectedOrg?.name}
           </Modal.Title>
         </Modal.Header>
         <Modal.Body className="p-4">
           {loadingStats || !companyStats ? (
             <div className="text-center py-5">
               <Spinner animation="border" variant="primary" />
-              <p className="text-secondary mb-0 mt-2">Fetching live stats for {selectedOrg?.name}…</p>
+              <p className="text-secondary mb-0 mt-2">Loading stats for {selectedOrg?.name}…</p>
             </div>
           ) : (
             <div>
-              {/* Quick Info Grid */}
               <Row className="g-3 mb-4">
                 <Col xs={12} sm={4}>
                   <div className="p-3 border rounded bg-light">
-                    <span className="text-secondary small fw-semibold text-uppercase d-block">Company Owner</span>
+                    <span className="text-secondary small fw-semibold text-uppercase d-block">Owner</span>
                     <strong className="text-dark d-block">{companyStats.owner_name || "Unassigned"}</strong>
                     <small className="text-secondary">{companyStats.owner_email || "No email"}</small>
                   </div>
@@ -776,14 +760,13 @@ export default function OrganizationsPage() {
                 </Col>
                 <Col xs={12} sm={4}>
                   <div className="p-3 border rounded bg-light">
-                    <span className="text-secondary small fw-semibold text-uppercase d-block">Workforce Total</span>
+                    <span className="text-secondary small fw-semibold text-uppercase d-block">Workforce</span>
                     <h4 className="fw-bold text-dark mb-0">{companyStats.employee_count}</h4>
-                    <small className="text-success">{companyStats.active_employees} active profiles</small>
+                    <small className="text-success">{companyStats.active_employees} active</small>
                   </div>
                 </Col>
               </Row>
 
-              {/* Attendance Today Breakdown */}
               <h6 className="fw-bold text-dark mb-3">Today's Attendance Status</h6>
               <Row className="g-2 mb-4">
                 <Col xs={3}>
@@ -794,7 +777,7 @@ export default function OrganizationsPage() {
                 </Col>
                 <Col xs={3}>
                   <div className="p-2.5 text-center bg-warning-subtle text-warning rounded border border-warning-subtle">
-                    <span className="small fw-semibold d-block">Late Entry</span>
+                    <span className="small fw-semibold d-block">Late</span>
                     <strong className="fs-4">{companyStats.today_attendance.late}</strong>
                   </div>
                 </Col>
@@ -812,8 +795,7 @@ export default function OrganizationsPage() {
                 </Col>
               </Row>
 
-              {/* Employee Directory Preview */}
-              <h6 className="fw-bold text-dark mb-2">Workforce Directory Preview ({companyStats.employees.length})</h6>
+              <h6 className="fw-bold text-dark mb-2">Workforce Preview ({companyStats.employees.length})</h6>
               <div style={{ maxHeight: 220, overflowY: "auto" }} className="border rounded">
                 <Table size="sm" responsive hover className="align-middle mb-0">
                   <thead className="table-light sticky-top">
@@ -862,9 +844,9 @@ export default function OrganizationsPage() {
         </Modal.Footer>
       </Modal>
 
-      {/* Modal 4: Delete Company Confirmation */}
+      {/* Modal 4: Delete Confirmation */}
       <Modal show={showDeleteModal} onHide={() => setShowDeleteModal(false)} centered>
-        <Modal.Header closeButton className="border-bottom-0 pb-0">
+        <Modal.Header closeButton>
           <Modal.Title className="fw-bold text-danger d-flex align-items-center gap-2">
             <IconAlertTriangle size={24} />
             Confirm Delete Company
@@ -875,10 +857,10 @@ export default function OrganizationsPage() {
             Are you sure you want to permanently delete <strong>"{selectedOrg?.name}"</strong>?
           </p>
           <Alert variant="danger" className="py-2 px-3 small border-0 mb-0">
-            <strong>Warning:</strong> This operation will remove company organization records from the platform.
+            <strong>Warning:</strong> This will remove company tenant records from the platform.
           </Alert>
         </Modal.Body>
-        <Modal.Footer className="border-top-0 pt-0">
+        <Modal.Footer>
           <Button variant="outline-secondary" onClick={() => setShowDeleteModal(false)}>
             Cancel
           </Button>
@@ -887,36 +869,6 @@ export default function OrganizationsPage() {
           </Button>
         </Modal.Footer>
       </Modal>
-
-      <style jsx global>{`
-        .super-admin-companies-page .stat-card {
-          border-radius: 12px;
-          transition: transform 0.15s ease, box-shadow 0.15s ease;
-        }
-
-        .super-admin-companies-page .stat-card:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08) !important;
-        }
-
-        .company-table th {
-          font-size: 0.78rem;
-          text-transform: uppercase;
-          letter-spacing: 0.04em;
-          color: #64748b;
-          font-weight: 700;
-        }
-
-        .spin {
-          animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-          100% {
-            transform: rotate(360deg);
-          }
-        }
-      `}</style>
     </Container>
   );
 }

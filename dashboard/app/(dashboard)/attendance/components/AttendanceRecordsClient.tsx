@@ -73,8 +73,10 @@ const authHeaders = (): HeadersInit => {
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
-const formatDate = (value: string) => {
+const formatDate = (value?: string | null) => {
+  if (!value) return "--";
   const date = new Date(value);
+  if (isNaN(date.getTime())) return "--";
   const formattedDate = new Intl.DateTimeFormat("en-IN", { day: "2-digit", month: "short", year: "numeric" }).format(date);
   if (date.getDay() === 0) { // 0 is Sunday
     return `${formattedDate} (Sunday)`;
@@ -82,8 +84,12 @@ const formatDate = (value: string) => {
   return formattedDate;
 };
 
-const formatTime = (value?: string | null) =>
-  value ? new Intl.DateTimeFormat("en-IN", { hour: "2-digit", minute: "2-digit" }).format(new Date(value)) : "--";
+const formatTime = (value?: string | null) => {
+  if (!value) return "--";
+  const date = new Date(value);
+  if (isNaN(date.getTime())) return "--";
+  return new Intl.DateTimeFormat("en-IN", { hour: "2-digit", minute: "2-digit" }).format(date);
+};
 
 const formatCurrency = (value: number | string | null) => {
   if (value === null || value === "N/A") return "N/A";

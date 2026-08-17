@@ -86,6 +86,9 @@ interface OrganizationAccess {
   id: number;
   name: string;
   invite_code: string;
+  external_company_id?: string;
+  external_source?: string;
+  is_simplyjob_linked?: boolean;
   can_manage_invite_code: boolean;
 }
 
@@ -105,6 +108,38 @@ const SettingsPage = () => {
   const [isUpdatingOrganizationCode, setIsUpdatingOrganizationCode] = useState(false);
   const [organizationCodeNotice, setOrganizationCodeNotice] = useState("");
   const [organizationCodeError, setOrganizationCodeError] = useState("");
+
+  const [simplyJobOrgIdInput, setSimplyJobOrgIdInput] = useState("");
+  const [isLinkingSimplyJob, setIsLinkingSimplyJob] = useState(false);
+
+  const handleLinkSimplyJob = async () => {
+    if (!simplyJobOrgIdInput.trim() || !organizationAccess) return;
+    setIsLinkingSimplyJob(true);
+    setOrganizationCodeError("");
+    setOrganizationCodeNotice("");
+
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_ENDPOINT;
+      const res = await fetch(`${API_URL}/api/v1/organizations/${organizationAccess.id}/link-simplyjob/`, {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ simplyjob_org_id: simplyJobOrgIdInput.trim() }),
+      });
+
+      if (res.ok) {
+        const updatedOrg = await res.json();
+        setOrganizationAccess(updatedOrg);
+        setOrganizationCodeNotice(`SimplyJob Organization ID successfully linked: "${simplyJobOrgIdInput.trim()}"`);
+      } else {
+        const data = await res.json();
+        setOrganizationCodeError(data.detail || "Failed to link SimplyJob Organization ID.");
+      }
+    } catch {
+      setOrganizationCodeError("Error connecting to server. Please try again.");
+    } finally {
+      setIsLinkingSimplyJob(false);
+    }
+  };
 
   // Detect admin's current GPS location for easy office coord setup
   const detectMyLocation = () => {
@@ -1585,6 +1620,59 @@ const SettingsPage = () => {
                     <h4 className="fw-bold mb-4">Security Settings</h4>
                     <Row className="g-4">
                       <Col md={6}>
+                        {/* SimplyJob Integration Card */}
+                        <Card className="border shadow-sm mb-4">
+                          <Card.Body>
+                            <div className="d-flex align-items-center justify-content-between mb-3">
+                              <h5 className="fw-semibold mb-0 d-flex align-items-center gap-2">
+                                <IconBuildingBank className="text-primary" size={22} />
+                                SimplyJob Integration & Org ID
+                              </h5>
+                              <Badge bg={organizationAccess?.external_company_id ? "success" : "warning"} text={organizationAccess?.external_company_id ? "white" : "dark"}>
+                                {organizationAccess?.external_company_id ? "VERIFIED & CONNECTED" : "ACTION REQUIRED: SET ORG ID"}
+                              </Badge>
+                            </div>
+                            <p className="text-secondary small mb-3">
+                              Copy your AttendStack Organization ID (<strong>{organizationAccess?.invite_code || "ORG-ID"}</strong>) and paste it into SimplyJob. Then paste your SimplyJob Org ID here to unlock employee invitations.
+                            </p>
+
+                            <Row className="g-3 align-items-end mb-2">
+                              <Col md={6}>
+                                <Form.Group controlId="attendstack-org-id">
+                                  <Form.Label className="small fw-semibold">AttendStack Org ID (Copy to SimplyJob)</Form.Label>
+                                  <div className="input-group">
+                                    <Form.Control value={organizationAccess?.invite_code || ""} readOnly className="font-monospace fw-bold bg-light" />
+                                    <Button variant="outline-primary" size="sm" onClick={copyOrganizationCode}>
+                                      <IconCopy size={16} className="me-1" /> Copy
+                                    </Button>
+                                  </div>
+                                </Form.Group>
+                              </Col>
+                              <Col md={6}>
+                                <Form.Group controlId="simplyjob-org-id">
+                                  <Form.Label className="small fw-semibold">SimplyJob Org ID / Integration Code *</Form.Label>
+                                  <div className="input-group">
+                                    <Form.Control
+                                      placeholder="e.g. SIMPLYJOB-ORG-101"
+                                      value={simplyJobOrgIdInput || organizationAccess?.external_company_id || ""}
+                                      onChange={(e) => setSimplyJobOrgIdInput(e.target.value)}
+                                    />
+                                    <Button variant="primary" size="sm" onClick={handleLinkSimplyJob} disabled={isLinkingSimplyJob || !simplyJobOrgIdInput.trim()}>
+                                      {isLinkingSimplyJob ? <Spinner size="sm" /> : "Link Org ID"}
+                                    </Button>
+                                  </div>
+                                </Form.Group>
+                              </Col>
+                            </Row>
+
+                            {!organizationAccess?.external_company_id && (
+                              <Alert variant="warning" className="py-2 px-3 small border-0 mt-3 mb-0">
+                                <strong>Notice:</strong> Employee invitations are disabled until you paste and save your SimplyJob Org ID above.
+                              </Alert>
+                            )}
+                          </Card.Body>
+                        </Card>
+
                         <Card className="border shadow-sm h-100">
                           <Card.Body>
                             <h5 className="fw-semibold mb-2">Employee onboarding code</h5>

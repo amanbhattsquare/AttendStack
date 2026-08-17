@@ -266,6 +266,16 @@ export default function EmployeeRegistrationPage() {
   const removeProfilePhoto = () => updateFile("profile_photo");
 
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const urlOrgId = params.get("org_id") || params.get("code") || params.get("invite_code");
+      if (urlOrgId) {
+        setForm((current) => ({ ...current, organization_code: urlOrgId.trim().toUpperCase() }));
+      }
+    }
+  }, []);
+
+  useEffect(() => {
     if (!success) return;
     const redirectTimer = window.setTimeout(() => router.replace("/sign-in"), 3000);
     return () => window.clearTimeout(redirectTimer);
@@ -319,7 +329,7 @@ export default function EmployeeRegistrationPage() {
 
     if (!form.organization_code.trim()) nextErrors.organization_code = "Organization code is required.";
     else if (organizationCodeStatus !== "valid") nextErrors.organization_code = "Enter a valid active organization code.";
-    if (form.full_name.trim().split(/\s+/).filter(Boolean).length < 2) nextErrors.full_name = "Enter your first and last name.";
+    if (!form.full_name.trim()) nextErrors.full_name = "Enter your full name.";
     if (!/^\S+@\S+\.\S+$/.test(email)) nextErrors.email = "Enter a valid email address.";
     if (!/^\+?[0-9]{10,15}$/.test(phone)) nextErrors.phone = "Enter a valid 10 to 15 digit phone number.";
     if (aadhaarNumber && !/^[0-9]{12}$/.test(aadhaarNumber)) nextErrors.aadhaar_number = "Enter a valid 12-digit Aadhaar number.";

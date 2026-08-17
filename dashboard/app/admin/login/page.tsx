@@ -16,7 +16,7 @@ const AdminLoginPage = () => {
     // Add your authentication logic here
     console.log('Logging in with:', username, password);
     // On successful login, redirect to the admin dashboard
-    router.push('/admin/dashboard');
+    router.push('/dashboard');
   };
 
   return (

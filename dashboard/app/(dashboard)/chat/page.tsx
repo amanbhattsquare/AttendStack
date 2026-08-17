@@ -1061,7 +1061,7 @@ export default function ChatPage() {
             </div>
           )}
 
-          <div className={`chat-bubble ${isMe ? "bubble-sent" : "bubble-received"}`}>
+          <div className={`chat-bubble ${isMe ? "bubble-sent" : "bubble-received"} ${msg.is_announcement ? "chat-announcement-bubble" : ""}`}>
             {/* Top-right 3-dots action menu */}
             {messageActionsMenu}
 
@@ -1074,40 +1074,63 @@ export default function ChatPage() {
 
             {/* Announcement Banner or Regular Text */}
             {msg.is_announcement ? (
-              <div
-                className="p-3 mb-1 rounded-3 border w-100"
-                style={{ background: "linear-gradient(135deg, #f0fdf4 0%, #e0e7ff 100%)", borderColor: "#a5b4fc" }}
-              >
-                <div className="d-flex align-items-center justify-content-between mb-2">
+              <div className="w-100" style={{ backgroundColor: "#ffffff" }}>
+                {/* Header */}
+                <div
+                  className="d-flex align-items-center justify-content-between px-3 py-2.5 border-bottom"
+                  style={{ background: "linear-gradient(135deg, #f8fafc 0%, #eef2ff 100%)", borderColor: "#e2e8f0" }}
+                >
                   <div className="d-flex align-items-center gap-2">
-                    <Megaphone size={16} className="text-primary" />
-                    <span className="fw-bold text-dark small text-uppercase" style={{ letterSpacing: "0.05em" }}>
+                    <div
+                      className="d-flex align-items-center justify-content-center rounded-circle"
+                      style={{ width: "26px", height: "26px", backgroundColor: "#e0e7ff", color: "#4f46e5" }}
+                    >
+                      <Megaphone size={14} />
+                    </div>
+                    <span className="fw-bold text-dark small text-uppercase" style={{ letterSpacing: "0.04em", fontSize: "11px" }}>
                       Company Announcement
                     </span>
                   </div>
                   {msg.pinned && (
-                    <span className="badge bg-primary-subtle text-primary rounded-pill px-2" style={{ fontSize: "10px" }}>
+                    <span className="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill px-2.5 py-1" style={{ fontSize: "10px", fontWeight: 600 }}>
                       Pinned
                     </span>
                   )}
                 </div>
-                <p className="mb-2 text-dark fw-medium" style={{ fontSize: "14px", lineHeight: "1.5" }}>
-                  {renderTextWithMentions(msg.content || "")}
-                </p>
+
+                {/* Content */}
+                <div className="px-3 py-2.5">
+                  <p className="mb-0 text-dark fw-medium" style={{ fontSize: "13.5px", lineHeight: "1.55", color: "#1e293b" }}>
+                    {renderTextWithMentions(msg.content || "")}
+                  </p>
+                </div>
+
+                {/* Acknowledgment Bar */}
                 {msg.requires_acknowledgement && (
-                  <div className="d-flex align-items-center justify-content-between pt-2 border-top mt-1">
-                    <small className="text-muted" style={{ fontSize: "11px" }}>
-                      {msg.acknowledged_count || 0} acknowledged
-                    </small>
+                  <div
+                    className="d-flex align-items-center justify-content-between px-3 py-2 border-top"
+                    style={{ backgroundColor: "#f8fafc", borderColor: "#f1f5f9" }}
+                  >
+                    <div
+                      className="d-flex align-items-center gap-1.5 px-2.5 py-1 rounded-pill bg-white border shadow-xs"
+                      style={{ fontSize: "11.5px", color: "#334155", fontWeight: 600, borderColor: "#e2e8f0" }}
+                    >
+                      <UserCheck size={13} className="text-primary" />
+                      <span>{msg.acknowledged_count || 0} acknowledged</span>
+                    </div>
+
                     {msg.is_acknowledged_by_me ? (
-                      <span className="badge bg-success-subtle text-success border border-success-subtle rounded-pill px-2 py-1" style={{ fontSize: "11px" }}>
-                        Acknowledged
+                      <span
+                        className="badge bg-success-subtle text-success border border-success-subtle rounded-pill px-2.5 py-1.5 d-flex align-items-center gap-1"
+                        style={{ fontSize: "11.5px", fontWeight: 600 }}
+                      >
+                        <CheckCheck size={13} /> Acknowledged
                       </span>
                     ) : (
                       <Button
                         variant="primary"
                         size="sm"
-                        className="rounded-pill px-3 border-0"
+                        className="rounded-pill px-3 py-1 border-0 shadow-xs fw-semibold"
                         style={{ backgroundColor: "#6366f1", fontSize: "12px" }}
                         onClick={() => acknowledgeMutation.mutate(msg.id)}
                         disabled={acknowledgeMutation.isPending}
@@ -2558,6 +2581,34 @@ export default function ChatPage() {
           color: #1e293b;
           border: 1px solid #e2e8f0;
           border-bottom-left-radius: 4px;
+        }
+
+        /* Dedicated Announcement Bubble */
+        .chat-announcement-bubble {
+          background: #ffffff !important;
+          color: #0f172a !important;
+          border: 1px solid #cbd5e1 !important;
+          border-radius: 16px !important;
+          padding: 0 !important;
+          box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06) !important;
+          overflow: hidden !important;
+          max-width: 75% !important;
+          min-width: 290px !important;
+        }
+
+        .chat-announcement-bubble .chat-bubble-meta {
+          padding: 4px 12px 6px;
+          margin-top: 0;
+          background: #ffffff;
+        }
+
+        .chat-announcement-bubble .chat-time {
+          color: #64748b !important;
+          opacity: 0.9 !important;
+        }
+
+        .chat-announcement-bubble .chat-read-icon {
+          color: #6366f1 !important;
         }
 
         .chat-sender-name {

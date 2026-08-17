@@ -401,7 +401,6 @@ const SalaryPage = () => {
                 <thead className="table-light">
                   <tr>
                     <th>Employee Name</th>
-                    <th>Generated On</th>
                     <th>Monthly Salary</th>
                     <th>Allowances</th>
                     <th>Deductions</th>
@@ -413,7 +412,7 @@ const SalaryPage = () => {
                 <tbody>
                   {payrolls.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="text-center py-5 text-secondary">
+                      <td colSpan={7} className="text-center py-5 text-secondary">
                         No payroll records found for the selected filters.
                       </td>
                     </tr>
@@ -439,14 +438,6 @@ const SalaryPage = () => {
                                 </small>
                               </div>
                             </div>
-                          </td>
-                          <td>
-                            <div className="fw-medium text-dark small">{formatDate(p.created_at)}</div>
-                            {p.paid_on && (
-                              <small className="text-success d-block" style={{ fontSize: "0.72rem" }}>
-                                Paid: {formatDate(p.paid_on)}
-                              </small>
-                            )}
                           </td>
                           <td>{formatCurrency(monthlySalary)}</td>
                           <td>{formatCurrency(p.allowances)}</td>

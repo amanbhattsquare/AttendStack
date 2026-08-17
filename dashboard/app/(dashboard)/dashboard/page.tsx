@@ -6,6 +6,7 @@ import { IconUsers, IconListCheck, IconClock, IconSnowboarding, IconRefresh, Ico
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import UpcomingIncrementsChartWidget from "components/UpcomingIncrementsChartWidget";
+import ProjectDeliveryOverviewWidget from "components/dashboard/ProjectDeliveryOverviewWidget";
 import { ApexOptions } from "apexcharts";
 
 // SSR safe dynamic import for ApexCharts
@@ -401,6 +402,9 @@ const DashboardPage = () => {
           </Card>
         </Col>
       </Row>
+
+      {/* Project Delivery Overview & Live Tasks Section */}
+      <ProjectDeliveryOverviewWidget />
 
       <Row className="g-6 mb-6">
         {/* Left column: Recent Joiners & workforce breakdown chart */}

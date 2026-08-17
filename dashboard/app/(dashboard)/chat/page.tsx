@@ -38,6 +38,8 @@ import {
   Bell,
   Pin,
   AtSign,
+  UploadCloud,
+  Image as ImageIcon,
 } from "lucide-react";
 import {
   useQuery,
@@ -643,23 +645,136 @@ export default function ChatPage() {
     },
   });
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files) return;
-    const files = Array.from(e.target.files);
-    setSelectedFiles((prev) => [...prev, ...files]);
+  // Drag and Drop state
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+  const dragCounter = useRef<number>(0);
 
-    const newPreviews = files.map((file) => ({
+  // Helper to add files (supports drag-and-drop, paste, and file-picker)
+  const addFiles = useCallback((newFiles: File[]) => {
+    if (!newFiles || newFiles.length === 0) return;
+
+    const processedFiles = newFiles.map((file, idx) => {
+      // Fix pasted blob files without names
+      if (file.name === "image.png" || !file.name || file.name === "blob") {
+        const ext = file.type.split("/")[1]?.replace("+xml", "") || "png";
+        const newName = `pasted-image-${Date.now()}-${idx + 1}.${ext}`;
+        return new File([file], newName, { type: file.type || "image/png" });
+      }
+      return file;
+    });
+
+    setSelectedFiles((prev) => [...prev, ...processedFiles]);
+
+    const newPreviews = processedFiles.map((file) => ({
       url: URL.createObjectURL(file),
       type: file.type,
       name: file.name,
       size: (file.size / (1024 * 1024)).toFixed(2) + " MB",
     }));
     setFilePreviews((prev) => [...prev, ...newPreviews]);
+
+    if (inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, []);
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files) return;
+    const files = Array.from(e.target.files);
+    addFiles(files);
+    e.target.value = ""; // Reset file input so re-selecting same file works
   };
 
   const removeFile = (index: number) => {
     setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
     setFilePreviews((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  // Clipboard Paste Handler (Ctrl+V image / file paste)
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    if (e.clipboardData) {
+      const items = Array.from(e.clipboardData.items || []);
+      const fileItems = items.filter((item) => item.kind === "file");
+      if (fileItems.length > 0) {
+        e.preventDefault();
+        const files: File[] = [];
+        fileItems.forEach((item) => {
+          const file = item.getAsFile();
+          if (file) files.push(file);
+        });
+        if (files.length > 0) {
+          addFiles(files);
+        }
+      }
+    }
+  };
+
+  // Global window paste listener for convenience when viewing active chat
+  useEffect(() => {
+    const handleGlobalPaste = (e: ClipboardEvent) => {
+      if (!activeConversationId) return;
+      const target = e.target as HTMLElement;
+      // Don't duplicate if already focused in our textarea (handled by onPaste)
+      if (target === inputRef.current) return;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return;
+
+      if (e.clipboardData && e.clipboardData.items) {
+        const items = Array.from(e.clipboardData.items);
+        const fileItems = items.filter((item) => item.kind === "file");
+        if (fileItems.length > 0) {
+          e.preventDefault();
+          const files: File[] = [];
+          fileItems.forEach((item) => {
+            const file = item.getAsFile();
+            if (file) files.push(file);
+          });
+          if (files.length > 0) {
+            addFiles(files);
+          }
+        }
+      }
+    };
+
+    window.addEventListener("paste", handleGlobalPaste);
+    return () => window.removeEventListener("paste", handleGlobalPaste);
+  }, [activeConversationId, addFiles]);
+
+  // Drag and drop event handlers
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current += 1;
+    if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+      setIsDragging(true);
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current -= 1;
+    if (dragCounter.current <= 0) {
+      setIsDragging(false);
+      dragCounter.current = 0;
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = "copy";
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    dragCounter.current = 0;
+
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const droppedFiles = Array.from(e.dataTransfer.files);
+      addFiles(droppedFiles);
+    }
   };
 
   const handleSendMessage = (e?: React.FormEvent) => {
@@ -1262,7 +1377,25 @@ export default function ChatPage() {
         </div>
 
         {/* === RIGHT PANEL: Chat Area === */}
-        <div className={`chat-main ${mobileView === "chat" ? "mobile-show" : "mobile-hide"}`}>
+        <div
+          className={`chat-main position-relative ${mobileView === "chat" ? "mobile-show" : "mobile-hide"}`}
+          onDragEnter={activeConversation ? handleDragEnter : undefined}
+          onDragLeave={activeConversation ? handleDragLeave : undefined}
+          onDragOver={activeConversation ? handleDragOver : undefined}
+          onDrop={activeConversation ? handleDrop : undefined}
+        >
+          {/* Drag & Drop Visual Overlay */}
+          {isDragging && activeConversation && (
+            <div className="chat-dropzone-overlay">
+              <div className="chat-dropzone-box">
+                <div className="chat-dropzone-icon-pulse">
+                  <UploadCloud size={44} className="text-primary" />
+                </div>
+                <h5 className="fw-bold text-dark mt-3 mb-1">Drop files here to send</h5>
+                <p className="text-muted small mb-0">Images, videos, documents, or screenshots</p>
+              </div>
+            </div>
+          )}
           {activeConversation ? (
             <>
               {/* Chat Header */}
@@ -1332,8 +1465,23 @@ export default function ChatPage() {
                   </div>
                 ) : messages.length === 0 ? (
                   <div className="chat-empty-state" style={{ marginTop: "auto", marginBottom: "auto" }}>
-                    <div className="chat-empty-icon accent">
-                      <Sparkles size={32} />
+                    <div
+                      className="chat-mascot-wrapper"
+                      style={{
+                        width: "120px",
+                        height: "120px",
+                        margin: "0 auto 12px",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        filter: "drop-shadow(0 8px 16px rgba(245, 158, 11, 0.2))",
+                      }}
+                    >
+                      <img
+                        src="/smiling-mascot.svg"
+                        alt="Smiling Mascot"
+                        style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                      />
                     </div>
                     <h6>No messages yet</h6>
                     <p>Send a message to start the conversation with {activeConversation.display_name}</p>
@@ -1465,12 +1613,13 @@ export default function ChatPage() {
                   )}
                 </div>
 
-                {/* Textarea wrapper with auto-expand */}
+                {/* Textarea wrapper with auto-expand & paste support */}
                 <div className="chat-input-wrapper">
                   <textarea
                     ref={inputRef}
-                    placeholder="Type a message..."
+                    placeholder="Type a message or paste images (Ctrl+V)..."
                     value={inputContent}
+                    onPaste={handlePaste}
                     onChange={(e) => {
                       setInputContent(e.target.value);
                       const textarea = e.target;
@@ -1497,8 +1646,23 @@ export default function ChatPage() {
             /* No conversation selected placeholder */
             <div className="chat-no-selection">
               <div className="chat-no-selection-content">
-                <div className="chat-empty-icon large">
-                  <MessageSquare size={48} />
+                <div
+                  className="chat-mascot-wrapper"
+                  style={{
+                    width: "140px",
+                    height: "140px",
+                    margin: "0 auto 16px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    filter: "drop-shadow(0 10px 20px rgba(245, 158, 11, 0.25))",
+                  }}
+                >
+                  <img
+                    src="/smiling-mascot.svg"
+                    alt="Welcome to Chat"
+                    style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                  />
                 </div>
                 <h4>Welcome to Chat</h4>
                 <p>Select a conversation or start a new one to begin messaging your team.</p>
@@ -2820,6 +2984,70 @@ export default function ChatPage() {
         .chat-empty-icon.large {
           width: 72px;
           height: 72px;
+        }
+
+        /* Drag and Drop Overlay */
+        .chat-dropzone-overlay {
+          position: absolute;
+          inset: 0;
+          z-index: 999;
+          background: rgba(255, 255, 255, 0.9);
+          backdrop-filter: blur(8px);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border: 3px dashed #6366f1;
+          border-radius: 12px;
+          margin: 8px;
+          pointer-events: none;
+          animation: dropzoneFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes dropzoneFadeIn {
+          from {
+            opacity: 0;
+            transform: scale(0.98);
+          }
+          to {
+            opacity: 1;
+            transform: scale(1);
+          }
+        }
+
+        .chat-dropzone-box {
+          text-align: center;
+          padding: 32px 48px;
+          background: #ffffff;
+          border-radius: 20px;
+          box-shadow: 0 20px 40px -10px rgba(99, 102, 241, 0.25);
+          border: 1px solid #e0e7ff;
+        }
+
+        .chat-dropzone-icon-pulse {
+          width: 76px;
+          height: 76px;
+          border-radius: 50%;
+          background: #eef2ff;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          margin: 0 auto;
+          animation: pulseDropzone 1.5s infinite;
+        }
+
+        @keyframes pulseDropzone {
+          0% {
+            transform: scale(0.95);
+            box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.4);
+          }
+          70% {
+            transform: scale(1.05);
+            box-shadow: 0 0 0 16px rgba(99, 102, 241, 0);
+          }
+          100% {
+            transform: scale(0.95);
+            box-shadow: 0 0 0 0 rgba(99, 102, 241, 0);
+          }
         }
 
         /* Dropdown caret fix */

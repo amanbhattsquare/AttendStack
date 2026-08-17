@@ -164,7 +164,6 @@ const MySalaryClient = () => {
                 <thead className="table-light">
                   <tr>
                     <th>Payroll Period</th>
-                    <th>Generated On</th>
                     <th>Monthly Salary</th>
                     <th>Allowances</th>
                     <th>Deductions</th>
@@ -178,14 +177,6 @@ const MySalaryClient = () => {
                     <tr key={p.id}>
                       <td className="fw-semibold text-dark">
                         {p.month_name} {p.year}
-                      </td>
-                      <td>
-                        <div className="fw-medium text-dark small">{formatDate(p.created_at)}</div>
-                        {p.paid_on && (
-                          <small className="text-success d-block" style={{ fontSize: "0.72rem" }}>
-                            Paid: {formatDate(p.paid_on)}
-                          </small>
-                        )}
                       </td>
                       <td>{formatCurrency(p.basic_salary)}</td>
                       <td>{formatCurrency(p.allowances)}</td>

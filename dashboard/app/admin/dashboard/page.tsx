@@ -249,7 +249,7 @@ const AdminDashboard = () => {
   };
 
   useEffect(() => {
-    const interval = window.setInterval(loadDashboard, 60000);
+    const interval = window.setInterval(loadDashboard, 1800000);
     return () => window.clearInterval(interval);
   }, []);
 
@@ -415,7 +415,7 @@ const AdminDashboard = () => {
             <Badge bg="primary-subtle" text="primary" className="border border-primary-subtle px-3 py-2 rounded-pill">
               Live Operations
             </Badge>
-            <span className="text-secondary small">Auto-refreshes every 60 seconds</span>
+            <span className="text-secondary small">Auto-refreshes every 30 minutes</span>
           </div>
           <h2 className="mb-1 fw-bold text-dark">Admin Dashboard</h2>
           <p className="text-secondary mb-0">Workforce attendance, leave approvals, payroll queue, and operational activity.</p>
@@ -427,7 +427,7 @@ const AdminDashboard = () => {
             </div>
             <div>
               <div className="fw-bold text-dark">System Live</div>
-              <div className="small text-secondary">{formatDateTime(new Date().toISOString())}</div>
+              <div className="small text-secondary" suppressHydrationWarning>{formatDateTime(new Date().toISOString())}</div>
             </div>
           </Card.Body>
         </Card>

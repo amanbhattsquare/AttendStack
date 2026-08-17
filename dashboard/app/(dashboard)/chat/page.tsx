@@ -1087,12 +1087,15 @@ export default function ChatPage() {
                   {renderTextWithMentions(msg.content || "")}
                 </p>
                 {msg.requires_acknowledgement && (
-                  <div className="d-flex align-items-center justify-content-between pt-2 border-top mt-1">
-                    <small className="text-muted" style={{ fontSize: "11px" }}>
+                  <div
+                    className="d-flex align-items-center justify-content-between pt-2 border-top mt-1"
+                    style={{ borderColor: "rgba(165, 180, 252, 0.6)" }}
+                  >
+                    <small className="fw-semibold" style={{ fontSize: "11.5px", color: "#475569" }}>
                       {msg.acknowledged_count || 0} acknowledged
                     </small>
                     {msg.is_acknowledged_by_me ? (
-                      <span className="badge bg-success-subtle text-success border border-success-subtle rounded-pill px-2 py-1" style={{ fontSize: "11px" }}>
+                      <span className="badge bg-success-subtle text-success border border-success-subtle rounded-pill px-2.5 py-1" style={{ fontSize: "11px", fontWeight: 600 }}>
                         Acknowledged
                       </span>
                     ) : (

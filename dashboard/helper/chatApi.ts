@@ -5,6 +5,7 @@ export interface UserMinimal {
   username: string;
   email: string;
   name: string;
+  role?: string;
   is_active?: boolean;
   status?: string;
   employment_status?: string;

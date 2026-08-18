@@ -18,6 +18,8 @@ import {
   IconSettings,
   IconBook,
   IconMessage,
+  IconBuildingSkyscraper,
+  IconShieldCheck,
 } from "@tabler/icons-react";
 
 //import custom type
@@ -27,7 +29,7 @@ export const DashboardMenu: MenuItemType[] = [
   {
     id: uuid(),
     title: "Admin Dashboard",
-    link: "/admin/dashboard",
+    link: "/dashboard",
     icon: <IconLayoutDashboard size={20} strokeWidth={1.5} />,
   },
   {
@@ -89,6 +91,8 @@ export const DashboardMenu: MenuItemType[] = [
     title: "Chat & Messages",
     link: "/chat",
     icon: <IconMessage size={20} strokeWidth={1.5} />,
+    badge: "Beta",
+    badgecolor: "primary",
   },
   {
     id: uuid(),
@@ -114,4 +118,4 @@ export const DashboardMenu: MenuItemType[] = [
     icon: <IconLogout size={20} strokeWidth={1.5} />,
     logout: true,
   },
-];
+];

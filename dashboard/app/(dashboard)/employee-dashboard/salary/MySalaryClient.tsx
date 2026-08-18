@@ -6,6 +6,7 @@ import { Spinner, Alert, Badge, Table, Button, Modal, Row, Col } from "react-boo
 import PayslipPreview from "components/payroll/PayslipPreview";
 import { downloadPayslipPdf } from "components/payroll/payslipPdf";
 import { useBranding } from "context/BrandingContext";
+import EmployeeIncrementWidget from "components/EmployeeIncrementWidget";
 
 const BASE_URL = `${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/payroll/`;
 
@@ -163,7 +164,6 @@ const MySalaryClient = () => {
                 <thead className="table-light">
                   <tr>
                     <th>Payroll Period</th>
-                    <th>Generated On</th>
                     <th>Monthly Salary</th>
                     <th>Allowances</th>
                     <th>Deductions</th>
@@ -177,14 +177,6 @@ const MySalaryClient = () => {
                     <tr key={p.id}>
                       <td className="fw-semibold text-dark">
                         {p.month_name} {p.year}
-                      </td>
-                      <td>
-                        <div className="fw-medium text-dark small">{formatDate(p.created_at)}</div>
-                        {p.paid_on && (
-                          <small className="text-success d-block" style={{ fontSize: "0.72rem" }}>
-                            Paid: {formatDate(p.paid_on)}
-                          </small>
-                        )}
                       </td>
                       <td>{formatCurrency(p.basic_salary)}</td>
                       <td>{formatCurrency(p.allowances)}</td>
@@ -318,6 +310,8 @@ const MySalaryClient = () => {
         </Modal.Footer>
       </Modal>
 
+      {/* Employee Increment Growth Timeline */}
+      <EmployeeIncrementWidget />
     </Fragment>
   );
 };

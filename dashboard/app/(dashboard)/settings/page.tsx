@@ -24,6 +24,7 @@ import {
   IconWifi,
   IconCurrentLocation,
   IconAlertTriangle,
+  IconTrendingUp,
 } from "@tabler/icons-react";
 
 const apiRoot = (process.env.NEXT_PUBLIC_API_ENDPOINT || "").replace(/\/$/, "");
@@ -85,6 +86,9 @@ interface OrganizationAccess {
   id: number;
   name: string;
   invite_code: string;
+  external_company_id?: string;
+  external_source?: string;
+  is_simplyjob_linked?: boolean;
   can_manage_invite_code: boolean;
 }
 
@@ -104,6 +108,38 @@ const SettingsPage = () => {
   const [isUpdatingOrganizationCode, setIsUpdatingOrganizationCode] = useState(false);
   const [organizationCodeNotice, setOrganizationCodeNotice] = useState("");
   const [organizationCodeError, setOrganizationCodeError] = useState("");
+
+  const [simplyJobOrgIdInput, setSimplyJobOrgIdInput] = useState("");
+  const [isLinkingSimplyJob, setIsLinkingSimplyJob] = useState(false);
+
+  const handleLinkSimplyJob = async () => {
+    if (!simplyJobOrgIdInput.trim() || !organizationAccess) return;
+    setIsLinkingSimplyJob(true);
+    setOrganizationCodeError("");
+    setOrganizationCodeNotice("");
+
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_ENDPOINT;
+      const res = await fetch(`${API_URL}/api/v1/organizations/${organizationAccess.id}/link-simplyjob/`, {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ simplyjob_org_id: simplyJobOrgIdInput.trim() }),
+      });
+
+      if (res.ok) {
+        const updatedOrg = await res.json();
+        setOrganizationAccess(updatedOrg);
+        setOrganizationCodeNotice(`SimplyJob Organization ID successfully linked: "${simplyJobOrgIdInput.trim()}"`);
+      } else {
+        const data = await res.json();
+        setOrganizationCodeError(data.detail || "Failed to link SimplyJob Organization ID.");
+      }
+    } catch {
+      setOrganizationCodeError("Error connecting to server. Please try again.");
+    } finally {
+      setIsLinkingSimplyJob(false);
+    }
+  };
 
   // Detect admin's current GPS location for easy office coord setup
   const detectMyLocation = () => {
@@ -238,6 +274,13 @@ const SettingsPage = () => {
               dateFormat: data.date_format,
               workingDays: data.working_days,
             });
+
+            setIncrementSettings({
+              incrementEnabled: data.increment_enabled !== undefined ? data.increment_enabled : true,
+              defaultIncrementMonths: data.default_increment_months || 12,
+              defaultIncrementType: data.default_increment_type || "PERCENTAGE",
+              defaultIncrementValue: data.default_increment_value !== undefined ? parseFloat(data.default_increment_value) : 10.00,
+            });
         }
       } catch (error) {
         console.error("Failed to load settings:", error);
@@ -254,15 +297,29 @@ const SettingsPage = () => {
 
     const loadOrganizationAccess = async () => {
       try {
-        const response = await fetch(`${apiRoot}/api/v1/organizations/`, { headers: authHeaders() });
-        if (!response.ok) {
+        let orgData: any = null;
+        const response = await fetch(`${apiRoot}/api/v1/organizations/?scope=me`, { headers: authHeaders() });
+        if (response.ok) {
+          const data = await response.json();
+          const list = Array.isArray(data) ? data : data.results || [];
+          if (list.length > 0) orgData = list[0];
+        }
+        if (!orgData) {
+          const fallbackRes = await fetch(`${apiRoot}/api/v1/organizations/`, { headers: authHeaders() });
+          if (fallbackRes.ok) {
+            const data = await fallbackRes.json();
+            const list = Array.isArray(data) ? data : data.results || [];
+            const storedUserStr = typeof window !== "undefined" ? localStorage.getItem("user") : null;
+            const storedUser = storedUserStr ? JSON.parse(storedUserStr) : null;
+            orgData = (storedUser?.email && list.find((o: any) => o.owner_email && o.owner_email.toLowerCase() === storedUser.email.toLowerCase())) || list[0];
+          }
+        }
+        if (!orgData && !response.ok) {
           throw new Error(response.status === 401
             ? "Your session has expired. Please sign in again."
             : "Your company workspace could not be loaded. Refresh the page and try again.");
         }
-        const data = await response.json();
-        const organizations = Array.isArray(data) ? data : data.results || [];
-        if (!cancelled) setOrganizationAccess(organizations[0] || null);
+        if (!cancelled) setOrganizationAccess(orgData || null);
       } catch (error) {
         if (!cancelled) {
           setOrganizationCodeError(error instanceof TypeError
@@ -351,6 +408,14 @@ const SettingsPage = () => {
     currency: "INR",
     dateFormat: "DD/MM/YYYY",
     workingDays: ["monday", "tuesday", "wednesday", "thursday", "friday"],
+  });
+
+  // Increment Settings State
+  const [incrementSettings, setIncrementSettings] = useState({
+    incrementEnabled: true,
+    defaultIncrementMonths: 12,
+    defaultIncrementType: "PERCENTAGE",
+    defaultIncrementValue: 10.00,
   });
 
   const workingDaysOptions = [
@@ -559,6 +624,12 @@ const SettingsPage = () => {
         currency: companySettings.currency,
         date_format: companySettings.dateFormat,
         working_days: companySettings.workingDays,
+
+        // Increment settings
+        increment_enabled: incrementSettings.incrementEnabled,
+        default_increment_months: incrementSettings.defaultIncrementMonths,
+        default_increment_type: incrementSettings.defaultIncrementType,
+        default_increment_value: incrementSettings.defaultIncrementValue,
       };
 
       // Send PATCH request to update settings
@@ -1563,6 +1634,59 @@ const SettingsPage = () => {
                     <h4 className="fw-bold mb-4">Security Settings</h4>
                     <Row className="g-4">
                       <Col md={6}>
+                        {/* SimplyJob Integration Card */}
+                        <Card className="border shadow-sm mb-4">
+                          <Card.Body>
+                            <div className="d-flex align-items-center justify-content-between mb-3">
+                              <h5 className="fw-semibold mb-0 d-flex align-items-center gap-2">
+                                <IconBuildingBank className="text-primary" size={22} />
+                                SimplyJob Integration & Org ID
+                              </h5>
+                              <Badge bg={organizationAccess?.external_company_id ? "success" : "warning"} text={organizationAccess?.external_company_id ? "white" : "dark"}>
+                                {organizationAccess?.external_company_id ? "VERIFIED & CONNECTED" : "ACTION REQUIRED: SET ORG ID"}
+                              </Badge>
+                            </div>
+                            <p className="text-secondary small mb-3">
+                              Copy your AttendStack Organization ID (<strong>{organizationAccess?.invite_code || "ORG-ID"}</strong>) and paste it into SimplyJob. Then paste your SimplyJob Org ID here to unlock employee invitations.
+                            </p>
+
+                            <Row className="g-3 align-items-end mb-2">
+                              <Col md={6}>
+                                <Form.Group controlId="attendstack-org-id">
+                                  <Form.Label className="small fw-semibold">AttendStack Org ID (Copy to SimplyJob)</Form.Label>
+                                  <div className="input-group">
+                                    <Form.Control value={organizationAccess?.invite_code || ""} readOnly className="font-monospace fw-bold bg-light" />
+                                    <Button variant="outline-primary" size="sm" onClick={copyOrganizationCode}>
+                                      <IconCopy size={16} className="me-1" /> Copy
+                                    </Button>
+                                  </div>
+                                </Form.Group>
+                              </Col>
+                              <Col md={6}>
+                                <Form.Group controlId="simplyjob-org-id">
+                                  <Form.Label className="small fw-semibold">SimplyJob Org ID / Integration Code *</Form.Label>
+                                  <div className="input-group">
+                                    <Form.Control
+                                      placeholder="e.g. SIMPLYJOB-ORG-101"
+                                      value={simplyJobOrgIdInput || organizationAccess?.external_company_id || ""}
+                                      onChange={(e) => setSimplyJobOrgIdInput(e.target.value)}
+                                    />
+                                    <Button variant="primary" size="sm" onClick={handleLinkSimplyJob} disabled={isLinkingSimplyJob || !simplyJobOrgIdInput.trim()}>
+                                      {isLinkingSimplyJob ? <Spinner size="sm" /> : "Link Org ID"}
+                                    </Button>
+                                  </div>
+                                </Form.Group>
+                              </Col>
+                            </Row>
+
+                            {!organizationAccess?.external_company_id && (
+                              <Alert variant="warning" className="py-2 px-3 small border-0 mt-3 mb-0">
+                                <strong>Notice:</strong> Employee invitations are disabled until you paste and save your SimplyJob Org ID above.
+                              </Alert>
+                            )}
+                          </Card.Body>
+                        </Card>
+
                         <Card className="border shadow-sm h-100">
                           <Card.Body>
                             <h5 className="fw-semibold mb-2">Employee onboarding code</h5>
@@ -1613,6 +1737,122 @@ const SettingsPage = () => {
                             </Form.Group>
                             <Form.Group className="mb-4">
                               <Form.Check type="switch" id="session-timeout" label="Enable Session Timeout (30 minutes)" defaultChecked />
+                            </Form.Group>
+                          </Card.Body>
+                        </Card>
+                      </Col>
+                    </Row>
+                  </div>
+                </Tab>
+
+                {/* Increment Policy Tab */}
+                <Tab
+                  eventKey="increment"
+                  title={
+                    <span className="d-flex align-items-center gap-2 py-2">
+                      <IconTrendingUp size={18} />
+                      Increment Policy
+                    </span>
+                  }
+                >
+                  <div className="p-4 border-top">
+                    <div className="d-flex align-items-center justify-content-between mb-4">
+                      <div>
+                        <h4 className="fw-bold mb-1">Company Increment Settings</h4>
+                        <p className="text-secondary small mb-0">
+                          Set default salary increment rules applied to all employees automatically. You can override these per employee.
+                        </p>
+                      </div>
+                      <Form.Check
+                        type="switch"
+                        id="increment-enabled-toggle"
+                        label={<span className="fw-semibold ms-1">{incrementSettings.incrementEnabled ? "System Active" : "System Disabled"}</span>}
+                        checked={incrementSettings.incrementEnabled}
+                        onChange={(e) => setIncrementSettings({ ...incrementSettings, incrementEnabled: e.target.checked })}
+                      />
+                    </div>
+
+                    <Alert variant="info" className="d-flex align-items-start gap-3 mb-4 border-0 shadow-sm">
+                      <IconTrendingUp size={24} className="text-info flex-shrink-0 mt-1" />
+                      <div>
+                        <div className="fw-semibold">How Company Increment Policy Works</div>
+                        <div className="small text-secondary">
+                          When enabled, AttendStack automatically tracks employee joining dates or last increment dates and schedules upcoming increments every <strong>{incrementSettings.defaultIncrementMonths} months</strong> with a <strong>{incrementSettings.defaultIncrementType === "PERCENTAGE" ? `${incrementSettings.defaultIncrementValue}%` : `₹${incrementSettings.defaultIncrementValue}`}</strong> raise. Admins can accept, reject, or reschedule due increments on the dashboard.
+                        </div>
+                      </div>
+                    </Alert>
+
+                    <Row className="g-4">
+                      <Col md={4}>
+                        <Card className="border shadow-sm h-100">
+                          <Card.Body>
+                            <Form.Group className="mb-3">
+                              <Form.Label className="fw-semibold">Default Increment Interval</Form.Label>
+                              <Form.Select
+                                value={incrementSettings.defaultIncrementMonths}
+                                onChange={(e) => setIncrementSettings({ ...incrementSettings, defaultIncrementMonths: parseInt(e.target.value) || 12 })}
+                                disabled={!incrementSettings.incrementEnabled}
+                              >
+                                <option value={1}>Every 1 Month</option>
+                                <option value={3}>Every 3 Months (Quarterly)</option>
+                                <option value={6}>Every 6 Months (Half-Yearly)</option>
+                                <option value={9}>Every 9 Months</option>
+                                <option value={12}>Every 12 Months (Annually)</option>
+                                <option value={18}>Every 18 Months (1.5 Years)</option>
+                                <option value={24}>Every 24 Months (2 Years)</option>
+                              </Form.Select>
+                              <Form.Text className="text-muted small">
+                                Default frequency for employee performance raises.
+                              </Form.Text>
+                            </Form.Group>
+                          </Card.Body>
+                        </Card>
+                      </Col>
+
+                      <Col md={4}>
+                        <Card className="border shadow-sm h-100">
+                          <Card.Body>
+                            <Form.Group className="mb-3">
+                              <Form.Label className="fw-semibold">Increment Calculation Type</Form.Label>
+                              <Form.Select
+                                value={incrementSettings.defaultIncrementType}
+                                onChange={(e) => setIncrementSettings({ ...incrementSettings, defaultIncrementType: e.target.value })}
+                                disabled={!incrementSettings.incrementEnabled}
+                              >
+                                <option value="PERCENTAGE">Percentage Raise (%)</option>
+                                <option value="FLAT_AMOUNT">Flat Amount (Fixed ₹ Rupees)</option>
+                              </Form.Select>
+                              <Form.Text className="text-muted small">
+                                Choose whether raises are calculated as % of salary or a flat rupee amount.
+                              </Form.Text>
+                            </Form.Group>
+                          </Card.Body>
+                        </Card>
+                      </Col>
+
+                      <Col md={4}>
+                        <Card className="border shadow-sm h-100">
+                          <Card.Body>
+                            <Form.Group className="mb-3">
+                              <Form.Label className="fw-semibold">Default Increment Value</Form.Label>
+                              <div className="input-group">
+                                <span className="input-group-text fw-semibold">
+                                  {incrementSettings.defaultIncrementType === "PERCENTAGE" ? "%" : "₹"}
+                                </span>
+                                <Form.Control
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  value={incrementSettings.defaultIncrementValue}
+                                  onChange={(e) => setIncrementSettings({ ...incrementSettings, defaultIncrementValue: parseFloat(e.target.value) || 0 })}
+                                  disabled={!incrementSettings.incrementEnabled}
+                                />
+                              </div>
+                              <Form.Text className="text-muted small">
+                                {incrementSettings.defaultIncrementType === "PERCENTAGE"
+                                  ? "E.g., 10 for a 10% annual salary increase."
+                                  : "E.g., 5000 for a ₹5,000 raise."}
+                              </Form.Text>
                             </Form.Group>
                           </Card.Body>
                         </Card>

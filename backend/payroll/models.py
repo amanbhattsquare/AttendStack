@@ -47,3 +47,60 @@ class Payroll(models.Model):
         if self.status == PayrollStatus.PAID and not self.paid_on:
             self.paid_on = timezone.now()
         super().save(*args, **kwargs)
+
+
+class IncrementStatus(models.TextChoices):
+    PENDING = "PENDING", "Pending"
+    APPROVED = "APPROVED", "Approved"
+    REJECTED = "REJECTED", "Rejected"
+    RESCHEDULED = "RESCHEDULED", "Rescheduled"
+
+
+class IncrementType(models.TextChoices):
+    PERCENTAGE = "PERCENTAGE", "Percentage"
+    FLAT_AMOUNT = "FLAT_AMOUNT", "Flat Amount"
+
+
+class EmployeeIncrement(models.Model):
+    employee = models.ForeignKey(
+        Employee,
+        on_delete=models.CASCADE,
+        related_name="increments"
+    )
+    due_date = models.DateField(db_index=True)
+    current_salary = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+    increment_type = models.CharField(
+        max_length=20,
+        choices=IncrementType.choices,
+        default=IncrementType.PERCENTAGE
+    )
+    increment_value = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    calculated_increment_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+    new_salary = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+    status = models.CharField(
+        max_length=20,
+        choices=IncrementStatus.choices,
+        default=IncrementStatus.PENDING,
+        db_index=True
+    )
+    rescheduled_date = models.DateField(null=True, blank=True)
+    action_date = models.DateTimeField(null=True, blank=True)
+    action_by = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="processed_increments"
+    )
+    notes = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["due_date", "-created_at"]
+        indexes = [
+            models.Index(fields=["status", "due_date"]),
+        ]
+
+    def __str__(self):
+        return f"{self.employee.full_name} - {self.due_date} ({self.status})"

@@ -71,6 +71,13 @@ class ChatConsumer(AsyncWebsocketConsumer):
             'message': message
         }, cls=DjangoJSONEncoder))
 
+    async def chat_message_deleted(self, event):
+        await self.send(text_data=json.dumps({
+            'type': 'message_deleted',
+            'message_id': event['message_id'],
+            'conversation_id': event.get('conversation_id')
+        }, cls=DjangoJSONEncoder))
+
     async def chat_typing(self, event):
         # Don't send back to the user who is typing
         if str(event['user_id']) != str(self.user.id):

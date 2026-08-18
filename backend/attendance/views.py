@@ -16,6 +16,7 @@ from ipware import get_client_ip
 from geopy.distance import geodesic
 
 from accounts.permissions import IsAdminOrHR
+from organizations.models import Organization
 from employees.models import (
     ATTENDANCE_ELIGIBLE_STATUSES,
     ATTENDANCE_WORKING_STATUSES,
@@ -87,6 +88,17 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
             return [IsAuthenticated()]
         return super().get_permissions()
 
+    def _organization_for_user(self):
+        user = self.request.user
+        if not user.is_authenticated or user.is_superuser or getattr(user, 'role', '') == "SUPER_ADMIN":
+            return None
+        org = Organization.objects.filter(owner=user).first()
+        if not org:
+            emp = Employee.objects.filter(email__iexact=user.email).first()
+            if emp:
+                org = emp.organization
+        return org
+
     def get_queryset(self):
         queryset = attendance_eligible_records(super().get_queryset())
         user = self.request.user
@@ -105,20 +117,22 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
         if self.action == "list" and not any([date_from, date_to, year, month, day, search]):
             queryset = queryset.filter(date=timezone.now().date())
 
+        # Enforce organization data isolation
+        if not (user.is_superuser or getattr(user, 'role', '') == "SUPER_ADMIN"):
+            org = self._organization_for_user()
+            if org:
+                queryset = queryset.filter(employee__organization=org)
+            else:
+                queryset = queryset.none()
+
         # Enforce data isolation: Employees can only view their own records
-        if user.is_authenticated and user.role == "EMPLOYEE":
+        if user.is_authenticated and getattr(user, 'role', '') == "EMPLOYEE":
             queryset = queryset.filter(employee__email__iexact=user.email)
 
         queryset = queryset.filter(
             date__lte=timezone.now().date(),
             date__gte=F("employee__joining_date"),
         )
-
-        # if year and month:
-        #     try:
-        #         auto_mark_calendar_days(int(month), int(year))
-        #     except (TypeError, ValueError):
-        #         pass
 
         if date_from:
             queryset = queryset.filter(date__gte=date_from)
@@ -210,14 +224,27 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
     def today(self, request):
         today = timezone.localdate()
         auto_mark_calendar_days(today.month, today.year)
-        records = {
-            record.employee.id: record
-            for record in AttendanceRecord.objects.select_related("employee").filter(date=today)
-        }
-        employees = Employee.objects.attendance_eligible_on(today).filter(
+        
+        user = request.user
+        org = self._organization_for_user()
+
+        records_qs = AttendanceRecord.objects.select_related("employee").filter(date=today)
+        employees_qs = Employee.objects.attendance_eligible_on(today).filter(
             joining_date__lte=today,
         ).order_by("full_name")
-        payload = [self._today_payload(employee, records.get(employee.id)) for employee in employees]
+
+        if org:
+            records_qs = records_qs.filter(employee__organization=org)
+            employees_qs = employees_qs.filter(organization=org)
+        elif not (user.is_superuser or getattr(user, 'role', '') == "SUPER_ADMIN"):
+            records_qs = records_qs.none()
+            employees_qs = employees_qs.none()
+
+        records = {
+            record.employee.id: record
+            for record in records_qs
+        }
+        payload = [self._today_payload(employee, records.get(employee.id)) for employee in employees_qs]
         serializer = TodayAttendanceSerializer(payload, many=True)
         return Response(serializer.data)
 
@@ -717,6 +744,17 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(
                 Q(employee__email__iexact=user.email) | Q(employee__employee_id=user.employee_id)
             )
+        elif user.is_authenticated and not (user.is_superuser or getattr(user, 'role', '') == "SUPER_ADMIN"):
+            org = Organization.objects.filter(owner=user).first()
+            if not org:
+                emp = Employee.objects.filter(email__iexact=user.email).first()
+                if emp:
+                    org = emp.organization
+            if org:
+                queryset = queryset.filter(employee__organization=org)
+            else:
+                queryset = queryset.none()
+
         return queryset.filter(end_date__gte=F("employee__joining_date"))
 
     def _raise_if_leave_overlaps(self, employee, start_date, end_date, instance=None):
@@ -758,11 +796,15 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
                 })
             return
 
-        record = AttendanceRecord.objects.filter(employee=employee, date=start_date).first()
-        if record is None or not record.check_out:
-            raise ValidationError({
-                "detail": "A half-day leave can be approved only after the employee has checked out."
-            })
+        # Only require checkout if the half-day is for today or a past date
+        from django.utils import timezone
+        today = timezone.localdate()
+        if start_date <= today:
+            record = AttendanceRecord.objects.filter(employee=employee, date=start_date).first()
+            if record is None or not record.check_out:
+                raise ValidationError({
+                    "detail": "A half-day leave for today or a past date can only be approved after the employee has checked out."
+                })
 
     def _validate_monthly_policy(self, serializer, employee):
         instance = serializer.instance
@@ -840,6 +882,12 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         user = self.request.user
         
         with transaction.atomic():
+            # Store original values before saving to detect critical changes
+            original_leave_type = serializer.instance.leave_type
+            original_start_date = serializer.instance.start_date
+            original_end_date = serializer.instance.end_date
+            original_status = serializer.instance.status
+            
             employee = Employee.objects.select_for_update().get(
                 pk=serializer.validated_data.get("employee", serializer.instance.employee).pk
             )
@@ -861,7 +909,16 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
                 self._validate_half_day_approval(serializer)
                 leave_request = serializer.save(employee=employee)
 
-            sync_leave_request_attendance(leave_request)
+            # Always sync attendance if any critical field that affects attendance changes
+            critical_fields_changed = (
+                leave_request.leave_type != original_leave_type or
+                leave_request.start_date != original_start_date or
+                leave_request.end_date != original_end_date or
+                leave_request.status != original_status
+            )
+            
+            if critical_fields_changed:
+                sync_leave_request_attendance(leave_request)
 
     def perform_destroy(self, instance):
         user = self.request.user

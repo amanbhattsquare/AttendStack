@@ -381,29 +381,44 @@ def sync_leave_request_attendance(leave_request) -> dict[str, int]:
                 },
             )
             if not created:
+                # Update all relevant fields for half-day records too when leave type changes
                 record.leave_request = leave_request
                 if record.check_out:
                     record.status = AttendanceStatus.HALF_DAY
-                record.save(auto_refresh_status=False, update_fields=["leave_request", "status", "updated_at"])
+                else:
+                    record.status = AttendanceStatus.HALF_DAY
+                record.is_paid = False
+                record.notes = f"Approved half-day leave request #{leave_request.id}; checkout required."
+                record.save(auto_refresh_status=False, update_fields=["leave_request", "status", "is_paid", "notes", "updated_at"])
             created_count += int(created)
             updated_count += int(not created)
             continue
 
-        defaults = {
-            "leave_request": leave_request,
-            "check_in": None,
-            "check_out": None,
-            "status": AttendanceStatus.LEAVE,
-            "is_paid": False,
-            "notes": f"Auto-marked from approved leave request #{leave_request.id}: Unpaid leave",
-        }
-        _, created = AttendanceRecord.objects.update_or_create(
+        # Always update existing records with latest leave request data
+        record, created = AttendanceRecord.objects.get_or_create(
             employee=leave_request.employee,
             date=leave_date,
-            defaults=defaults,
+            defaults={
+                "leave_request": leave_request,
+                "check_in": None,
+                "check_out": None,
+                "status": AttendanceStatus.LEAVE,
+                "is_paid": False,
+                "notes": f"Auto-marked from approved leave request #{leave_request.id}: Unpaid leave",
+            },
         )
-        created_count += int(created)
-        updated_count += int(not created)
+        if not created:
+            # Update all relevant fields even if record exists - critical for when leave type changes
+            record.leave_request = leave_request
+            record.check_in = None
+            record.check_out = None
+            record.status = AttendanceStatus.LEAVE
+            record.is_paid = False
+            record.notes = f"Auto-marked from approved leave request #{leave_request.id}: Unpaid leave"
+            record.save(auto_refresh_status=False, update_fields=["leave_request", "check_in", "check_out", "status", "is_paid", "notes", "updated_at"])
+            updated_count += 1
+        else:
+            created_count += int(created)
 
     for year in affected_years:
         _rebalance_yearly_paid_leaves(leave_request.employee, year)

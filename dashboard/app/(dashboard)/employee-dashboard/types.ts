@@ -28,6 +28,7 @@ export type CurrentEmployee = {
   pay_frequency_label: string;
   bank_name: string;
   bank_account_number: string;
+  ifsc_code: string;
   tax_id: string;
   created_at: string;
   updated_at: string;

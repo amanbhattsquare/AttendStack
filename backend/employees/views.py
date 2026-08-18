@@ -44,20 +44,25 @@ class EmployeeViewSet(viewsets.ModelViewSet):
             return [IsAuthenticated()]
         return super().get_permissions()
 
+    def _organization_for_user(self):
+        user = self.request.user
+        if not user.is_authenticated or user.is_superuser or getattr(user, 'role', '') == UserRole.SUPER_ADMIN:
+            return None
+        org = Organization.objects.filter(owner=user).first()
+        if not org:
+            emp = Employee.objects.filter(email__iexact=user.email).first()
+            if emp:
+                org = emp.organization
+        return org
+
     def get_queryset(self):
         user = self.request.user
         queryset = super().get_queryset()
 
-        if not user.is_superuser:
-            try:
-                employee = Employee.objects.get(email=user.email)
-                organization = employee.organization
-            except Employee.DoesNotExist:
-                # A company owner can manage their workspace before they have
-                # an Employee profile of their own.
-                organization = Organization.objects.filter(owner=user).first()
+        if not user.is_superuser and getattr(user, 'role', '') != UserRole.SUPER_ADMIN:
+            organization = self._organization_for_user()
             if organization is None:
-                queryset = queryset.filter(organization__isnull=True)
+                queryset = queryset.none()
             else:
                 queryset = queryset.filter(organization=organization)
 
@@ -87,22 +92,11 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         user = self.request.user
         organization = None
 
-        if user.is_superuser:
+        if user.is_superuser or getattr(user, 'role', '') == UserRole.SUPER_ADMIN:
             # For superusers, assign the first organization as a default
             organization = Organization.objects.first()
         else:
-            # For other users, derive organization from their own employee record
-            try:
-                employee = Employee.objects.get(email=user.email)
-                organization = employee.organization
-            except Employee.DoesNotExist:
-                organization = Organization.objects.filter(owner=user).first()
-        
-        # Ensure an organization is set before saving
-        if organization is None:
-            # Handle case where no organization is found, perhaps raise an error
-            # For now, we'll let the serializer handle it, which might fail if org is required
-            pass
+            organization = self._organization_for_user()
 
         serializer.save(organization=organization)
 

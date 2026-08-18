@@ -52,6 +52,7 @@ type Employee = {
   pay_frequency_label: string;
   bank_name: string;
   bank_account_number: string;
+  ifsc_code: string;
   tax_id: string;
   created_at: string;
   updated_at: string;
@@ -294,6 +295,7 @@ const EmployeeProfileClient = ({ employeeId, employee: legacyEmployee }: Employe
           { label: "Pay Frequency", value: employee.pay_frequency_label || employee.pay_frequency, icon: <IconCalendar size={18} /> },
           { label: "Bank Name", value: employee.bank_name, icon: <IconBuildingBank size={18} /> },
           { label: "Bank Account Number", value: employee.bank_account_number, icon: <IconId size={18} /> },
+          { label: "IFSC Code", value: employee.ifsc_code, icon: <IconBuildingBank size={18} /> },
           { label: "Tax ID / PAN", value: employee.tax_id, icon: <IconFileText size={18} /> },
         ],
       },

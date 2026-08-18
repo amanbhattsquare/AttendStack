@@ -41,7 +41,7 @@ const DashboardLayout: React.FC<DashboardProps> = ({ children }) => {
       try {
         const u = JSON.parse(storedUser);
         setUserRole(u?.role || null);
-      } catch {}
+      } catch { }
     }
   }, []);
 
@@ -94,20 +94,55 @@ const DashboardLayout: React.FC<DashboardProps> = ({ children }) => {
     };
   }, [pathname, router]);
 
+  const isChatPage = pathname.startsWith("/chat");
+
   return (
     <BrandingProvider>
       <div>
         <Sidebar hideLogo={false} containerId='miniSidebar' currentPath={pathname} isEmployee={isEmployeeSidebar} />
-        <div id='content' className='position-relative h-100 d-flex flex-column'>
+        <div id='content' className={`position-relative d-flex flex-column ${isChatPage ? 'chat-content-wrap' : 'h-100'}`}>
           <Header />
-          <div className='custom-container' style={{ flex: '1 0 auto' }}>
+          <div
+            className={isChatPage ? "" : "custom-container"}
+            style={
+              isChatPage
+                ? {
+                    flex: "1 1 auto",
+                    height: "100%",
+                    maxHeight: "100%",
+                    padding: 0,
+                    margin: 0,
+                    maxWidth: "100%",
+                    overflow: "hidden",
+                  }
+                : { flex: "1 0 auto" }
+            }
+          >
             {children}
           </div>
-          <div className='custom-container py-3'>
-            <span className='me-1'>© 2026 AttendStack. A <a href="https://bhattsquare.com" target="_blank" rel="noopener noreferrer">Bhatt Square</a> Project. <span className='text-secondary ms-2'>Version 2.5.3</span></span>
-          </div>
+          {!isChatPage && (
+            <div className='custom-container py-3'>
+              <span className='me-1'>© 2026 AttendStack. A <a href="https://bhattsquare.com" target="_blank" rel="noopener noreferrer">Bhatt Square</a> Project. <span className='text-secondary ms-2'>Version 2.5.3</span></span>
+            </div>
+          )}
         </div>
       </div>
+      {isChatPage && (
+        <style jsx global>{`
+          html #content.chat-content-wrap,
+          html.collapsed #content.chat-content-wrap,
+          html.expanded #content.chat-content-wrap {
+            padding-top: 62px !important;
+            padding-bottom: 0 !important;
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+            height: 100vh !important;
+            min-height: 100vh !important;
+            max-height: 100vh !important;
+            overflow: hidden !important;
+          }
+        `}</style>
+      )}
     </BrandingProvider>
   );
 };

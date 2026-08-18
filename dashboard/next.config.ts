@@ -9,7 +9,7 @@ const nextConfig: NextConfig = {
   },
   env: {
     NEXT_PUBLIC_BASE_PATH: "",
-    NEXT_PUBLIC_API_ENDPOINT: process.env.NEXT_PUBLIC_API_ENDPOINT || "http://localhost:8001",
+    NEXT_PUBLIC_API_ENDPOINT: process.env.NEXT_PUBLIC_API_ENDPOINT || "http://localhost:8000",
   },
   sassOptions: {
     includePaths: [

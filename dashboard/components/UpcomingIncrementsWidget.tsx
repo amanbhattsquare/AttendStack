@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
-import { Card, Table, Badge, Button, Modal, Form, Spinner, Row, Col, Alert } from "react-bootstrap";
-import { IconTrendingUp, IconCheck, IconX, IconCalendarTime, IconCurrencyRupee, IconRefresh } from "@tabler/icons-react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
+import { Card, Table, Badge, Button, Modal, Form, Spinner, Row, Col, Alert, ButtonGroup, InputGroup } from "react-bootstrap";
+import { IconTrendingUp, IconCheck, IconX, IconCalendarTime, IconCurrencyRupee, IconRefresh, IconEdit } from "@tabler/icons-react";
 import Swal from "sweetalert2";
 
 const BASE_URL = `${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1`;
@@ -76,6 +76,14 @@ const UpcomingIncrementsWidget: React.FC = () => {
 
   // Reject Modal State
   const [showRejectModal, setShowRejectModal] = useState<boolean>(false);
+
+  // Edit Hike Modal State
+  const [showEditHikeModal, setShowEditHikeModal] = useState<boolean>(false);
+  const [editHikeType, setEditHikeType] = useState<"PERCENTAGE" | "FLAT_AMOUNT">("PERCENTAGE");
+  const [editHikeValue, setEditHikeValue] = useState<string>("");
+  const [editUpdatePolicy, setEditUpdatePolicy] = useState<boolean>(false);
+  const [editNotes, setEditNotes] = useState<string>("");
+
 
   const fetchIncrements = useCallback(async () => {
     setLoading(true);
@@ -234,6 +242,86 @@ const UpcomingIncrementsWidget: React.FC = () => {
       fetchIncrements();
     } catch (err) {
       Swal.fire("Error", err instanceof Error ? err.message : "Failed to reschedule increment.", "error");
+    } finally {
+      setSubmittingAction(false);
+    }
+  };
+
+  // Open Edit Hike Modal
+  const openEditHikeModal = (inc: EmployeeIncrementItem) => {
+    setSelectedIncrement(inc);
+    setEditHikeType(inc.increment_type || "PERCENTAGE");
+    setEditHikeValue(inc.increment_value ? String(Number(inc.increment_value)) : "10");
+    setEditNotes(inc.notes || "");
+    setEditUpdatePolicy(false);
+    setShowEditHikeModal(true);
+  };
+
+  // Dynamic preview calculation for Edit Hike modal
+  const editPreview = useMemo(() => {
+    if (!selectedIncrement) return null;
+    const curr = Number(selectedIncrement.current_salary) || 0;
+    const val = parseFloat(editHikeValue) || 0;
+    let raiseAmt = 0;
+    if (editHikeType === "PERCENTAGE") {
+      raiseAmt = curr * (val / 100);
+    } else {
+      raiseAmt = val;
+    }
+    const newSal = curr + raiseAmt;
+    const isAnnual = curr > 50000;
+    const monthlyCurrent = isAnnual ? Math.round(curr / 12) : curr;
+    const monthlyRaise = isAnnual ? Math.round(raiseAmt / 12) : raiseAmt;
+    const monthlyNew = isAnnual ? Math.round(newSal / 12) : newSal;
+    const pctEffective = curr > 0 ? ((raiseAmt / curr) * 100).toFixed(1) : "0";
+
+    return {
+      currentAnnual: curr,
+      newAnnual: newSal,
+      raiseAnnual: raiseAmt,
+      monthlyCurrent,
+      monthlyRaise,
+      monthlyNew,
+      pctEffective,
+      isAnnual,
+    };
+  }, [selectedIncrement, editHikeType, editHikeValue]);
+
+  // Submit Edit Hike
+  const handleConfirmEditHike = async () => {
+    if (!selectedIncrement || !editHikeValue || parseFloat(editHikeValue) <= 0) {
+      Swal.fire("Invalid Hike Value", "Please enter a valid positive hike percentage or flat amount.", "warning");
+      return;
+    }
+    setSubmittingAction(true);
+    try {
+      const res = await fetch(`${BASE_URL}/payroll/increments/${selectedIncrement.id}/edit-hike/`, {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({
+          increment_type: editHikeType,
+          increment_value: parseFloat(editHikeValue),
+          notes: editNotes,
+          update_employee_policy: editUpdatePolicy,
+        }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.detail || "Failed to update salary hike.");
+      }
+
+      setShowEditHikeModal(false);
+      Swal.fire({
+        icon: "success",
+        title: "Salary Hike Updated",
+        text: `Salary increment proposal for ${selectedIncrement.employee_details?.full_name} has been updated successfully.`,
+        timer: 2500,
+        showConfirmButton: false,
+      });
+      fetchIncrements();
+    } catch (err) {
+      Swal.fire("Error", err instanceof Error ? err.message : "Failed to update salary hike.", "error");
     } finally {
       setSubmittingAction(false);
     }
@@ -476,6 +564,16 @@ const UpcomingIncrementsWidget: React.FC = () => {
                           {isPending ? (
                             <div className="d-flex justify-content-end gap-1">
                               <Button
+                                variant="outline-primary"
+                                size="sm"
+                                className="p-1 px-2 d-inline-flex align-items-center justify-content-center"
+                                onClick={() => openEditHikeModal(inc)}
+                                title="Edit Salary Hike Amount / %"
+                              >
+                                <IconEdit size={16} />
+                              </Button>
+
+                              <Button
                                 variant="success"
                                 size="sm"
                                 className="p-1 px-2 d-inline-flex align-items-center justify-content-center"
@@ -520,6 +618,144 @@ const UpcomingIncrementsWidget: React.FC = () => {
           )}
         </Card.Body>
       </Card>
+
+      {/* Edit Salary Hike Modal */}
+      <Modal show={showEditHikeModal} onHide={() => setShowEditHikeModal(false)} centered size="lg">
+        <Modal.Header closeButton className="border-bottom-0 pb-0">
+          <Modal.Title className="fw-bold d-flex align-items-center gap-2">
+            <IconEdit size={22} className="text-primary" />
+            <span>Edit Salary Hike Proposal</span>
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body className="pt-2">
+          <div className="bg-light rounded p-3 mb-3 border">
+            <div className="d-flex align-items-center justify-content-between flex-wrap gap-2">
+              <div>
+                <h6 className="fw-bold text-dark mb-0">{selectedIncrement?.employee_details?.full_name}</h6>
+                <small className="text-muted">
+                  ID: {selectedIncrement?.employee_details?.employee_id} &bull; Dept: {selectedIncrement?.employee_details?.department || "N/A"}
+                </small>
+              </div>
+              <div className="text-end">
+                <span className="text-muted small d-block">Current Salary</span>
+                <span className="fw-bold text-dark">
+                  ₹{Number(editPreview?.monthlyCurrent || 0).toLocaleString("en-IN")}/mo
+                  <small className="text-muted fw-normal ms-1">
+                    (₹{Number(editPreview?.currentAnnual || 0).toLocaleString("en-IN")}/yr)
+                  </small>
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <Row className="g-3 mb-3">
+            <Col sm={6}>
+              <Form.Group>
+                <Form.Label className="fw-semibold">Hike Calculation Mode</Form.Label>
+                <div>
+                  <ButtonGroup className="w-100">
+                    <Button
+                      variant={editHikeType === "PERCENTAGE" ? "primary" : "outline-secondary"}
+                      onClick={() => setEditHikeType("PERCENTAGE")}
+                      size="sm"
+                    >
+                      Percentage (%)
+                    </Button>
+                    <Button
+                      variant={editHikeType === "FLAT_AMOUNT" ? "primary" : "outline-secondary"}
+                      onClick={() => setEditHikeType("FLAT_AMOUNT")}
+                      size="sm"
+                    >
+                      Flat Amount (₹ / Year)
+                    </Button>
+                  </ButtonGroup>
+                </div>
+              </Form.Group>
+            </Col>
+
+            <Col sm={6}>
+              <Form.Group>
+                <Form.Label className="fw-semibold">
+                  {editHikeType === "PERCENTAGE" ? "Hike Percentage (%)" : "Flat Increment (₹ / Year)"}
+                </Form.Label>
+                <InputGroup size="sm">
+                  <InputGroup.Text>
+                    {editHikeType === "PERCENTAGE" ? "%" : "₹"}
+                  </InputGroup.Text>
+                  <Form.Control
+                    type="number"
+                    step={editHikeType === "PERCENTAGE" ? "0.5" : "1000"}
+                    min="0"
+                    placeholder={editHikeType === "PERCENTAGE" ? "e.g. 15" : "e.g. 60000"}
+                    value={editHikeValue}
+                    onChange={(e) => setEditHikeValue(e.target.value)}
+                  />
+                </InputGroup>
+              </Form.Group>
+            </Col>
+          </Row>
+
+          {/* Real-time Calculation Summary Card */}
+          {editPreview && (
+            <Card className="border border-success border-opacity-25 bg-success bg-opacity-10 mb-3 shadow-none">
+              <Card.Body className="p-3">
+                <div className="d-flex justify-content-between align-items-center mb-2">
+                  <span className="fw-semibold text-success small text-uppercase">Projected Salary After Hike</span>
+                  <Badge bg="success">+{editPreview.pctEffective}% Raise</Badge>
+                </div>
+                <Row className="g-2 text-dark">
+                  <Col xs={6} md={4}>
+                    <small className="text-muted d-block">Monthly Raise</small>
+                    <strong className="text-success">+₹{Number(editPreview.monthlyRaise || 0).toLocaleString("en-IN")} / mo</strong>
+                  </Col>
+                  <Col xs={6} md={4}>
+                    <small className="text-muted d-block">New Monthly Salary</small>
+                    <strong className="text-dark fs-6">₹{Number(editPreview.monthlyNew || 0).toLocaleString("en-IN")} / mo</strong>
+                  </Col>
+                  <Col xs={12} md={4}>
+                    <small className="text-muted d-block">New Annual CTC</small>
+                    <strong className="text-dark">₹{Number(editPreview.newAnnual || 0).toLocaleString("en-IN")} / yr</strong>
+                  </Col>
+                </Row>
+              </Card.Body>
+            </Card>
+          )}
+
+          <Form.Group className="mb-3">
+            <Form.Check
+              type="checkbox"
+              id="update-employee-policy-checkbox"
+              label="Save this custom hike as the employee's default policy for future cycles"
+              checked={editUpdatePolicy}
+              onChange={(e) => setEditUpdatePolicy(e.target.checked)}
+              className="small fw-semibold text-secondary"
+            />
+          </Form.Group>
+
+          <Form.Group className="mb-2">
+            <Form.Label className="fw-semibold small">Notes / Reason for Revision</Form.Label>
+            <Form.Control
+              as="textarea"
+              rows={2}
+              placeholder="E.g., Exceptional performance in Q4; approved higher hike percentage."
+              value={editNotes}
+              onChange={(e) => setEditNotes(e.target.value)}
+            />
+          </Form.Group>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowEditHikeModal(false)} disabled={submittingAction}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            onClick={handleConfirmEditHike}
+            disabled={submittingAction || !editHikeValue || parseFloat(editHikeValue) <= 0}
+          >
+            {submittingAction ? <Spinner size="sm" /> : "Save & Update Hike"}
+          </Button>
+        </Modal.Footer>
+      </Modal>
 
       {/* Reschedule Modal */}
       <Modal show={showRescheduleModal} onHide={() => setShowRescheduleModal(false)} centered>
@@ -590,6 +826,7 @@ const UpcomingIncrementsWidget: React.FC = () => {
       </Modal>
     </div>
   );
+
 };
 
 export default UpcomingIncrementsWidget;

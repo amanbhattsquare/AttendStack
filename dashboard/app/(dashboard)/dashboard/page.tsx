@@ -68,17 +68,33 @@ const DashboardPage = () => {
 
   const fetchOrg = async () => {
     try {
-      const res = await fetch(`${BASE_URL}/organizations/`, { headers: authHeaders() });
+      let orgData: any = null;
+      const res = await fetch(`${BASE_URL}/organizations/?scope=me`, { headers: authHeaders() });
       if (res.ok) {
         const data = await res.json();
         const orgs = Array.isArray(data) ? data : data.results || [];
-        if (orgs[0]) {
-          setOrganization(orgs[0]);
-          const hasSeenModal = typeof window !== "undefined" ? sessionStorage.getItem("attendstack_org_popup_seen") : "true";
-          if (!hasSeenModal) {
-            setShowOrgModal(true);
-            if (typeof window !== "undefined") sessionStorage.setItem("attendstack_org_popup_seen", "true");
+        if (orgs.length > 0) {
+          orgData = orgs[0];
+        }
+      }
+      if (!orgData) {
+        const fallbackRes = await fetch(`${BASE_URL}/organizations/`, { headers: authHeaders() });
+        if (fallbackRes.ok) {
+          const fallbackData = await fallbackRes.json();
+          const orgs = Array.isArray(fallbackData) ? fallbackData : fallbackData.results || [];
+          if (orgs.length > 0) {
+            const storedUserStr = typeof window !== "undefined" ? localStorage.getItem("user") : null;
+            const storedUser = storedUserStr ? JSON.parse(storedUserStr) : null;
+            orgData = (storedUser?.email && orgs.find((o: any) => o.owner_email && o.owner_email.toLowerCase() === storedUser.email.toLowerCase())) || orgs[0];
           }
+        }
+      }
+      if (orgData) {
+        setOrganization(orgData);
+        const hasSeenModal = typeof window !== "undefined" ? sessionStorage.getItem("attendstack_org_popup_seen") : "true";
+        if (!hasSeenModal) {
+          setShowOrgModal(true);
+          if (typeof window !== "undefined") sessionStorage.setItem("attendstack_org_popup_seen", "true");
         }
       }
     } catch {

@@ -184,25 +184,39 @@ const EmployeePageClient = () => {
 
     try {
       const token = localStorage.getItem("authToken");
-      const orgRes = await fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/organizations/`, {
+      let myOrg: any = null;
+      const orgRes = await fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/organizations/?scope=me`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (orgRes.ok) {
         const orgs = await orgRes.json();
-        const myOrg = Array.isArray(orgs) ? orgs[0] : orgs.results?.[0];
-        if (myOrg) {
-          const res = await fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/organizations/${myOrg.id}/generate-invite-link/`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          const data = await res.json();
-          if (res.ok) {
-            setInviteData(data);
-          } else {
-            setInviteError(data.detail || "SimplyJob Organization ID is not configured. Please paste and save your SimplyJob Org ID in Settings before sending invitations.");
-          }
-        } else {
-          setInviteError("No organization workspace found for this account.");
+        const list = Array.isArray(orgs) ? orgs : orgs.results || [];
+        if (list.length > 0) myOrg = list[0];
+      }
+      if (!myOrg) {
+        const fallbackRes = await fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/organizations/`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (fallbackRes.ok) {
+          const orgs = await fallbackRes.json();
+          const list = Array.isArray(orgs) ? orgs : orgs.results || [];
+          const storedUserStr = typeof window !== "undefined" ? localStorage.getItem("user") : null;
+          const storedUser = storedUserStr ? JSON.parse(storedUserStr) : null;
+          myOrg = (storedUser?.email && list.find((o: any) => o.owner_email && o.owner_email.toLowerCase() === storedUser.email.toLowerCase())) || list[0];
         }
+      }
+      if (myOrg) {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/organizations/${myOrg.id}/generate-invite-link/`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+        if (res.ok) {
+          setInviteData(data);
+        } else {
+          setInviteError(data.detail || "SimplyJob Organization ID is not configured. Please paste and save your SimplyJob Org ID in Settings before sending invitations.");
+        }
+      } else {
+        setInviteError("No organization workspace found for this account.");
       }
     } catch {
       setInviteError("Failed to generate invitation link. Please check your backend connection.");

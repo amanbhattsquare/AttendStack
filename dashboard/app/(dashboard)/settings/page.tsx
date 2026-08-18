@@ -297,15 +297,29 @@ const SettingsPage = () => {
 
     const loadOrganizationAccess = async () => {
       try {
-        const response = await fetch(`${apiRoot}/api/v1/organizations/`, { headers: authHeaders() });
-        if (!response.ok) {
+        let orgData: any = null;
+        const response = await fetch(`${apiRoot}/api/v1/organizations/?scope=me`, { headers: authHeaders() });
+        if (response.ok) {
+          const data = await response.json();
+          const list = Array.isArray(data) ? data : data.results || [];
+          if (list.length > 0) orgData = list[0];
+        }
+        if (!orgData) {
+          const fallbackRes = await fetch(`${apiRoot}/api/v1/organizations/`, { headers: authHeaders() });
+          if (fallbackRes.ok) {
+            const data = await fallbackRes.json();
+            const list = Array.isArray(data) ? data : data.results || [];
+            const storedUserStr = typeof window !== "undefined" ? localStorage.getItem("user") : null;
+            const storedUser = storedUserStr ? JSON.parse(storedUserStr) : null;
+            orgData = (storedUser?.email && list.find((o: any) => o.owner_email && o.owner_email.toLowerCase() === storedUser.email.toLowerCase())) || list[0];
+          }
+        }
+        if (!orgData && !response.ok) {
           throw new Error(response.status === 401
             ? "Your session has expired. Please sign in again."
             : "Your company workspace could not be loaded. Refresh the page and try again.");
         }
-        const data = await response.json();
-        const organizations = Array.isArray(data) ? data : data.results || [];
-        if (!cancelled) setOrganizationAccess(organizations[0] || null);
+        if (!cancelled) setOrganizationAccess(orgData || null);
       } catch (error) {
         if (!cancelled) {
           setOrganizationCodeError(error instanceof TypeError

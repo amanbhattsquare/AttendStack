@@ -203,14 +203,26 @@ class OrganizationCodeLookupView(APIView):
         organization = Organization.objects.filter(
             invite_code__iexact=code,
             is_active=True,
-        ).only("name").first()
+        ).first()
         if organization is None:
             return Response(
-                {"detail": "Enter a valid active organization code."},
+                {
+                    "valid": False,
+                    "code": code,
+                    "detail": "Enter a valid active organization code.",
+                    "error": "The organization code does not exist or has expired in AttendStack.",
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        return Response({"organization_name": organization.name})
+        return Response({
+            "valid": True,
+            "code": organization.invite_code,
+            "organization_id": organization.id,
+            "organization_name": organization.name,
+            "is_active": organization.is_active,
+        })
+
 
 
 class RequestPasswordResetOTPView(APIView):

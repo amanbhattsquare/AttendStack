@@ -3,7 +3,8 @@ from django.utils import timezone
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
-from rest_framework.permissions import IsAdminUser
+from rest_framework.views import APIView
+from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
 
 from accounts.models import UserRole
@@ -16,14 +17,73 @@ from .serializers import OrganizationSerializer, AdministratorSerializer
 User = get_user_model()
 
 
+class OrganizationVerifyCodeView(APIView):
+    """
+    Public endpoint to verify if an AttendStack Organization Code is valid and active.
+    Used by SimplyJob to check status before sending invitations.
+    """
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        code = str(request.query_params.get("code") or "").strip().upper()
+        if not code:
+            return Response({"valid": False, "error": "Code is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        org = Organization.objects.filter(invite_code__iexact=code, is_active=True).first()
+        if not org:
+            return Response({
+                "valid": False,
+                "code": code,
+                "error": "The organization code does not exist or has been expired/reset."
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        return Response({
+            "valid": True,
+            "code": org.invite_code,
+            "organization_id": org.id,
+            "organization_name": org.name,
+            "is_active": org.is_active,
+        }, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        code = str(request.data.get("code") or request.query_params.get("code") or "").strip().upper()
+        if not code:
+            return Response({"valid": False, "error": "Code is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        org = Organization.objects.filter(invite_code__iexact=code, is_active=True).first()
+        if not org:
+            return Response({
+                "valid": False,
+                "code": code,
+                "error": "The organization code does not exist or has been expired/reset."
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        return Response({
+            "valid": True,
+            "code": org.invite_code,
+            "organization_id": org.id,
+            "organization_name": org.name,
+            "is_active": org.is_active,
+        }, status=status.HTTP_200_OK)
+
+
+
 class OrganizationViewSet(viewsets.ModelViewSet):
     queryset = Organization.objects.all().order_by("-created_at")
     serializer_class = OrganizationSerializer
 
     def get_permissions(self):
+        if self.action == "verify_code":
+            return [permissions.AllowAny()]
         if self.action in ["create", "update", "partial_update", "destroy", "toggle_status", "superadmin_overview", "stats"]:
             return [IsAdminOrHR()]
         return [permissions.IsAuthenticated()]
+
+    def get_authenticators(self):
+        if getattr(self, "action", None) == "verify_code":
+            return []
+        return super().get_authenticators()
 
     def _find_user_organization(self, user):
         if not user or not user.is_authenticated:
@@ -150,6 +210,29 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         organization.save(update_fields=["is_active"])
         return Response(OrganizationSerializer(organization, context={"request": request}).data)
 
+    @action(detail=False, methods=["get", "post"], url_path="verify-code", permission_classes=[permissions.AllowAny], authentication_classes=[])
+    def verify_code(self, request):
+        """Public verification endpoint used by SimplyJob to check if an Org Code is valid and active."""
+        code = str(request.query_params.get("code") or request.data.get("code") or "").strip().upper()
+        if not code:
+            return Response({"valid": False, "error": "Code is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        org = Organization.objects.filter(invite_code__iexact=code, is_active=True).first()
+        if not org:
+            return Response({
+                "valid": False,
+                "code": code,
+                "error": "The organization code does not exist or has been expired/reset."
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        return Response({
+            "valid": True,
+            "code": org.invite_code,
+            "organization_id": org.id,
+            "organization_name": org.name,
+            "is_active": org.is_active,
+        }, status=status.HTTP_200_OK)
+
     @action(detail=True, methods=["post"], url_path="regenerate-invite-code")
     def regenerate_invite_code(self, request, pk=None):
         organization = self.get_object()
@@ -157,7 +240,6 @@ class OrganizationViewSet(viewsets.ModelViewSet):
             raise PermissionDenied("Only the organization owner or Super Admin can regenerate its invite code.")
 
         from .models import generate_invite_code
-        from .services import sync_invite_code_to_simplyjob
 
         while True:
             invite_code = generate_invite_code()
@@ -166,11 +248,8 @@ class OrganizationViewSet(viewsets.ModelViewSet):
                 organization.save(update_fields=["invite_code"])
                 break
 
-        # Instant real-time webhook sync to SimplyJob
-        sync_result = sync_invite_code_to_simplyjob(organization)
-
         data = OrganizationSerializer(organization, context={"request": request}).data
-        data["simplyjob_sync"] = sync_result
+        data["message"] = f"New organization code generated: {organization.invite_code}. Please update this code in SimplyJob."
         return Response(data)
 
     @action(detail=True, methods=["post"], url_path="link-simplyjob")

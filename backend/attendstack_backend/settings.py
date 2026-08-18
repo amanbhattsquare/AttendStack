@@ -331,3 +331,4 @@ SIMPLYJOB_WEBHOOK_URL = config("SIMPLYJOB_WEBHOOK_URL", default="https://simplyj
 SIMPLYJOB_DATABASE_URL = config("SIMPLYJOB_DATABASE_URL", default="postgresql://postgres.igwdszfzqxnrbkyivxzz:h95LA8x1mAIkCzuC@aws-1-ap-northeast-2.pooler.supabase.com:6543/postgres")
 
 
+

@@ -18,10 +18,15 @@ from django.contrib import admin
 from django.conf import settings
 from django.conf.urls.static import static
 from django.urls import path, include
+from organizations.views import OrganizationVerifyCodeView
+
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path("api/v1/verify-org-code/", OrganizationVerifyCodeView.as_view(), name="verify_org_code"),
+    path("api/v1/organizations/verify-code/", OrganizationVerifyCodeView.as_view(), name="org_verify_code_direct"),
     path("api/v1/", include("organizations.urls")),
+
     path("api/v1/accounts/", include("accounts.urls", namespace="accounts")),
     path("api/v1/employees/", include("employees.urls", namespace="employees")),
     path("api/v1/attendance/", include("attendance.urls", namespace="attendance")),

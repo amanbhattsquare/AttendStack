@@ -464,11 +464,22 @@ const SettingsPage = () => {
       });
       const organization = await response.json();
       setOrganizationAccess(organization);
-      if (organization.simplyjob_sync?.ok) {
-        setOrganizationCodeNotice(`New code generated: ${organization.invite_code}. SimplyJob has been automatically synchronized in real-time.`);
-      } else {
-        setOrganizationCodeNotice("A new employee onboarding code is ready. The previous code no longer works.");
-      }
+      const newCode = organization.invite_code;
+      setOrganizationCodeNotice(`New code generated: ${newCode}. Please update this new code in SimplyJob to keep employee onboarding active.`);
+
+      Swal.fire({
+        icon: "warning",
+        title: "New Organization Code Generated",
+        html: `
+          <div style="text-align: left; font-size: 14px;">
+            <p>Your new AttendStack Organization Code is: <strong style="font-family: monospace; font-size: 16px; color: #0d6efd;">${newCode}</strong></p>
+            <p style="color: #dc3545; font-weight: 600;">⚠️ Previous codes are now expired and invalid.</p>
+            <p><strong>Action Required:</strong> If your company is connected with <strong>SimplyJob</strong>, please copy this new code and update it in your SimplyJob <em>"Hired & AttendStack"</em> workspace so hired candidates can be onboarded.</p>
+          </div>
+        `,
+        confirmButtonText: "I Understand & Will Update SimplyJob",
+        confirmButtonColor: "#0d6efd",
+      });
     } catch {
       setOrganizationCodeError("The code could not be generated. Please try again.");
     } finally {

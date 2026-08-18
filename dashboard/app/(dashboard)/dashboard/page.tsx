@@ -151,19 +151,31 @@ const DashboardPage = () => {
     return "Good evening";
   }, []);
 
+  const isRecordPresent = (r: any) =>
+    Boolean(r.check_in) ||
+    ["Present", "Clocked In", "Clocked Out", "Half Day", "Half-day", "Late", "Late Entry"].includes(r.live_status) ||
+    ["PRESENT", "LATE", "HALF_DAY"].includes(r.status);
+
+  const isRecordLate = (r: any) =>
+    ["Late", "Late Entry"].includes(r.live_status) || r.status === "LATE";
+
+  const isRecordOnLeave = (r: any) =>
+    ["Leave", "Paid Leave", "On Leave"].includes(r.live_status) ||
+    ["LEAVE", "PAID_LEAVE"].includes(r.status);
+
   // Compute live KPIs
   const stats = useMemo(() => {
     const total = todayRecords.length;
-    const present = todayRecords.filter(
-      (r) => r.live_status === "Present" || r.live_status === "Late Entry" || r.live_status === "Half-day"
-    ).length;
-    const late = todayRecords.filter((r) => r.live_status === "Late Entry").length;
-    const onLeave = todayRecords.filter((r) => r.live_status === "On Leave").length;
+    const present = todayRecords.filter(isRecordPresent).length;
+    const late = todayRecords.filter(isRecordLate).length;
+    const onLeave = todayRecords.filter(isRecordOnLeave).length;
+    const onTimePresent = Math.max(present - late, 0);
     const rate = total > 0 ? Math.round((present / total) * 100) : 0;
 
     return {
       total,
       present,
+      onTimePresent,
       late,
       onLeave,
       rate,
@@ -179,9 +191,9 @@ const DashboardPage = () => {
         summary[dept] = { total: 0, present: 0, absent: 0, leave: 0 };
       }
       summary[dept].total += 1;
-      if (r.live_status === "Present" || r.live_status === "Late Entry" || r.live_status === "Half-day") {
+      if (isRecordPresent(r)) {
         summary[dept].present += 1;
-      } else if (r.live_status === "On Leave") {
+      } else if (isRecordOnLeave(r)) {
         summary[dept].leave += 1;
       } else {
         summary[dept].absent += 1;
@@ -228,12 +240,12 @@ const DashboardPage = () => {
     },
   };
 
-  const absentCount = Math.max(stats.total - stats.present - stats.late - stats.onLeave, 0);
+  const absentCount = Math.max(stats.total - stats.present - stats.onLeave, 0);
 
   const attendanceChartSeries = [
     {
       name: "Employees",
-      data: [stats.present, stats.late, stats.onLeave, absentCount],
+      data: [stats.onTimePresent, stats.late, stats.onLeave, absentCount],
     },
   ];
 

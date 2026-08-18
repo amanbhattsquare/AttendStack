@@ -341,19 +341,18 @@ const DashboardPage = () => {
       .sort((a, b) => new Date(b.check_in).getTime() - new Date(a.check_in).getTime())
       .slice(0, 5)
       .map((r) => {
-        let colorClass = "success";
-        let desc = `${r.employee_name} checked in successfully.`;
-        if (r.live_status === "Late Entry") {
-          colorClass = "warning";
-          desc = `${r.employee_name} checked in (Late Entry).`;
-        } else if (r.live_status === "Half-day") {
-          colorClass = "info";
-          desc = `${r.employee_name} marked as Half-day.`;
-        }
+        const isLate = ["Late", "Late Entry"].includes(r.live_status) || r.status === "LATE";
+        const isHalfDay = ["Half Day", "Half-day"].includes(r.live_status) || r.status === "HALF_DAY";
+        
+        const colorClass = isLate ? "warning" : isHalfDay ? "info" : "success";
+        const badgeText = isLate ? "Late Entry" : isHalfDay ? "Half Day" : "On Time";
+
         return {
-          description: desc,
+          employeeName: r.employee_name || "Employee",
+          department: r.employee_department || "General",
           timestamp: formatTime(r.check_in),
           colorClass,
+          badgeText,
         };
       });
   }, [todayRecords]);
@@ -658,37 +657,116 @@ const DashboardPage = () => {
 
         {/* Right column: Recent activities feed */}
         <Col xl={4}>
-          <Card className="border-0 shadow-sm h-100">
-            <Card.Header className="bg-white py-4">
-              <h5 className="mb-0 fw-bold">Today's Activity Feed</h5>
+          <Card className="border-0 shadow-sm h-100 d-flex flex-column">
+            <Card.Header className="bg-white py-3.5 px-4 d-flex justify-content-between align-items-center border-bottom">
+              <div className="d-flex align-items-center gap-2">
+                <div className="p-1.5 rounded-3 bg-success-subtle text-success d-flex align-items-center justify-content-center">
+                  <IconClock size={18} />
+                </div>
+                <div>
+                  <h5 className="mb-0 fw-bold text-dark fs-6">Today's Activity Feed</h5>
+                  <small className="text-secondary" style={{ fontSize: "11px" }}>Real-time check-in stream</small>
+                </div>
+              </div>
+              <Badge bg="success-subtle" className="text-success fw-semibold px-2.5 py-1 rounded-pill" style={{ fontSize: "11px" }}>
+                <span className="d-inline-block rounded-circle bg-success me-1.5" style={{ width: "6px", height: "6px" }} />
+                Live
+              </Badge>
             </Card.Header>
-            <Card.Body className="d-flex flex-column justify-content-between">
+            <Card.Body className="p-4 d-flex flex-column justify-content-between flex-grow-1">
               <div>
                 {recentActivities.length === 0 ? (
-                  <div className="text-muted text-center py-5">
-                    No check-in activities recorded today yet.
+                  <div className="text-center py-5 text-muted">
+                    <IconClock size={32} className="text-secondary opacity-50 mb-2" />
+                    <p className="mb-0 small">No check-in activities recorded today yet.</p>
                   </div>
                 ) : (
-                  <div className="d-flex flex-column gap-4">
-                    {recentActivities.map((act, index) => (
-                      <div key={index} className="d-flex gap-3 align-items-start p-2 rounded activity-item">
-                        <div className="mt-1">
-                          <span className={`badge bg-light-${act.colorClass} p-2 rounded-circle d-flex align-items-center justify-content-center activity-dot`}>
-                            <span className={`bg-${act.colorClass} rounded-circle`} style={{ width: "8px", height: "8px" }} />
-                          </span>
+                  <div className="position-relative">
+                    {/* Vertical timeline connector line */}
+                    <div
+                      className="position-absolute"
+                      style={{
+                        top: "14px",
+                        bottom: "20px",
+                        left: "15px",
+                        width: "2px",
+                        backgroundColor: "#f1f5f9",
+                        zIndex: 0,
+                      }}
+                    />
+
+                    <div className="d-flex flex-column gap-2 position-relative" style={{ zIndex: 1 }}>
+                      {recentActivities.map((act, index) => (
+                        <div
+                          key={index}
+                          className="d-flex align-items-center justify-content-between p-2 rounded-3 bg-light-subtle border border-transparent transition-all"
+                          style={{ transition: "all 0.15s ease" }}
+                        >
+                          <div className="d-flex align-items-center gap-2.5 min-w-0">
+                            {/* Avatar or initial with status badge */}
+                            <div className="position-relative flex-shrink-0">
+                              <div
+                                className="rounded-circle d-flex align-items-center justify-content-center fw-bold text-white shadow-sm"
+                                style={{
+                                  width: "30px",
+                                  height: "30px",
+                                  backgroundColor:
+                                    act.colorClass === "warning"
+                                      ? "#f59e0b"
+                                      : act.colorClass === "info"
+                                      ? "#06b6d4"
+                                      : "#10b981",
+                                  fontSize: "12px",
+                                }}
+                              >
+                                {act.employeeName.charAt(0).toUpperCase()}
+                              </div>
+                              <span
+                                className={`position-absolute bottom-0 end-0 rounded-circle border border-white bg-${act.colorClass}`}
+                                style={{ width: "9px", height: "9px" }}
+                              />
+                            </div>
+
+                            {/* Name & department info */}
+                            <div className="min-w-0">
+                              <div className="fw-semibold text-dark text-truncate" style={{ fontSize: "13px", lineHeight: "1.25" }}>
+                                {act.employeeName}
+                              </div>
+                              <div className="d-flex align-items-center gap-1.5 text-secondary" style={{ fontSize: "11px", lineHeight: "1.2" }}>
+                                <span className="text-muted">Checked in</span>
+                                <span>•</span>
+                                <span className="text-muted text-truncate">{act.department}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Time & status badge */}
+                          <div className="text-end flex-shrink-0 ms-2">
+                            <span className="badge bg-white text-secondary border fw-medium px-2 py-0.5" style={{ fontSize: "11px" }}>
+                              {act.timestamp}
+                            </span>
+                            {act.badgeText !== "On Time" && (
+                              <div className="mt-0.5">
+                                <span className={`badge bg-${act.colorClass}-subtle text-${act.colorClass} px-1.5 py-0.2`} style={{ fontSize: "9.5px" }}>
+                                  {act.badgeText}
+                                </span>
+                              </div>
+                            )}
+                          </div>
                         </div>
-                        <div>
-                          <div className="fw-semibold text-dark fs-5">{act.description}</div>
-                          <small className="text-muted d-block mt-1">{act.timestamp}</small>
-                        </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
-              <div className="d-grid mt-6">
-                <Link href="/attendance" className="btn btn-light text-primary fw-semibold">
-                  View Live Attendance Status
+
+              <div className="pt-3 mt-auto">
+                <Link
+                  href="/attendance"
+                  className="btn btn-outline-primary w-100 py-1.5 d-flex align-items-center justify-content-center gap-1.5 fw-semibold shadow-none"
+                  style={{ fontSize: "12.5px" }}
+                >
+                  View Live Attendance Feed <IconExternalLink size={14} />
                 </Link>
               </div>
             </Card.Body>

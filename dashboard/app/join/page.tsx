@@ -45,7 +45,7 @@ function EmployeeJoinContent() {
 
     const verifyCode = async () => {
       try {
-        const apiBase = process.env.NEXT_PUBLIC_API_ENDPOINT || "http://localhost:8001";
+        const apiBase = process.env.NEXT_PUBLIC_API_ENDPOINT || "http://localhost:8000";
         const res = await axios.get(`${apiBase}/api/v1/accounts/organization-code/?code=${code}`);
         if (res.data && res.data.organization_name) {
           setOrgName(res.data.organization_name);

@@ -157,6 +157,7 @@ class OrganizationViewSet(viewsets.ModelViewSet):
             raise PermissionDenied("Only the organization owner or Super Admin can regenerate its invite code.")
 
         from .models import generate_invite_code
+        from .services import sync_invite_code_to_simplyjob
 
         while True:
             invite_code = generate_invite_code()
@@ -164,7 +165,13 @@ class OrganizationViewSet(viewsets.ModelViewSet):
                 organization.invite_code = invite_code
                 organization.save(update_fields=["invite_code"])
                 break
-        return Response(OrganizationSerializer(organization, context={"request": request}).data)
+
+        # Instant real-time webhook sync to SimplyJob
+        sync_result = sync_invite_code_to_simplyjob(organization)
+
+        data = OrganizationSerializer(organization, context={"request": request}).data
+        data["simplyjob_sync"] = sync_result
+        return Response(data)
 
     @action(detail=True, methods=["post"], url_path="link-simplyjob")
     def link_simplyjob(self, request, pk=None):
@@ -173,6 +180,8 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         if not (user.is_superuser or user.role == UserRole.SUPER_ADMIN or organization.owner_id == user.id):
             raise PermissionDenied("Only organization owners or Super Admins can configure SimplyJob integration.")
 
+        from .services import sync_invite_code_to_simplyjob
+
         simplyjob_org_id = request.data.get("simplyjob_org_id", "").strip()
         if not simplyjob_org_id:
             return Response({"detail": "SimplyJob Organization ID is required."}, status=status.HTTP_400_BAD_REQUEST)
@@ -180,7 +189,13 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         organization.external_company_id = simplyjob_org_id
         organization.external_source = "SIMPLYJOB"
         organization.save(update_fields=["external_company_id", "external_source"])
-        return Response(OrganizationSerializer(organization, context={"request": request}).data)
+
+        # Instant real-time webhook sync to SimplyJob
+        sync_result = sync_invite_code_to_simplyjob(organization)
+
+        data = OrganizationSerializer(organization, context={"request": request}).data
+        data["simplyjob_sync"] = sync_result
+        return Response(data)
 
     @action(detail=True, methods=["get", "post"], url_path="generate-invite-link")
     def generate_invite_link(self, request, pk=None):

@@ -1,3 +1,4 @@
+from decimal import Decimal
 from rest_framework import serializers
 from .models import Payroll
 from employees.models import Employee
@@ -128,4 +129,12 @@ class RescheduleIncrementSerializer(serializers.Serializer):
 
 class ProcessIncrementActionSerializer(serializers.Serializer):
     notes = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+class EditIncrementHikeSerializer(serializers.Serializer):
+    increment_type = serializers.ChoiceField(choices=["PERCENTAGE", "FLAT_AMOUNT"], required=True)
+    increment_value = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=Decimal("0.01"), required=True)
+    notes = serializers.CharField(required=False, allow_blank=True, default="")
+    update_employee_policy = serializers.BooleanField(required=False, default=False)
+
 

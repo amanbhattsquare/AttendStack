@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useState, useMemo } from "react";
 import { Badge, Card, Col, Row, Table, Spinner, Button, Modal } from "react-bootstrap";
-import { IconUsers, IconListCheck, IconClock, IconSnowboarding, IconRefresh, IconBuildingBank, IconCopy, IconCheck, IconExternalLink } from "@tabler/icons-react";
+import { IconUsers, IconListCheck, IconClock, IconSnowboarding, IconRefresh, IconBuildingBank, IconCopy, IconCheck, IconExternalLink, IconChartPie } from "@tabler/icons-react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import UpcomingIncrementsChartWidget from "components/UpcomingIncrementsChartWidget";
@@ -13,6 +13,8 @@ import { ApexOptions } from "apexcharts";
 const Chart = dynamic(() => import("react-apexcharts"), { ssr: false });
 
 const BASE_URL = `${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1`;
+
+const DEPT_COLORS = ["#4f46e5", "#10b981", "#06b6d4", "#f59e0b", "#8b5cf6", "#ec4899", "#3b82f6", "#14b8a6"];
 
 const authHeaders = (): HeadersInit => {
   const token = typeof window !== "undefined" ? localStorage.getItem("authToken") : null;
@@ -213,29 +215,57 @@ const DashboardPage = () => {
   const chartOptions: ApexOptions = {
     chart: {
       type: "donut",
+      toolbar: { show: false },
+      fontFamily: "Inter, sans-serif",
     },
     labels: chartLabels,
-    colors: ["#6366f1", "#10b981", "#f59e0b", "#06b6d4", "#8b5cf6", "#ec4899", "#6b7280"],
+    colors: departmentStats.map((_, i) => DEPT_COLORS[i % DEPT_COLORS.length]),
     legend: {
-      position: "bottom",
+      show: false, // Clean custom legend tags rendered underneath to prevent layout cut-off
     },
     dataLabels: {
-      enabled: true,
-      formatter: (val: number) => `${Math.round(val)}%`,
+      enabled: false,
+    },
+    stroke: {
+      width: 3,
+      colors: ["#ffffff"],
     },
     plotOptions: {
       pie: {
         donut: {
-          size: "65%",
+          size: "72%",
           labels: {
             show: true,
+            name: {
+              show: true,
+              fontSize: "12px",
+              fontWeight: 600,
+              color: "#64748b",
+              offsetY: -4,
+            },
+            value: {
+              show: true,
+              fontSize: "24px",
+              fontWeight: 700,
+              color: "#1e293b",
+              offsetY: 6,
+              formatter: (val) => String(val),
+            },
             total: {
               show: true,
               label: "Workforce",
+              fontSize: "12px",
+              fontWeight: 600,
+              color: "#64748b",
               formatter: () => String(stats.total),
             },
           },
         },
+      },
+    },
+    tooltip: {
+      y: {
+        formatter: (val: number) => `${val} staff members`,
       },
     },
   };
@@ -474,44 +504,127 @@ const DashboardPage = () => {
         {/* Left column: Recent Joiners & workforce breakdown chart */}
         <Col xl={8}>
           {/* Workforce Distribution Chart & Breakdown Card */}
-          <Card className="border-0 shadow-sm mb-6">
-            <Card.Header className="bg-white py-4">
-              <h5 className="mb-0 fw-bold">Workforce Department Analytics</h5>
+          <Card className="border-0 shadow-sm mb-6 overflow-hidden">
+            <Card.Header className="bg-white py-3.5 px-4 d-flex justify-content-between align-items-center flex-wrap gap-2 border-bottom">
+              <div className="d-flex align-items-center gap-2.5">
+                <div className="p-2 rounded-3 bg-primary-subtle text-primary d-flex align-items-center justify-content-center">
+                  <IconChartPie size={20} />
+                </div>
+                <div>
+                  <h5 className="mb-0 fw-bold text-dark fs-5">Workforce Department Analytics</h5>
+                  <small className="text-secondary">Real-time team distribution and attendance health</small>
+                </div>
+              </div>
+              <Badge bg="primary-subtle" className="text-primary fw-semibold px-3 py-1.5 rounded-pill fs-7">
+                {departmentStats.length} {departmentStats.length === 1 ? "Department" : "Departments"}
+              </Badge>
             </Card.Header>
-            <Card.Body>
+            <Card.Body className="p-4">
               {chartSeries.length > 0 ? (
                 <Row className="align-items-center g-4">
-                  {/* Left: Donut Chart */}
-                  <Col lg={5} className="d-flex justify-content-center">
-                    <div style={{ width: "100%", maxWidth: "320px" }}>
-                      <Chart options={chartOptions} series={chartSeries} type="donut" height={320} />
+                  {/* Left: Donut Chart with clean center */}
+                  <Col lg={5} className="d-flex flex-column align-items-center justify-content-center">
+                    <div style={{ width: "100%", maxWidth: "260px" }}>
+                      <Chart options={chartOptions} series={chartSeries} type="donut" height={250} />
+                    </div>
+                    {/* Clean custom legend tags underneath chart */}
+                    <div className="d-flex flex-wrap justify-content-center gap-2 mt-2">
+                      {departmentStats.map((dept, i) => (
+                        <div
+                          key={dept.name}
+                          className="d-flex align-items-center gap-1.5 px-2.5 py-1 rounded-pill bg-light border text-secondary small fw-medium"
+                        >
+                          <span
+                            className="rounded-circle d-inline-block"
+                            style={{
+                              width: "8px",
+                              height: "8px",
+                              backgroundColor: DEPT_COLORS[i % DEPT_COLORS.length],
+                            }}
+                          />
+                          <span>{dept.name}</span>
+                          <span className="fw-bold text-dark">({dept.total})</span>
+                        </div>
+                      ))}
                     </div>
                   </Col>
-                  {/* Right: Detailed Department Breakdown Table */}
+
+                  {/* Right: Modern Department Cards / Breakdown without overflow */}
                   <Col lg={7}>
-                    <div className="border rounded">
-                      <Table hover responsive className="align-middle mb-0 text-nowrap">
-                        <thead className="table-light">
-                          <tr>
-                            <th>Department</th>
-                            <th className="text-center">Total Staff</th>
-                            <th className="text-center">Present</th>
-                            <th className="text-center">Absent</th>
-                            <th className="text-center">On Leave</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {departmentStats.map((dept, index) => (
-                            <tr key={index}>
-                              <td className="fw-semibold text-dark">{dept.name}</td>
-                              <td className="text-center">{dept.total}</td>
-                              <td className="text-center text-success fw-medium">{dept.present}</td>
-                              <td className="text-center text-danger">{dept.absent}</td>
-                              <td className="text-center text-secondary">{dept.leave}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </Table>
+                    <div className="d-flex flex-column gap-2.5">
+                      {departmentStats.map((dept, index) => {
+                        const color = DEPT_COLORS[index % DEPT_COLORS.length];
+                        const presentPct = dept.total > 0 ? Math.round((dept.present / dept.total) * 100) : 0;
+                        const pctOfTotal = stats.total > 0 ? Math.round((dept.total / stats.total) * 100) : 0;
+
+                        return (
+                          <div
+                            key={dept.name}
+                            className="p-3 rounded-3 border bg-light-subtle shadow-none"
+                          >
+                            <div className="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-1">
+                              <div className="d-flex align-items-center gap-2">
+                                <span
+                                  className="rounded-circle d-inline-block flex-shrink-0"
+                                  style={{
+                                    width: "10px",
+                                    height: "10px",
+                                    backgroundColor: color,
+                                  }}
+                                />
+                                <span className="fw-bold text-dark fs-6">{dept.name}</span>
+                                <Badge bg="light" className="text-secondary border fw-medium px-2 py-0.5" style={{ fontSize: "11px" }}>
+                                  {dept.total} staff • {pctOfTotal}% of total
+                                </Badge>
+                              </div>
+                              <span className="small fw-semibold text-dark">
+                                {presentPct}% Active Today
+                              </span>
+                            </div>
+
+                            {/* Mini Multi-segment Attendance Progress Bar */}
+                            <div className="progress mb-2" style={{ height: "6px", backgroundColor: "#e2e8f0" }}>
+                              <div
+                                className="progress-bar bg-success"
+                                style={{ width: `${(dept.present / dept.total) * 100}%` }}
+                                title={`${dept.present} Present`}
+                              />
+                              <div
+                                className="progress-bar bg-warning"
+                                style={{ width: `${(dept.leave / dept.total) * 100}%` }}
+                                title={`${dept.leave} On Leave`}
+                              />
+                              <div
+                                className="progress-bar bg-danger"
+                                style={{ width: `${(dept.absent / dept.total) * 100}%` }}
+                                title={`${dept.absent} Absent`}
+                              />
+                            </div>
+
+                            {/* Status tags row */}
+                            <div className="d-flex align-items-center justify-content-between text-secondary" style={{ fontSize: "12px" }}>
+                              <div className="d-flex align-items-center gap-3">
+                                <span className="text-success fw-semibold">
+                                  ● {dept.present} Present
+                                </span>
+                                {dept.leave > 0 && (
+                                  <span className="text-warning fw-semibold">
+                                    ● {dept.leave} Leave
+                                  </span>
+                                )}
+                                {dept.absent > 0 && (
+                                  <span className="text-danger fw-semibold">
+                                    ● {dept.absent} Absent
+                                  </span>
+                                )}
+                              </div>
+                              <span className="text-muted">
+                                Total: {dept.total}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </Col>
                 </Row>

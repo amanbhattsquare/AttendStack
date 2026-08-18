@@ -39,6 +39,9 @@ const SignInPage = () => {
         localStorage.setItem("authToken", response.data.access);
         localStorage.setItem("refreshToken", response.data.refresh);
         localStorage.setItem("user", JSON.stringify(response.data.user));
+        if (response.data.organization) {
+          localStorage.setItem("organization", JSON.stringify(response.data.organization));
+        }
         const role = response.data.user?.role;
         if (role === "EMPLOYEE") {
           router.push("/employee-dashboard");

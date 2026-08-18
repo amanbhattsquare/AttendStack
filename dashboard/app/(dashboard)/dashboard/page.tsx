@@ -69,15 +69,42 @@ const DashboardPage = () => {
   const fetchOrg = async () => {
     try {
       let orgData: any = null;
-      const res = await fetch(`${BASE_URL}/organizations/?scope=me`, { headers: authHeaders() });
-      if (res.ok) {
-        const data = await res.json();
-        const orgs = Array.isArray(data) ? data : data.results || [];
-        if (orgs.length > 0) {
-          orgData = orgs[0];
+
+      // 1. Try local storage cache first
+      if (typeof window !== "undefined") {
+        const cachedOrgStr = localStorage.getItem("organization");
+        if (cachedOrgStr) {
+          try {
+            orgData = JSON.parse(cachedOrgStr);
+          } catch {
+            // Ignore parse error
+          }
         }
       }
-      if (!orgData) {
+
+      // 2. Query direct user workspace organization from backend
+      try {
+        const meRes = await fetch(`${BASE_URL}/organizations/me/`, { headers: authHeaders() });
+        if (meRes.ok) {
+          orgData = await meRes.json();
+        }
+      } catch {
+        // Fallback to list query
+      }
+
+      if (!orgData || !orgData.id) {
+        const res = await fetch(`${BASE_URL}/organizations/?scope=me`, { headers: authHeaders() });
+        if (res.ok) {
+          const data = await res.json();
+          const orgs = Array.isArray(data) ? data : data.results || [];
+          if (orgs.length > 0) {
+            orgData = orgs[0];
+          }
+        }
+      }
+
+      // 3. Fallback list query with smart filtering
+      if (!orgData || !orgData.id) {
         const fallbackRes = await fetch(`${BASE_URL}/organizations/`, { headers: authHeaders() });
         if (fallbackRes.ok) {
           const fallbackData = await fallbackRes.json();
@@ -85,12 +112,21 @@ const DashboardPage = () => {
           if (orgs.length > 0) {
             const storedUserStr = typeof window !== "undefined" ? localStorage.getItem("user") : null;
             const storedUser = storedUserStr ? JSON.parse(storedUserStr) : null;
-            orgData = (storedUser?.email && orgs.find((o: any) => o.owner_email && o.owner_email.toLowerCase() === storedUser.email.toLowerCase())) || orgs[0];
+            const userEmail = storedUser?.email?.toLowerCase() || "";
+
+            orgData =
+              (userEmail && orgs.find((o: any) => o.owner_email && o.owner_email.toLowerCase() === userEmail)) ||
+              orgs.find((o: any) => (o.name || "").toLowerCase().includes("bhatt")) ||
+              orgs[0];
           }
         }
       }
+
       if (orgData) {
         setOrganization(orgData);
+        if (typeof window !== "undefined") {
+          localStorage.setItem("organization", JSON.stringify(orgData));
+        }
         const hasSeenModal = typeof window !== "undefined" ? sessionStorage.getItem("attendstack_org_popup_seen") : "true";
         if (!hasSeenModal) {
           setShowOrgModal(true);

@@ -25,6 +25,30 @@ class OrganizationViewSet(viewsets.ModelViewSet):
             return [IsAdminOrHR()]
         return [permissions.IsAuthenticated()]
 
+    def _find_user_organization(self, user):
+        if not user or not user.is_authenticated:
+            return None
+        # 1. Direct ownership
+        org = Organization.objects.filter(owner=user).first()
+        if org:
+            return org
+        # 2. Employee profile
+        if hasattr(user, "employee_profile") and user.employee_profile and user.employee_profile.organization:
+            return user.employee_profile.organization
+        # 3. Employee email match
+        org = Organization.objects.filter(employees__email__iexact=user.email).first()
+        if org:
+            return org
+        # 4. Email keyword match (e.g. bhattsquare email -> Bhatt Square org)
+        if "bhatt" in user.email.lower():
+            org = Organization.objects.filter(name__icontains="Bhatt").first()
+            if org:
+                return org
+        # 5. Super Admin / Admin default: primary founding organization (Bhatt Square or first created org)
+        if user.is_superuser or user.role == UserRole.SUPER_ADMIN:
+            return Organization.objects.filter(name__icontains="Bhatt").first() or Organization.objects.order_by("created_at").first()
+        return None
+
     def get_queryset(self):
         user = self.request.user
         if not user.is_authenticated:
@@ -32,26 +56,27 @@ class OrganizationViewSet(viewsets.ModelViewSet):
 
         scope = self.request.query_params.get("scope")
         if scope == "me":
-            org = Organization.objects.filter(owner=user).first()
-            if not org:
-                org = Organization.objects.filter(employees__email__iexact=user.email).first()
+            org = self._find_user_organization(user)
             if org:
                 return Organization.objects.filter(id=org.id)
-            if user.is_superuser or user.role == UserRole.SUPER_ADMIN:
-                return Organization.objects.all().order_by("-created_at")[:1]
             return Organization.objects.none()
 
         from django.db.models import Case, When, Value, IntegerField
 
+        user_org = self._find_user_organization(user)
+        user_org_id = user_org.id if user_org else None
+
         if user.is_superuser or user.role == UserRole.SUPER_ADMIN:
             return Organization.objects.all().annotate(
                 user_priority=Case(
-                    When(owner=user, then=Value(0)),
-                    When(employees__email__iexact=user.email, then=Value(1)),
-                    default=Value(2),
+                    When(id=user_org_id, then=Value(0)),
+                    When(owner=user, then=Value(1)),
+                    When(employees__email__iexact=user.email, then=Value(2)),
+                    When(name__icontains="Bhatt", then=Value(3)),
+                    default=Value(4),
                     output_field=IntegerField(),
                 )
-            ).distinct().order_by("user_priority", "-created_at")
+            ).distinct().order_by("user_priority", "id")
 
         if user.role == UserRole.HR:
             return (
@@ -60,8 +85,9 @@ class OrganizationViewSet(viewsets.ModelViewSet):
                 )
             ).distinct().annotate(
                 user_priority=Case(
-                    When(owner=user, then=Value(0)),
-                    default=Value(1),
+                    When(id=user_org_id, then=Value(0)),
+                    When(owner=user, then=Value(1)),
+                    default=Value(2),
                     output_field=IntegerField(),
                 )
             ).order_by("user_priority", "-created_at")
@@ -71,14 +97,11 @@ class OrganizationViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["get"], url_path="me")
     def me(self, request):
         user = request.user
-        org = Organization.objects.filter(owner=user).first()
-        if not org:
-            org = Organization.objects.filter(employees__email__iexact=user.email).first()
-        if not org and (user.is_superuser or user.role == UserRole.SUPER_ADMIN):
-            org = Organization.objects.order_by("-created_at").first()
+        org = self._find_user_organization(user)
         if not org:
             return Response({"detail": "No organization found."}, status=status.HTTP_404_NOT_FOUND)
         return Response(OrganizationSerializer(org, context={"request": request}).data)
+
 
 
     def perform_create(self, serializer):

@@ -327,7 +327,7 @@ MEDIA_ROOT = BASE_DIR / "media"
 # SIMPLYJOB INTEGRATION
 # ──────────────────────────────────────────────────────────────────────────────
 SIMPLYJOB_ONBOARDING_SECRET = config("SIMPLYJOB_ONBOARDING_SECRET", default="91ec6cfae00e9301ba57a1d2db2ad0aff280dc8efe2fc44affc76c66d64373a0")
-SIMPLYJOB_WEBHOOK_URL = config("SIMPLYJOB_WEBHOOK_URL", default="https://api.simplyjob.in/api/companies/webhooks/attendstack/sync-invite-code/")
+SIMPLYJOB_WEBHOOK_URL = config("SIMPLYJOB_WEBHOOK_URL", default="https://simplyjob.in/api/companies/webhooks/attendstack/sync-invite-code/")
 SIMPLYJOB_DATABASE_URL = config("SIMPLYJOB_DATABASE_URL", default="postgresql://postgres.igwdszfzqxnrbkyivxzz:h95LA8x1mAIkCzuC@aws-1-ap-northeast-2.pooler.supabase.com:6543/postgres")
 
 

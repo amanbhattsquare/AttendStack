@@ -322,3 +322,10 @@ else:
 # ──────────────────────────────────────────────────────────────────────────────
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
+
+# ──────────────────────────────────────────────────────────────────────────────
+# SIMPLYJOB INTEGRATION
+# ──────────────────────────────────────────────────────────────────────────────
+SIMPLYJOB_ONBOARDING_SECRET = config("SIMPLYJOB_ONBOARDING_SECRET", default="91ec6cfae00e9301ba57a1d2db2ad0aff280dc8efe2fc44affc76c66d64373a0")
+SIMPLYJOB_WEBHOOK_URL = config("SIMPLYJOB_WEBHOOK_URL", default="http://localhost:8000/api/companies/webhooks/attendstack/sync-invite-code/")
+

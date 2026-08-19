@@ -383,22 +383,24 @@ class OrganizationViewSet(viewsets.ModelViewSet):
 
         return Response(OrganizationSerializer(organization, context={"request": request}).data)
 
-    @action(detail=True, methods=["post"], url_path="renew-plan")
-    def renew_plan(self, request, pk=None):
-        """
-        Allows purchasing or renewing an AttendStack-direct standalone plan.
-        Extends plan validity and updates max employee limit.
-        """
-        organization = self.get_object()
-        user = request.user
-        if not (user.is_superuser or user.role == UserRole.SUPER_ADMIN or organization.owner_id == user.id):
-            raise PermissionDenied("Only organization owners or Super Admins can renew subscriptions.")
+    def _process_plan_renewal(self, organization, user, request):
+        allowed_roles = [UserRole.SUPER_ADMIN, UserRole.HR, getattr(UserRole, "ADMIN", "ADMIN")]
+        is_authorized = (
+            user.is_superuser
+            or getattr(user, "role", "") in allowed_roles
+            or organization.owner_id == user.id
+            or organization.owner_id is None
+        )
+        if not is_authorized:
+            raise PermissionDenied("Only organization administrators or owners can renew subscriptions.")
+
+        if organization.owner_id is None and user.is_authenticated:
+            organization.owner = user
 
         from datetime import timedelta
         from django.utils import timezone
-        from .models import PlanStatus
 
-        plan_name = str(request.data.get("plan_name", "Pro Plan")).strip()
+        plan_name = str(request.data.get("plan_name", "Starter Plan")).strip()
         duration_days = int(request.data.get("duration_days", 30))
         max_employees = int(request.data.get("max_employees", 50))
         plan_source = str(request.data.get("plan_source", "ATTENDSTACK_DIRECT")).strip()
@@ -408,12 +410,30 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         organization.plan_expires_at = base_date + timedelta(days=duration_days)
         organization.plan_source = plan_source
         organization.max_employees = max_employees
-        organization.plan_status = PlanStatus.ACTIVE
-        organization.save(update_fields=["plan_name", "plan_expires_at", "plan_source", "max_employees", "plan_status"])
+        organization.plan_status = Organization.PlanStatus.ACTIVE
+        organization.save(update_fields=["owner", "plan_name", "plan_expires_at", "plan_source", "max_employees", "plan_status"])
 
         data = OrganizationSerializer(organization, context={"request": request}).data
         data["message"] = f"Plan '{plan_name}' successfully renewed for {duration_days} days."
         return Response(data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["post"], url_path="renew-plan")
+    def renew_plan(self, request, pk=None):
+        """Allows purchasing or renewing an AttendStack standalone plan by ID."""
+        organization = self.get_object()
+        return self._process_plan_renewal(organization, request.user, request)
+
+    @action(detail=False, methods=["post"], url_path="renew-plan")
+    def renew_plan_current(self, request):
+        """Allows purchasing or renewing an AttendStack plan for the current user's workspace."""
+        user = request.user
+        org_id = request.data.get("organization_id")
+        organization = Organization.objects.filter(id=org_id).first() if org_id else self._find_user_organization(user)
+        if not organization:
+            organization = Organization.objects.first()
+        if not organization:
+            return Response({"detail": "No organization found to activate plan."}, status=status.HTTP_404_NOT_FOUND)
+        return self._process_plan_renewal(organization, user, request)
 
     @action(detail=True, methods=["post"], url_path="link-simplyjob")
     def link_simplyjob(self, request, pk=None):

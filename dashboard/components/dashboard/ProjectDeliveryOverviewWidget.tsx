@@ -355,150 +355,109 @@ const ProjectDeliveryOverviewWidget: React.FC = () => {
       title: "Pending",
       count: metrics.pending,
       link: "/tasks?status=PENDING",
-      icon: <IconClock size={20} />,
+      icon: <IconClock size={17} />,
       accentColor: "#0284c7",
-      bgColor: "#f0f9ff",
-      borderColor: "#e0f2fe",
-      badgeColor: "#0369a1",
+      iconBg: "#f0f9ff",
     },
     {
       title: "To Do",
       count: metrics.todo,
       link: "/tasks?status=TODO",
-      icon: <IconListDetails size={20} />,
+      icon: <IconListDetails size={17} />,
       accentColor: "#475569",
-      bgColor: "#f8fafc",
-      borderColor: "#e2e8f0",
-      badgeColor: "#334155",
+      iconBg: "#f8fafc",
     },
     {
       title: "Active",
       count: metrics.active,
       link: "/tasks?task_filter=active",
-      icon: <IconBolt size={20} />,
-      accentColor: "#4f46e5",
-      bgColor: "#eef2ff",
-      borderColor: "#e0e7ff",
-      badgeColor: "#4338ca",
+      icon: <IconBolt size={17} />,
+      accentColor: "#0d6efd",
+      iconBg: "#eff6ff",
     },
     {
       title: "Overdue",
       count: metrics.overdue,
       link: "/tasks?task_filter=overdue",
-      icon: <IconAlertTriangle size={20} />,
+      icon: <IconAlertTriangle size={17} />,
       accentColor: "#dc2626",
-      bgColor: "#fef2f2",
-      borderColor: "#fee2e2",
-      badgeColor: "#b91c1c",
+      iconBg: "#fef2f2",
     },
     {
       title: "On Hold",
       count: metrics.onHold,
       link: "/tasks?task_filter=on-hold",
-      icon: <IconPlayerPause size={20} />,
+      icon: <IconPlayerPause size={17} />,
       accentColor: "#d97706",
-      bgColor: "#fffbeb",
-      borderColor: "#fef3c7",
-      badgeColor: "#b45309",
+      iconBg: "#fffbeb",
     },
     {
       title: "High Priority",
       count: metrics.urgent,
       link: "/tasks?task_filter=high-priority",
-      icon: <IconFlame size={20} />,
+      icon: <IconFlame size={17} />,
       accentColor: "#ea580c",
-      bgColor: "#fff7ed",
-      borderColor: "#ffedd5",
-      badgeColor: "#c2410c",
+      iconBg: "#fff7ed",
     },
   ];
 
   return (
     <Card
-      className="border-0 shadow-sm mb-6"
-      style={{
-        borderRadius: "16px",
-        overflow: "hidden",
-        border: "1px solid rgba(226, 232, 240, 0.8)",
-        background: "#ffffff",
-      }}
+      className="border shadow-sm mb-4 rounded-3 bg-white overflow-hidden"
     >
       {/* Top Banner Header */}
       <div
-        className="p-4 d-flex flex-column flex-xl-row align-items-xl-center justify-content-between gap-3"
-        style={{
-          borderBottom: "1px solid #f1f5f9",
-          background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)",
-        }}
+        className="p-3.5 p-md-4 d-flex flex-column flex-xl-row align-items-xl-center justify-content-between gap-3 border-bottom bg-light bg-opacity-50"
       >
         <div className="d-flex align-items-center gap-3">
           <div
+            className="rounded-3 d-flex align-items-center justify-content-center flex-shrink-0"
             style={{
-              width: "48px",
-              height: "48px",
-              borderRadius: "12px",
-              background: "linear-gradient(135deg, #4f46e5 0%, #3730a3 100%)",
-              color: "#ffffff",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              boxShadow: "0 4px 12px rgba(79, 70, 229, 0.25)",
-              flexShrink: 0,
+              width: "44px",
+              height: "44px",
+              background: "#eff6ff",
+              color: "#0d6efd",
+              border: "1px solid #bfdbfe",
             }}
           >
-            <IconListDetails size={24} />
+            <IconListDetails size={22} />
           </div>
           <div>
             <div className="d-flex align-items-center gap-2">
-              <h5 className="mb-0 fw-bold text-dark fs-4">Project Delivery & Tasks Overview</h5>
-              <span
-                style={{
-                  background: "#dcfce7",
-                  color: "#15803d",
-                  fontSize: "11px",
-                  fontWeight: 700,
-                  padding: "2px 8px",
-                  borderRadius: "999px",
-                  border: "1px solid #bbf7d0",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.5px",
-                }}
-              >
+              <h5 className="mb-0 fw-bold text-dark fs-5">Project Delivery &amp; Tasks Overview</h5>
+              <Badge bg="success-subtle" className="text-success border border-success-subtle rounded-pill px-2.5 py-1 fw-bold text-uppercase" style={{ fontSize: "10px", letterSpacing: "0.05em" }}>
                 Live Sync
-              </span>
+              </Badge>
             </div>
-            <p className="text-secondary small mb-0 mt-1">
+            <p className="text-muted small mb-0 mt-0.5">
               Real-time workload, project milestones, assignee status, and delivery risk.
             </p>
           </div>
         </div>
 
         {/* Right Action & Progress Tracker */}
-        <div className="d-flex flex-column flex-sm-row align-items-stretch align-items-sm-center gap-3">
+        <div className="d-flex flex-column flex-sm-row align-items-stretch align-items-sm-center gap-2.5">
           {/* Completion Meter Card */}
           <div
+            className="bg-white border rounded-3 px-3 py-2"
             style={{
-              background: "#ffffff",
-              border: "1px solid #e2e8f0",
-              borderRadius: "12px",
-              padding: "10px 16px",
-              minWidth: "200px",
-              boxShadow: "0 2px 6px rgba(15, 23, 42, 0.04)",
+              minWidth: "190px",
+              boxShadow: "0 1px 3px rgba(15, 23, 42, 0.03)",
             }}
           >
             <div className="d-flex justify-content-between align-items-center mb-1">
               <span
                 style={{
-                  fontSize: "11px",
+                  fontSize: "10.5px",
                   fontWeight: 800,
                   color: "#64748b",
                   textTransform: "uppercase",
-                  letterSpacing: "0.5px",
+                  letterSpacing: "0.06em",
                 }}
               >
                 Task Completion
               </span>
-              <strong style={{ fontSize: "15px", color: "#0f172a", fontWeight: 800 }}>
+              <strong style={{ fontSize: "14px", color: "#0f172a", fontWeight: 800 }}>
                 {metrics.completionRate}%
               </strong>
             </div>
@@ -513,7 +472,7 @@ const ProjectDeliveryOverviewWidget: React.FC = () => {
               <div
                 style={{
                   width: `${metrics.completionRate}%`,
-                  background: "linear-gradient(90deg, #4f46e5 0%, #10b981 100%)",
+                  background: "#0d6efd",
                   height: "100%",
                   borderRadius: "999px",
                   transition: "width 0.4s ease",
@@ -524,23 +483,19 @@ const ProjectDeliveryOverviewWidget: React.FC = () => {
 
           <Link
             href="/tasks"
-            className="btn btn-primary px-4 py-2 fw-semibold d-inline-flex align-items-center justify-content-center gap-2 shadow-sm"
+            className="btn btn-primary px-3.5 py-2 fw-semibold d-inline-flex align-items-center justify-content-center gap-1.5 shadow-sm"
             style={{
-              borderRadius: "10px",
-              background: "linear-gradient(135deg, #4f46e5 0%, #4338ca 100%)",
-              border: "none",
-              fontSize: "14px",
-              boxShadow: "0 4px 12px rgba(79, 70, 229, 0.3)",
+              fontSize: "13.5px",
             }}
           >
-            <IconFolder size={18} />
+            <IconFolder size={17} />
             <span>Open Workspace</span>
-            <IconArrowRight size={16} />
+            <IconArrowRight size={15} />
           </Link>
         </div>
       </div>
 
-      <Card.Body className="p-4">
+      <Card.Body className="p-3.5 p-md-4">
         {isLoading ? (
           <div className="d-flex justify-content-center align-items-center py-5">
             <Spinner animation="border" variant="primary" size="sm" className="me-2" />
@@ -565,48 +520,37 @@ const ProjectDeliveryOverviewWidget: React.FC = () => {
                       flexDirection: "column",
                       justifyContent: "space-between",
                       height: "100%",
-                      minHeight: "100px",
-                      background: metric.bgColor,
-                      border: `1px solid ${metric.borderColor}`,
-                      borderRadius: "14px",
-                      padding: "14px 16px",
+                      minHeight: "92px",
+                      background: "#ffffff",
+                      border: "1px solid #e2e8f0",
+                      borderTop: `3px solid ${metric.accentColor}`,
+                      borderRadius: "10px",
+                      padding: "12px 14px",
                       position: "relative",
-                      overflow: "hidden",
-                      transition: "all 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
+                      transition: "all 0.2s ease",
                       cursor: "pointer",
-                      boxShadow: "0 2px 4px rgba(15, 23, 42, 0.02)",
+                      boxShadow: "0 1px 3px rgba(15, 23, 42, 0.03)",
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.transform = "translateY(-3px)";
-                      e.currentTarget.style.boxShadow = "0 8px 18px rgba(15, 23, 42, 0.08)";
+                      e.currentTarget.style.transform = "translateY(-2px)";
+                      e.currentTarget.style.boxShadow = "0 6px 14px rgba(15, 23, 42, 0.06)";
                       e.currentTarget.style.borderColor = metric.accentColor;
                     }}
                     onMouseLeave={(e) => {
                       e.currentTarget.style.transform = "translateY(0)";
-                      e.currentTarget.style.boxShadow = "0 2px 4px rgba(15, 23, 42, 0.02)";
-                      e.currentTarget.style.borderColor = metric.borderColor;
+                      e.currentTarget.style.boxShadow = "0 1px 3px rgba(15, 23, 42, 0.03)";
+                      e.currentTarget.style.border = "1px solid #e2e8f0";
+                      e.currentTarget.style.borderTop = `3px solid ${metric.accentColor}`;
                     }}
                   >
-                    {/* Top Accent Strip */}
-                    <div
-                      style={{
-                        position: "absolute",
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        height: "3px",
-                        background: metric.accentColor,
-                      }}
-                    />
-
-                    <div className="d-flex justify-content-between align-items-center mb-2">
+                    <div className="d-flex justify-content-between align-items-center mb-1">
                       <span
                         style={{
-                          fontSize: "12px",
-                          fontWeight: 700,
-                          color: metric.badgeColor,
+                          fontSize: "11px",
+                          fontWeight: 750,
+                          color: "#64748b",
                           textTransform: "uppercase",
-                          letterSpacing: "0.4px",
+                          letterSpacing: "0.06em",
                         }}
                       >
                         {metric.title}
@@ -617,20 +561,21 @@ const ProjectDeliveryOverviewWidget: React.FC = () => {
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
-                          width: "30px",
-                          height: "30px",
-                          borderRadius: "8px",
-                          background: "rgba(255, 255, 255, 0.7)",
+                          width: "28px",
+                          height: "28px",
+                          borderRadius: "7px",
+                          background: metric.iconBg,
+                          border: `1px solid ${metric.accentColor}25`,
                         }}
                       >
                         {metric.icon}
                       </div>
                     </div>
 
-                    <div className="d-flex align-items-baseline justify-content-between">
+                    <div className="d-flex align-items-baseline justify-content-between mt-1">
                       <span
                         style={{
-                          fontSize: "28px",
+                          fontSize: "24px",
                           fontWeight: 800,
                           color: "#0f172a",
                           lineHeight: 1,
@@ -641,8 +586,11 @@ const ProjectDeliveryOverviewWidget: React.FC = () => {
                       <span
                         style={{
                           fontSize: "11px",
-                          color: metric.badgeColor,
-                          fontWeight: 600,
+                          fontWeight: 650,
+                          color: metric.accentColor,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "2px",
                         }}
                       >
                         View &rarr;

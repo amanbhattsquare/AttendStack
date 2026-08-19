@@ -100,7 +100,7 @@ const DashboardLayout: React.FC<DashboardProps> = ({ children }) => {
     <BrandingProvider>
       <div>
         <Sidebar hideLogo={false} containerId='miniSidebar' currentPath={pathname} isEmployee={isEmployeeSidebar} />
-        <div id='content' className={`position-relative d-flex flex-column ${isChatPage ? 'chat-content-wrap' : 'h-100'}`}>
+        <div id='content' className={`position-relative d-flex flex-column ${isChatPage ? 'chat-content-wrap' : 'min-vh-100'}`} style={{ minHeight: "100vh" }}>
           <Header />
           <PlanExpiryAlertBanner />
           <div
@@ -122,9 +122,9 @@ const DashboardLayout: React.FC<DashboardProps> = ({ children }) => {
             {children}
           </div>
           {!isChatPage && (
-            <div className='custom-container py-3'>
-              <span className='me-1'>© 2026 AttendStack. A <a href="https://bhattsquare.com" target="_blank" rel="noopener noreferrer">Bhatt Square</a> Project. <span className='text-secondary ms-2'>Version 2.5.3</span></span>
-            </div>
+            <footer className='custom-container mt-auto pt-3 pb-1 text-muted small border-top' style={{ borderColor: '#f1f5f9' }}>
+              <span className='me-1'>© 2026 AttendStack. A <a href="https://bhattsquare.com" target="_blank" rel="noopener noreferrer" className="text-primary fw-medium text-decoration-none">Bhatt Square</a> Project. <span className='text-secondary ms-2'>Version 2.5.3</span></span>
+            </footer>
           )}
         </div>
       </div>

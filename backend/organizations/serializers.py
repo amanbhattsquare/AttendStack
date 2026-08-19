@@ -28,6 +28,13 @@ class OrganizationSerializer(serializers.ModelSerializer):
             "location",
             "industry",
             "plan_name",
+            "plan_expires_at",
+            "plan_status",
+            "plan_source",
+            "max_employees",
+            "days_until_plan_expiry",
+            "is_plan_expiring_soon",
+            "is_plan_expired",
             "is_simplyjob_linked",
             "owner",
             "owner_name",
@@ -39,7 +46,16 @@ class OrganizationSerializer(serializers.ModelSerializer):
             "active_employee_count",
             "today_attendance_count",
         ]
-        read_only_fields = ["id", "created_at", "owner_name", "owner_email", "invite_code"]
+        read_only_fields = [
+            "id",
+            "created_at",
+            "owner_name",
+            "owner_email",
+            "invite_code",
+            "days_until_plan_expiry",
+            "is_plan_expiring_soon",
+            "is_plan_expired",
+        ]
 
     def get_is_simplyjob_linked(self, obj):
         return bool(obj.external_company_id or obj.external_source == "SIMPLYJOB")

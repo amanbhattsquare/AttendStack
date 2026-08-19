@@ -59,12 +59,65 @@ class OrganizationVerifyCodeView(APIView):
                 "error": "The organization code does not exist or has been expired/reset."
             }, status=status.HTTP_404_NOT_FOUND)
 
+class OrganizationVerifyApiKeyView(APIView):
+    """
+    Public endpoint to verify an AttendStack API Key.
+    Used by SimplyJob to connect and auto-sync Organization details & Plan status.
+    """
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        return self._verify(request)
+
+    def post(self, request):
+        return self._verify(request)
+
+    def _verify(self, request):
+        raw_key = (
+            request.query_params.get("api_key")
+            or request.data.get("api_key")
+            or request.headers.get("X-API-Key")
+            or request.headers.get("Authorization", "").replace("Bearer ", "")
+            or ""
+        ).strip()
+
+        if not raw_key:
+            return Response(
+                {"valid": False, "error": "API Key is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        org = Organization.objects.filter(api_key=raw_key, is_active=True).first()
+        if not org:
+            return Response(
+                {
+                    "valid": False,
+                    "error": "Invalid or inactive AttendStack API Key. Please verify the key in AttendStack Settings > API & Integrations.",
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Refresh plan status in DB
+        org.plan_status = org.computed_plan_status
+        org.save(update_fields=["plan_status"])
+
         return Response({
             "valid": True,
-            "code": org.invite_code,
             "organization_id": org.id,
             "organization_name": org.name,
-            "is_active": org.is_active,
+            "invite_code": org.invite_code,
+            "external_company_id": org.external_company_id,
+            "plan_name": org.plan_name or "Standard Plan",
+            "plan_expires_at": org.plan_expires_at.isoformat() if org.plan_expires_at else None,
+            "plan_status": org.computed_plan_status,
+            "plan_source": org.plan_source,
+            "days_until_plan_expiry": org.days_until_plan_expiry,
+            "is_plan_expiring_soon": org.is_plan_expiring_soon,
+            "is_plan_expired": org.is_plan_expired,
+            "max_employees": org.max_employees,
+            "employee_count": org.employees.count(),
+            "active_employee_count": org.employees.filter(status=EmployeeStatus.ACTIVE).count(),
         }, status=status.HTTP_200_OK)
 
 
@@ -251,6 +304,54 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         data = OrganizationSerializer(organization, context={"request": request}).data
         data["message"] = f"New organization code generated: {organization.invite_code}. Please update this code in SimplyJob."
         return Response(data)
+
+    @action(detail=True, methods=["post"], url_path="regenerate-api-key")
+    def regenerate_api_key(self, request, pk=None):
+        organization = self.get_object()
+        if not (request.user.is_superuser or request.user.role == UserRole.SUPER_ADMIN or organization.owner_id == request.user.id):
+            raise PermissionDenied("Only the organization owner or Super Admin can regenerate the API key.")
+
+        from .models import generate_api_key
+
+        while True:
+            new_key = generate_api_key()
+            if not Organization.objects.filter(api_key=new_key).exists():
+                organization.api_key = new_key
+                organization.save(update_fields=["api_key"])
+                break
+
+        data = OrganizationSerializer(organization, context={"request": request}).data
+        data["message"] = "New API Key generated successfully. Please copy and paste it into SimplyJob."
+        return Response(data)
+
+    @action(detail=True, methods=["post"], url_path="sync-plan")
+    def sync_plan(self, request, pk=None):
+        organization = self.get_object()
+        user = request.user
+        api_key = request.headers.get("X-API-Key") or request.data.get("api_key")
+        is_key_valid = bool(api_key and organization.api_key == api_key)
+
+        if not (is_key_valid or (user.is_authenticated and (user.is_superuser or user.role == UserRole.SUPER_ADMIN or organization.owner_id == user.id))):
+            raise PermissionDenied("Invalid credentials to sync organization plan.")
+
+        plan_name = request.data.get("plan_name")
+        plan_expires_at = request.data.get("plan_expires_at")
+        plan_source = request.data.get("plan_source", "SIMPLYJOB")
+        max_employees = request.data.get("max_employees")
+
+        if plan_name:
+            organization.plan_name = str(plan_name).strip()
+        if plan_expires_at:
+            organization.plan_expires_at = plan_expires_at
+        if plan_source:
+            organization.plan_source = str(plan_source).strip()
+        if max_employees is not None:
+            organization.max_employees = int(max_employees)
+
+        organization.plan_status = organization.computed_plan_status
+        organization.save()
+
+        return Response(OrganizationSerializer(organization, context={"request": request}).data)
 
     @action(detail=True, methods=["post"], url_path="link-simplyjob")
     def link_simplyjob(self, request, pk=None):

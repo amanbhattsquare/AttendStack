@@ -15,5 +15,8 @@ export interface MenuItemType {
   badge?: string;
   badgecolor?: string;
   logout?: boolean;
+  featureKey?: string;
+  requiresPro?: boolean;
   children?: MenuItemType[];
 }
+

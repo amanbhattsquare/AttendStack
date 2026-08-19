@@ -12,6 +12,7 @@ class OrganizationSerializer(serializers.ModelSerializer):
     active_employee_count = serializers.SerializerMethodField()
     today_attendance_count = serializers.SerializerMethodField()
     is_simplyjob_linked = serializers.SerializerMethodField()
+    plan_features = serializers.SerializerMethodField()
 
     class Meta:
         model = Organization
@@ -36,6 +37,7 @@ class OrganizationSerializer(serializers.ModelSerializer):
             "is_plan_expiring_soon",
             "is_plan_expired",
             "is_simplyjob_linked",
+            "plan_features",
             "owner",
             "owner_name",
             "owner_email",
@@ -55,7 +57,63 @@ class OrganizationSerializer(serializers.ModelSerializer):
             "days_until_plan_expiry",
             "is_plan_expiring_soon",
             "is_plan_expired",
+            "plan_features",
         ]
+
+    def get_plan_features(self, obj):
+        from .models import Plan
+        plan_name = obj.plan_name or ""
+        plan = Plan.objects.filter(name__iexact=plan_name, is_active=True).first()
+        if not plan:
+            # Check by slug
+            plan = Plan.objects.filter(slug__iexact=plan_name.lower().replace(" ", "-"), is_active=True).first()
+
+        if plan:
+            return {
+                "allows_employees": plan.allows_employees,
+                "allows_attendance": plan.allows_attendance,
+                "allows_geofencing": plan.allows_geofencing,
+                "allows_holidays": plan.allows_holidays,
+                "allows_payroll_reports": plan.allows_payroll_reports,
+                "allows_leaves": plan.allows_leaves,
+                "allows_projects_tasks": plan.allows_projects_tasks,
+                "allows_chat": plan.allows_chat,
+                "allows_custom_shifts": plan.allows_custom_shifts,
+                "allows_auto_checkout": plan.allows_auto_checkout,
+                "allows_dedicated_api": plan.allows_dedicated_api,
+                "allows_simplyjob_sync": plan.allows_simplyjob_sync,
+            }
+
+        if obj.plan_source == "SIMPLYJOB":
+            return {
+                "allows_employees": True,
+                "allows_attendance": True,
+                "allows_geofencing": False,
+                "allows_holidays": True,
+                "allows_payroll_reports": False,
+                "allows_leaves": True,
+                "allows_projects_tasks": False,
+                "allows_chat": False,
+                "allows_custom_shifts": False,
+                "allows_auto_checkout": False,
+                "allows_dedicated_api": False,
+                "allows_simplyjob_sync": True,
+            }
+
+        return {
+            "allows_employees": True,
+            "allows_attendance": True,
+            "allows_geofencing": True,
+            "allows_holidays": True,
+            "allows_payroll_reports": True,
+            "allows_leaves": True,
+            "allows_projects_tasks": True,
+            "allows_chat": True,
+            "allows_custom_shifts": True,
+            "allows_auto_checkout": True,
+            "allows_dedicated_api": False,
+            "allows_simplyjob_sync": True,
+        }
 
     def get_is_simplyjob_linked(self, obj):
         return bool(obj.external_company_id or obj.external_source == "SIMPLYJOB")
@@ -83,4 +141,41 @@ class AdministratorSerializer(serializers.ModelSerializer):
     class Meta:
         model = Employee
         fields = ('id', 'full_name', 'email', 'organization_name')
+
+
+from .models import Plan
+
+class PlanSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Plan
+        fields = [
+            "id",
+            "name",
+            "slug",
+            "description",
+            "monthly_price",
+            "yearly_price",
+            "max_employees",
+            "badge_text",
+            "is_popular",
+            "is_active",
+            "sort_order",
+            "allows_employees",
+            "allows_attendance",
+            "allows_geofencing",
+            "allows_holidays",
+            "allows_payroll_reports",
+            "allows_leaves",
+            "allows_projects_tasks",
+            "allows_chat",
+            "allows_custom_shifts",
+            "allows_auto_checkout",
+            "allows_dedicated_api",
+            "allows_simplyjob_sync",
+            "features_list",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
 

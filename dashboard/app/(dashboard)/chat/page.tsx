@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import Swal from "sweetalert2";
+import PlanFeatureLockedPaywall from "components/PlanFeatureLockedPaywall";
 import {
   Form,
   Button,
@@ -155,6 +156,20 @@ const getDateLabel = (dateStr: string) => {
 export default function ChatPage() {
   const dispatch = useAppDispatch();
   const queryClient = useQueryClient();
+
+  const [organization, setOrganization] = useState<any>(null);
+
+  useEffect(() => {
+    const orgData = localStorage.getItem("organization");
+    if (orgData) {
+      try {
+        setOrganization(JSON.parse(orgData));
+      } catch {}
+    }
+  }, []);
+
+  const isFeatureLocked =
+    organization?.plan_features && organization.plan_features.allows_chat === false;
 
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
 
@@ -1226,6 +1241,22 @@ export default function ChatPage() {
 
     return elements;
   };
+
+  if (isFeatureLocked) {
+    return (
+      <PlanFeatureLockedPaywall
+        featureTitle="Team Chat & Direct Messaging"
+        featureDescription="Internal 1-on-1 team chat, group channels, file attachments, and broadcast announcements are locked under your current plan."
+        benefits={[
+          "Real-time instant direct messaging across all employees",
+          "Department & project-specific group channels",
+          "File attachments, images, and document sharing",
+          "Priority company-wide announcement broadcasts",
+        ]}
+        requiredTier="Growth Pro or Enterprise"
+      />
+    );
+  }
 
   return (
     <>

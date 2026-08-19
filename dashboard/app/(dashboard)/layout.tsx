@@ -2,10 +2,10 @@
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from 'next/navigation';
 
-//import custom components
 import { BrandingProvider } from "context/BrandingContext";
 import Header from "layouts/header/Header";
 import Sidebar from "layouts/Sidebar";
+import PlanExpiryAlertBanner from "components/PlanExpiryAlertBanner";
 
 interface DashboardProps {
   children: React.ReactNode;
@@ -102,6 +102,7 @@ const DashboardLayout: React.FC<DashboardProps> = ({ children }) => {
         <Sidebar hideLogo={false} containerId='miniSidebar' currentPath={pathname} isEmployee={isEmployeeSidebar} />
         <div id='content' className={`position-relative d-flex flex-column ${isChatPage ? 'chat-content-wrap' : 'h-100'}`}>
           <Header />
+          <PlanExpiryAlertBanner />
           <div
             className={isChatPage ? "" : "custom-container"}
             style={

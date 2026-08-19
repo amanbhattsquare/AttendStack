@@ -98,9 +98,39 @@ class OrganizationVerifyApiKeyView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        # Refresh plan status in DB
-        org.plan_status = org.computed_plan_status
-        org.save(update_fields=["plan_status"])
+        # If POST contains plan sync data, update the organization record
+        if request.method == "POST" and request.data:
+            from django.utils.dateparse import parse_datetime
+
+            plan_name = request.data.get("plan_name")
+            plan_expires_at = request.data.get("plan_expires_at")
+            plan_source = request.data.get("plan_source")
+            max_employees = request.data.get("max_employees")
+
+            update_fields = ["plan_status"]
+            if plan_name:
+                org.plan_name = str(plan_name).strip()
+                update_fields.append("plan_name")
+            if plan_expires_at:
+                if isinstance(plan_expires_at, str):
+                    parsed_exp = parse_datetime(plan_expires_at)
+                    org.plan_expires_at = parsed_exp or plan_expires_at
+                else:
+                    org.plan_expires_at = plan_expires_at
+                update_fields.append("plan_expires_at")
+            if plan_source:
+                org.plan_source = str(plan_source).strip()
+                update_fields.append("plan_source")
+            if max_employees is not None:
+                org.max_employees = int(max_employees)
+                update_fields.append("max_employees")
+
+            org.plan_status = org.computed_plan_status
+            org.save(update_fields=update_fields)
+        else:
+            # Refresh plan status in DB
+            org.plan_status = org.computed_plan_status
+            org.save(update_fields=["plan_status"])
 
         return Response({
             "valid": True,
@@ -353,6 +383,38 @@ class OrganizationViewSet(viewsets.ModelViewSet):
 
         return Response(OrganizationSerializer(organization, context={"request": request}).data)
 
+    @action(detail=True, methods=["post"], url_path="renew-plan")
+    def renew_plan(self, request, pk=None):
+        """
+        Allows purchasing or renewing an AttendStack-direct standalone plan.
+        Extends plan validity and updates max employee limit.
+        """
+        organization = self.get_object()
+        user = request.user
+        if not (user.is_superuser or user.role == UserRole.SUPER_ADMIN or organization.owner_id == user.id):
+            raise PermissionDenied("Only organization owners or Super Admins can renew subscriptions.")
+
+        from datetime import timedelta
+        from django.utils import timezone
+        from .models import PlanStatus
+
+        plan_name = str(request.data.get("plan_name", "Pro Plan")).strip()
+        duration_days = int(request.data.get("duration_days", 30))
+        max_employees = int(request.data.get("max_employees", 50))
+        plan_source = str(request.data.get("plan_source", "ATTENDSTACK_DIRECT")).strip()
+
+        base_date = organization.plan_expires_at if (organization.plan_expires_at and organization.plan_expires_at > timezone.now()) else timezone.now()
+        organization.plan_name = plan_name
+        organization.plan_expires_at = base_date + timedelta(days=duration_days)
+        organization.plan_source = plan_source
+        organization.max_employees = max_employees
+        organization.plan_status = PlanStatus.ACTIVE
+        organization.save(update_fields=["plan_name", "plan_expires_at", "plan_source", "max_employees", "plan_status"])
+
+        data = OrganizationSerializer(organization, context={"request": request}).data
+        data["message"] = f"Plan '{plan_name}' successfully renewed for {duration_days} days."
+        return Response(data, status=status.HTTP_200_OK)
+
     @action(detail=True, methods=["post"], url_path="link-simplyjob")
     def link_simplyjob(self, request, pk=None):
         organization = self.get_object()
@@ -507,4 +569,140 @@ class AdministratorViewSet(viewsets.ReadOnlyModelViewSet):
         if user.is_superuser or user.role == UserRole.SUPER_ADMIN:
             return queryset
         return queryset.filter(organization__owner=user)
+
+
+from .models import Plan
+from .serializers import PlanSerializer
+
+class PlanViewSet(viewsets.ModelViewSet):
+    queryset = Plan.objects.all().order_by("sort_order", "monthly_price")
+    serializer_class = PlanSerializer
+
+    def get_permissions(self):
+        if self.action in ["list", "retrieve"]:
+            return [AllowAny()]
+        return [IsAdminUser()]
+
+    def get_queryset(self):
+        user = self.request.user
+        if user and user.is_authenticated and (user.is_superuser or getattr(user, "role", "") == UserRole.SUPER_ADMIN):
+            return Plan.objects.all().order_by("sort_order", "monthly_price")
+        return Plan.objects.filter(is_active=True).order_by("sort_order", "monthly_price")
+
+    @action(detail=False, methods=["post"], url_path="seed-defaults")
+    def seed_defaults(self, request):
+        if not (request.user.is_superuser or getattr(request.user, "role", "") == UserRole.SUPER_ADMIN):
+            raise PermissionDenied("Only Super Admins can seed default plans.")
+
+        defaults = [
+            {
+                "name": "Starter Plan",
+                "slug": "starter",
+                "description": "Essential attendance tracking for startups & small teams.",
+                "monthly_price": 499.00,
+                "yearly_price": 4990.00,
+                "max_employees": 15,
+                "badge_text": "STARTER",
+                "is_popular": False,
+                "is_active": True,
+                "sort_order": 1,
+                "allows_employees": True,
+                "allows_attendance": True,
+                "allows_holidays": True,
+                "allows_leaves": True,
+                "allows_geofencing": False,
+                "allows_payroll_reports": False,
+                "allows_projects_tasks": False,
+                "allows_chat": False,
+                "allows_custom_shifts": False,
+                "allows_auto_checkout": False,
+                "allows_dedicated_api": False,
+                "allows_simplyjob_sync": True,
+                "features_list": [
+                    "Up to 15 Active Employees",
+                    "Real-Time Clock In / Out & Live Feed",
+                    "SimplyJob 1-Click Candidate Onboarding",
+                    "Standard Leave Management",
+                    "Holidays Calendar Management",
+                    "Monthly Attendance PDF Export",
+                    "Standard Email Support",
+                ],
+            },
+            {
+                "name": "Growth Pro Plan",
+                "slug": "growth-pro",
+                "description": "Advanced automation, geofencing, payroll, tasks and team chat for scaling companies.",
+                "monthly_price": 999.00,
+                "yearly_price": 9990.00,
+                "max_employees": 50,
+                "badge_text": "MOST POPULAR",
+                "is_popular": True,
+                "is_active": True,
+                "sort_order": 2,
+                "allows_employees": True,
+                "allows_attendance": True,
+                "allows_holidays": True,
+                "allows_leaves": True,
+                "allows_geofencing": True,
+                "allows_payroll_reports": True,
+                "allows_projects_tasks": True,
+                "allows_chat": True,
+                "allows_custom_shifts": True,
+                "allows_auto_checkout": True,
+                "allows_dedicated_api": False,
+                "allows_simplyjob_sync": True,
+                "features_list": [
+                    "Up to 50 Active Employees",
+                    "Office IP Shield & GPS Geofencing",
+                    "Salary & Payroll Processing (Payslips/Reports)",
+                    "Projects & Tasks Workspace",
+                    "Internal Team Chat & Direct Messaging",
+                    "Automated Auto-Checkout & Overtime Rules",
+                    "Multi-Shift & Late Rulebooks",
+                    "Real-Time Two-Way SimplyJob Sync Engine",
+                    "Priority WhatsApp & Ticket Support",
+                ],
+            },
+            {
+                "name": "Enterprise Sovereign Plan",
+                "slug": "enterprise",
+                "description": "Complete workforce sovereignty, custom shift logic, and dedicated API infrastructure.",
+                "monthly_price": 1999.00,
+                "yearly_price": 19990.00,
+                "max_employees": -1,
+                "badge_text": "UNLIMITED CAPACITY",
+                "is_popular": False,
+                "is_active": True,
+                "sort_order": 3,
+                "allows_employees": True,
+                "allows_attendance": True,
+                "allows_holidays": True,
+                "allows_leaves": True,
+                "allows_geofencing": True,
+                "allows_payroll_reports": True,
+                "allows_projects_tasks": True,
+                "allows_chat": True,
+                "allows_custom_shifts": True,
+                "allows_auto_checkout": True,
+                "allows_dedicated_api": True,
+                "allows_simplyjob_sync": True,
+                "features_list": [
+                    "Unlimited Employees (500+ Active)",
+                    "All HR, Attendance, Payroll & Leave Modules",
+                    "Projects, Tasks & Team Chat Modules",
+                    "Dedicated API Keys & Real-Time Webhooks",
+                    "Multi-Branch & Location Hierarchy",
+                    "Custom Overtime & Shift Rules Engine",
+                    "Custom ERP & Payroll Export Pipelines",
+                    "Single Sign-On (SSO) & Audit Logs",
+                    "99.9% Uptime Guarantee & 24/7 SLA Support",
+                ],
+            },
+        ]
+        results = []
+        for d in defaults:
+            p, _ = Plan.objects.update_or_create(slug=d["slug"], defaults=d)
+            results.append(PlanSerializer(p).data)
+        return Response({"message": "Default plans seeded successfully.", "plans": results})
+
 

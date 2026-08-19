@@ -21,6 +21,7 @@ import { Avatar } from "components/common/Avatar";
 import CustomToggle, { CustomToggleLevel2 } from "./SidebarMenuToggle";
 
 // import required routes
+import { IconLock } from "@tabler/icons-react";
 import { getAssetPath } from "helper/assetPath";
 import { DashboardMenu as AdminDashboardMenu } from "routes/DashboardRoute"; // Using DashboardMenu as a base for Admin
 
@@ -33,16 +34,28 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ hideLogo = false, container
   const { companyLogo, companyName } = useBranding();
   const menuItems = AdminDashboardMenu; // Using the imported admin menu
   const [user, setUser] = useState<{ full_name: string; designation: string } | null>(null);
+  const [organization, setOrganization] = useState<any>(null);
 
   useEffect(() => {
     // You might want to fetch admin user data here
     setUser({ full_name: "Admin", designation: "Administrator" });
+    const orgData = localStorage.getItem("organization");
+    if (orgData) {
+      try {
+        setOrganization(JSON.parse(orgData));
+      } catch {}
+    }
   }, []);
 
 
   //Generate Link
   const generateLink = (item: MenuItemType) => {
     const isactive = currentPath === item.link;
+    const isLocked =
+      Boolean(item.featureKey) &&
+      organization?.plan_features &&
+      organization.plan_features[item.featureKey!] === false;
+
     if (item.logout) {
       const handleLogout = () => {
         // Handle admin logout
@@ -65,14 +78,22 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ hideLogo = false, container
       >
         {item.icon && <span className="nav-icon">{item.icon}</span>}
         <span className="text">{item.name || item.title}</span>
-        {item.badge && (
+        {isLocked ? (
+          <Badge
+            bg="warning-subtle"
+            className="text-warning-emphasis border border-warning-subtle rounded-pill px-1.5 py-0.5 ms-auto d-inline-flex align-items-center gap-1"
+            style={{ fontSize: "10px" }}
+          >
+            <IconLock size={11} /> PRO
+          </Badge>
+        ) : item.badge ? (
           <Badge
             className="ms-1"
             bg={item.badgecolor ? item.badgecolor : "primary"}
           >
             {item.badge}
           </Badge>
-        )}
+        ) : null}
       </Link>
     );
   };

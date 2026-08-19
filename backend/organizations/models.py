@@ -68,17 +68,27 @@ class Organization(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     is_active = models.BooleanField(default=True)
 
+    def _get_parsed_expiry(self):
+        if not self.plan_expires_at:
+            return None
+        if isinstance(self.plan_expires_at, str):
+            from django.utils.dateparse import parse_datetime
+            return parse_datetime(self.plan_expires_at)
+        return self.plan_expires_at
+
     @property
     def is_plan_expired(self) -> bool:
-        if not self.plan_expires_at:
+        exp = self._get_parsed_expiry()
+        if not exp:
             return False
-        return timezone.now() > self.plan_expires_at
+        return timezone.now() > exp
 
     @property
     def days_until_plan_expiry(self) -> int | None:
-        if not self.plan_expires_at:
+        exp = self._get_parsed_expiry()
+        if not exp:
             return None
-        diff = (self.plan_expires_at - timezone.now()).total_seconds()
+        diff = (exp - timezone.now()).total_seconds()
         return max(0, int(diff // 86400))
 
     @property
@@ -105,3 +115,43 @@ class Organization(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class Plan(models.Model):
+    name = models.CharField(max_length=100)
+    slug = models.SlugField(max_length=100, unique=True)
+    description = models.TextField(blank=True, default="")
+    monthly_price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    yearly_price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    max_employees = models.IntegerField(default=50, help_text="-1 for unlimited")
+    badge_text = models.CharField(max_length=50, blank=True, default="")
+    is_popular = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
+    sort_order = models.IntegerField(default=0)
+
+    # Granular Feature Access Controls (matching AttendStack Sidebar Modules)
+    allows_employees = models.BooleanField(default=True, help_text="Employees Directory & Profiles")
+    allows_attendance = models.BooleanField(default=True, help_text="Daily Attendance & Live Punches")
+    allows_geofencing = models.BooleanField(default=False, help_text="Office IP Shield & GPS Geofencing")
+    allows_holidays = models.BooleanField(default=True, help_text="Holiday Calendar Management")
+    allows_payroll_reports = models.BooleanField(default=False, help_text="Salary & Payroll Processing")
+    allows_leaves = models.BooleanField(default=True, help_text="Leave Requests & Approval Workflow")
+    allows_projects_tasks = models.BooleanField(default=False, help_text="Projects & Tasks Workspace")
+    allows_chat = models.BooleanField(default=False, help_text="Team Chat & Direct Messaging (Beta)")
+    allows_custom_shifts = models.BooleanField(default=False, help_text="Multi-Shift & Late Rulebooks")
+    allows_auto_checkout = models.BooleanField(default=False, help_text="Auto-Checkout & Shift Logic")
+    allows_dedicated_api = models.BooleanField(default=False, help_text="Dedicated API Key & Webhooks")
+    allows_simplyjob_sync = models.BooleanField(default=True, help_text="SimplyJob Candidate Sync Engine")
+
+    # Custom Feature bullets JSON / text list
+    features_list = models.JSONField(default=list, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["sort_order", "monthly_price"]
+
+    def __str__(self):
+        return f"{self.name} (₹{self.monthly_price}/mo)"
+

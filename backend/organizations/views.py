@@ -59,12 +59,95 @@ class OrganizationVerifyCodeView(APIView):
                 "error": "The organization code does not exist or has been expired/reset."
             }, status=status.HTTP_404_NOT_FOUND)
 
+class OrganizationVerifyApiKeyView(APIView):
+    """
+    Public endpoint to verify an AttendStack API Key.
+    Used by SimplyJob to connect and auto-sync Organization details & Plan status.
+    """
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        return self._verify(request)
+
+    def post(self, request):
+        return self._verify(request)
+
+    def _verify(self, request):
+        raw_key = (
+            request.query_params.get("api_key")
+            or request.data.get("api_key")
+            or request.headers.get("X-API-Key")
+            or request.headers.get("Authorization", "").replace("Bearer ", "")
+            or ""
+        ).strip()
+
+        if not raw_key:
+            return Response(
+                {"valid": False, "error": "API Key is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        org = Organization.objects.filter(api_key=raw_key, is_active=True).first()
+        if not org:
+            return Response(
+                {
+                    "valid": False,
+                    "error": "Invalid or inactive AttendStack API Key. Please verify the key in AttendStack Settings > API & Integrations.",
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # If POST contains plan sync data, update the organization record
+        if request.method == "POST" and request.data:
+            from django.utils.dateparse import parse_datetime
+
+            plan_name = request.data.get("plan_name")
+            plan_expires_at = request.data.get("plan_expires_at")
+            plan_source = request.data.get("plan_source")
+            max_employees = request.data.get("max_employees")
+
+            update_fields = ["plan_status"]
+            if plan_name:
+                org.plan_name = str(plan_name).strip()
+                update_fields.append("plan_name")
+            if plan_expires_at:
+                if isinstance(plan_expires_at, str):
+                    parsed_exp = parse_datetime(plan_expires_at)
+                    org.plan_expires_at = parsed_exp or plan_expires_at
+                else:
+                    org.plan_expires_at = plan_expires_at
+                update_fields.append("plan_expires_at")
+            if plan_source:
+                org.plan_source = str(plan_source).strip()
+                update_fields.append("plan_source")
+            if max_employees is not None:
+                org.max_employees = int(max_employees)
+                update_fields.append("max_employees")
+
+            org.plan_status = org.computed_plan_status
+            org.save(update_fields=update_fields)
+        else:
+            # Refresh plan status in DB
+            org.plan_status = org.computed_plan_status
+            org.save(update_fields=["plan_status"])
+
         return Response({
             "valid": True,
-            "code": org.invite_code,
             "organization_id": org.id,
             "organization_name": org.name,
-            "is_active": org.is_active,
+            "invite_code": org.invite_code,
+            "external_company_id": org.external_company_id,
+            "plan_name": org.plan_name or "Standard Plan",
+            "plan_expires_at": org.plan_expires_at.isoformat() if org.plan_expires_at else None,
+            "plan_status": org.computed_plan_status,
+            "plan_source": org.plan_source,
+            "days_until_plan_expiry": org.days_until_plan_expiry,
+            "is_plan_expiring_soon": org.is_plan_expiring_soon,
+            "is_plan_expired": org.is_plan_expired,
+            "max_employees": org.max_employees,
+            "employee_count": org.employees.count(),
+            "active_employee_count": org.employees.filter(status=EmployeeStatus.ACTIVE).count(),
         }, status=status.HTTP_200_OK)
 
 
@@ -252,6 +335,106 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         data["message"] = f"New organization code generated: {organization.invite_code}. Please update this code in SimplyJob."
         return Response(data)
 
+    @action(detail=True, methods=["post"], url_path="regenerate-api-key")
+    def regenerate_api_key(self, request, pk=None):
+        organization = self.get_object()
+        if not (request.user.is_superuser or request.user.role == UserRole.SUPER_ADMIN or organization.owner_id == request.user.id):
+            raise PermissionDenied("Only the organization owner or Super Admin can regenerate the API key.")
+
+        from .models import generate_api_key
+
+        while True:
+            new_key = generate_api_key()
+            if not Organization.objects.filter(api_key=new_key).exists():
+                organization.api_key = new_key
+                organization.save(update_fields=["api_key"])
+                break
+
+        data = OrganizationSerializer(organization, context={"request": request}).data
+        data["message"] = "New API Key generated successfully. Please copy and paste it into SimplyJob."
+        return Response(data)
+
+    @action(detail=True, methods=["post"], url_path="sync-plan")
+    def sync_plan(self, request, pk=None):
+        organization = self.get_object()
+        user = request.user
+        api_key = request.headers.get("X-API-Key") or request.data.get("api_key")
+        is_key_valid = bool(api_key and organization.api_key == api_key)
+
+        if not (is_key_valid or (user.is_authenticated and (user.is_superuser or user.role == UserRole.SUPER_ADMIN or organization.owner_id == user.id))):
+            raise PermissionDenied("Invalid credentials to sync organization plan.")
+
+        plan_name = request.data.get("plan_name")
+        plan_expires_at = request.data.get("plan_expires_at")
+        plan_source = request.data.get("plan_source", "SIMPLYJOB")
+        max_employees = request.data.get("max_employees")
+
+        if plan_name:
+            organization.plan_name = str(plan_name).strip()
+        if plan_expires_at:
+            organization.plan_expires_at = plan_expires_at
+        if plan_source:
+            organization.plan_source = str(plan_source).strip()
+        if max_employees is not None:
+            organization.max_employees = int(max_employees)
+
+        organization.plan_status = organization.computed_plan_status
+        organization.save()
+
+        return Response(OrganizationSerializer(organization, context={"request": request}).data)
+
+    def _process_plan_renewal(self, organization, user, request):
+        allowed_roles = [UserRole.SUPER_ADMIN, UserRole.HR, getattr(UserRole, "ADMIN", "ADMIN")]
+        is_authorized = (
+            user.is_superuser
+            or getattr(user, "role", "") in allowed_roles
+            or organization.owner_id == user.id
+            or organization.owner_id is None
+        )
+        if not is_authorized:
+            raise PermissionDenied("Only organization administrators or owners can renew subscriptions.")
+
+        if organization.owner_id is None and user.is_authenticated:
+            organization.owner = user
+
+        from datetime import timedelta
+        from django.utils import timezone
+
+        plan_name = str(request.data.get("plan_name", "Starter Plan")).strip()
+        duration_days = int(request.data.get("duration_days", 30))
+        max_employees = int(request.data.get("max_employees", 50))
+        plan_source = str(request.data.get("plan_source", "ATTENDSTACK_DIRECT")).strip()
+
+        base_date = organization.plan_expires_at if (organization.plan_expires_at and organization.plan_expires_at > timezone.now()) else timezone.now()
+        organization.plan_name = plan_name
+        organization.plan_expires_at = base_date + timedelta(days=duration_days)
+        organization.plan_source = plan_source
+        organization.max_employees = max_employees
+        organization.plan_status = Organization.PlanStatus.ACTIVE
+        organization.save(update_fields=["owner", "plan_name", "plan_expires_at", "plan_source", "max_employees", "plan_status"])
+
+        data = OrganizationSerializer(organization, context={"request": request}).data
+        data["message"] = f"Plan '{plan_name}' successfully renewed for {duration_days} days."
+        return Response(data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["post"], url_path="renew-plan")
+    def renew_plan(self, request, pk=None):
+        """Allows purchasing or renewing an AttendStack standalone plan by ID."""
+        organization = self.get_object()
+        return self._process_plan_renewal(organization, request.user, request)
+
+    @action(detail=False, methods=["post"], url_path="renew-plan")
+    def renew_plan_current(self, request):
+        """Allows purchasing or renewing an AttendStack plan for the current user's workspace."""
+        user = request.user
+        org_id = request.data.get("organization_id")
+        organization = Organization.objects.filter(id=org_id).first() if org_id else self._find_user_organization(user)
+        if not organization:
+            organization = Organization.objects.first()
+        if not organization:
+            return Response({"detail": "No organization found to activate plan."}, status=status.HTTP_404_NOT_FOUND)
+        return self._process_plan_renewal(organization, user, request)
+
     @action(detail=True, methods=["post"], url_path="link-simplyjob")
     def link_simplyjob(self, request, pk=None):
         organization = self.get_object()
@@ -406,4 +589,140 @@ class AdministratorViewSet(viewsets.ReadOnlyModelViewSet):
         if user.is_superuser or user.role == UserRole.SUPER_ADMIN:
             return queryset
         return queryset.filter(organization__owner=user)
+
+
+from .models import Plan
+from .serializers import PlanSerializer
+
+class PlanViewSet(viewsets.ModelViewSet):
+    queryset = Plan.objects.all().order_by("sort_order", "monthly_price")
+    serializer_class = PlanSerializer
+
+    def get_permissions(self):
+        if self.action in ["list", "retrieve"]:
+            return [AllowAny()]
+        return [IsAdminUser()]
+
+    def get_queryset(self):
+        user = self.request.user
+        if user and user.is_authenticated and (user.is_superuser or getattr(user, "role", "") == UserRole.SUPER_ADMIN):
+            return Plan.objects.all().order_by("sort_order", "monthly_price")
+        return Plan.objects.filter(is_active=True).order_by("sort_order", "monthly_price")
+
+    @action(detail=False, methods=["post"], url_path="seed-defaults")
+    def seed_defaults(self, request):
+        if not (request.user.is_superuser or getattr(request.user, "role", "") == UserRole.SUPER_ADMIN):
+            raise PermissionDenied("Only Super Admins can seed default plans.")
+
+        defaults = [
+            {
+                "name": "Starter Plan",
+                "slug": "starter",
+                "description": "Essential attendance tracking for startups & small teams.",
+                "monthly_price": 499.00,
+                "yearly_price": 4990.00,
+                "max_employees": 15,
+                "badge_text": "STARTER",
+                "is_popular": False,
+                "is_active": True,
+                "sort_order": 1,
+                "allows_employees": True,
+                "allows_attendance": True,
+                "allows_holidays": True,
+                "allows_leaves": True,
+                "allows_geofencing": False,
+                "allows_payroll_reports": False,
+                "allows_projects_tasks": False,
+                "allows_chat": False,
+                "allows_custom_shifts": False,
+                "allows_auto_checkout": False,
+                "allows_dedicated_api": False,
+                "allows_simplyjob_sync": True,
+                "features_list": [
+                    "Up to 15 Active Employees",
+                    "Real-Time Clock In / Out & Live Feed",
+                    "SimplyJob 1-Click Candidate Onboarding",
+                    "Standard Leave Management",
+                    "Holidays Calendar Management",
+                    "Monthly Attendance PDF Export",
+                    "Standard Email Support",
+                ],
+            },
+            {
+                "name": "Growth Pro Plan",
+                "slug": "growth-pro",
+                "description": "Advanced automation, geofencing, payroll, tasks and team chat for scaling companies.",
+                "monthly_price": 999.00,
+                "yearly_price": 9990.00,
+                "max_employees": 50,
+                "badge_text": "MOST POPULAR",
+                "is_popular": True,
+                "is_active": True,
+                "sort_order": 2,
+                "allows_employees": True,
+                "allows_attendance": True,
+                "allows_holidays": True,
+                "allows_leaves": True,
+                "allows_geofencing": True,
+                "allows_payroll_reports": True,
+                "allows_projects_tasks": True,
+                "allows_chat": True,
+                "allows_custom_shifts": True,
+                "allows_auto_checkout": True,
+                "allows_dedicated_api": False,
+                "allows_simplyjob_sync": True,
+                "features_list": [
+                    "Up to 50 Active Employees",
+                    "Office IP Shield & GPS Geofencing",
+                    "Salary & Payroll Processing (Payslips/Reports)",
+                    "Projects & Tasks Workspace",
+                    "Internal Team Chat & Direct Messaging",
+                    "Automated Auto-Checkout & Overtime Rules",
+                    "Multi-Shift & Late Rulebooks",
+                    "Real-Time Two-Way SimplyJob Sync Engine",
+                    "Priority WhatsApp & Ticket Support",
+                ],
+            },
+            {
+                "name": "Enterprise Sovereign Plan",
+                "slug": "enterprise",
+                "description": "Complete workforce sovereignty, custom shift logic, and dedicated API infrastructure.",
+                "monthly_price": 1999.00,
+                "yearly_price": 19990.00,
+                "max_employees": -1,
+                "badge_text": "UNLIMITED CAPACITY",
+                "is_popular": False,
+                "is_active": True,
+                "sort_order": 3,
+                "allows_employees": True,
+                "allows_attendance": True,
+                "allows_holidays": True,
+                "allows_leaves": True,
+                "allows_geofencing": True,
+                "allows_payroll_reports": True,
+                "allows_projects_tasks": True,
+                "allows_chat": True,
+                "allows_custom_shifts": True,
+                "allows_auto_checkout": True,
+                "allows_dedicated_api": True,
+                "allows_simplyjob_sync": True,
+                "features_list": [
+                    "Unlimited Employees (500+ Active)",
+                    "All HR, Attendance, Payroll & Leave Modules",
+                    "Projects, Tasks & Team Chat Modules",
+                    "Dedicated API Keys & Real-Time Webhooks",
+                    "Multi-Branch & Location Hierarchy",
+                    "Custom Overtime & Shift Rules Engine",
+                    "Custom ERP & Payroll Export Pipelines",
+                    "Single Sign-On (SSO) & Audit Logs",
+                    "99.9% Uptime Guarantee & 24/7 SLA Support",
+                ],
+            },
+        ]
+        results = []
+        for d in defaults:
+            p, _ = Plan.objects.update_or_create(slug=d["slug"], defaults=d)
+            results.append(PlanSerializer(p).data)
+        return Response({"message": "Default plans seeded successfully.", "plans": results})
+
 

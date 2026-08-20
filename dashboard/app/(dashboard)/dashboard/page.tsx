@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useState, useMemo } from "react";
 import { Badge, Card, Col, Row, Table, Spinner, Button, Modal } from "react-bootstrap";
-import { IconUsers, IconListCheck, IconClock, IconSnowboarding, IconRefresh, IconBuildingBank, IconCopy, IconCheck, IconExternalLink, IconChartPie } from "@tabler/icons-react";
+import { IconUsers, IconListCheck, IconClock, IconSnowboarding, IconRefresh, IconBuildingBank, IconCopy, IconCheck, IconExternalLink, IconChartPie, IconKey, IconShieldLock } from "@tabler/icons-react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import UpcomingIncrementsChartWidget from "components/UpcomingIncrementsChartWidget";
@@ -64,9 +64,7 @@ const DashboardPage = () => {
     }
   };
 
-  const [showOrgModal, setShowOrgModal] = useState(false);
   const [organization, setOrganization] = useState<any>(null);
-  const [copied, setCopied] = useState(false);
 
   const fetchOrg = async () => {
     try {
@@ -128,11 +126,6 @@ const DashboardPage = () => {
         setOrganization(orgData);
         if (typeof window !== "undefined") {
           localStorage.setItem("organization", JSON.stringify(orgData));
-        }
-        const hasSeenModal = typeof window !== "undefined" ? sessionStorage.getItem("attendstack_org_popup_seen") : "true";
-        if (!hasSeenModal) {
-          setShowOrgModal(true);
-          if (typeof window !== "undefined") sessionStorage.setItem("attendstack_org_popup_seen", "true");
         }
       }
     } catch {
@@ -398,8 +391,16 @@ const DashboardPage = () => {
           <p className="text-secondary mb-0">Overview of company workforce, attendance, and recent activities.</p>
         </div>
         <div className="d-flex align-items-center gap-2">
-          <Button variant="primary" size="sm" onClick={() => setShowOrgModal(true)} className="d-flex align-items-center gap-2 px-3 shadow-sm fw-semibold">
-            <IconBuildingBank size={16} /> My Company Org ID ({organization?.invite_code || "ORG-ID"})
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => {
+              const simplyJobUrl = process.env.NEXT_PUBLIC_SIMPLYJOB_URL || (typeof window !== "undefined" && window.location.hostname === "localhost" ? "http://localhost:3009" : "https://simplyjob.in");
+              window.open(`${simplyJobUrl}/company/hired-employees`, "_blank");
+            }}
+            className="d-flex align-items-center gap-2 px-3 shadow-sm fw-semibold"
+          >
+            <IconExternalLink size={16} /> Open SimplyJob
           </Button>
           <Button variant="outline-primary" size="sm" onClick={fetchData} className="d-flex align-items-center gap-2 px-3 shadow-sm">
             <IconRefresh size={16} /> Sync Data
@@ -776,77 +777,6 @@ const DashboardPage = () => {
 
       {/* Upcoming Employee Salary Increments Strategy Line Chart */}
       <UpcomingIncrementsChartWidget />
-
-      {/* AttendStack Org ID Onboarding Modal */}
-      <Modal show={showOrgModal} onHide={() => setShowOrgModal(false)} centered backdrop="static" size="lg">
-        <Modal.Header closeButton className="bg-primary text-white border-0 py-3">
-          <Modal.Title className="fw-bold d-flex align-items-center gap-2 text-white">
-            <IconBuildingBank size={24} />
-            Company Organization ID & SimplyJob Integration
-          </Modal.Title>
-        </Modal.Header>
-        <Modal.Body className="p-4">
-          <div className="text-center mb-4">
-            <Badge bg="success-subtle" text="success" className="mb-2 px-3 py-2 fs-6 rounded-pill fw-semibold">
-              Company Account Ready
-            </Badge>
-            <h3 className="fw-bold text-dark mb-1">{organization?.name || "Your Company Workspace"}</h3>
-            <p className="text-secondary small">
-              Here is your official AttendStack Organization ID. Copy this ID and paste it into SimplyJob to sync your hired candidates seamlessly.
-            </p>
-          </div>
-
-          <Card className="border-primary border-2 bg-primary-subtle text-center p-4 mb-4 shadow-sm">
-            <div className="text-uppercase small fw-bold text-primary mb-2">Your AttendStack Organization ID</div>
-            <div className="display-6 font-monospace fw-bold text-primary mb-3 letter-spacing-1">
-              {organization?.invite_code || "Generating..."}
-            </div>
-            <div className="d-flex justify-content-center gap-2 flex-wrap">
-              <Button
-                variant={copied ? "success" : "primary"}
-                className="fw-bold px-4 py-2"
-                onClick={() => {
-                  if (organization?.invite_code) {
-                    navigator.clipboard.writeText(organization.invite_code);
-                    setCopied(true);
-                    setTimeout(() => setCopied(false), 3000);
-                  }
-                }}
-              >
-                {copied ? <><IconCheck size={18} className="me-1" /> Copied to Clipboard!</> : <><IconCopy size={18} className="me-1" /> Copy Org ID</>}
-              </Button>
-              <Button
-                variant="outline-primary"
-                className="fw-bold px-4 py-2"
-                onClick={() => {
-                  if (organization?.invite_code) {
-                    navigator.clipboard.writeText(organization.invite_code);
-                  }
-                  const simplyJobUrl = process.env.NEXT_PUBLIC_SIMPLYJOB_URL || (typeof window !== "undefined" && window.location.hostname === "localhost" ? "http://localhost:3009" : "https://simplyjob.in");
-                  window.open(`${simplyJobUrl}/company/hired-employees`, "_blank");
-                }}
-              >
-                <IconExternalLink size={18} className="me-1" /> Copy & Open SimplyJob
-              </Button>
-            </div>
-          </Card>
-
-          <div className="bg-light p-3 rounded border">
-            <h6 className="fw-bold mb-2 text-dark">📋 3 Quick Steps to Link SimplyJob:</h6>
-            <ol className="small text-secondary mb-0 ps-3">
-              <li className="mb-1">Click <strong>Copy Org ID</strong> above{organization?.invite_code ? <> (<code>{organization.invite_code}</code>)</> : null}.</li>
-              <li className="mb-1">Open <strong>SimplyJob Hired Employees</strong> workspace.</li>
-              <li className="mb-1">Paste this Org ID in the <strong>AttendStack Organization ID</strong> field and click <strong>Save Org ID</strong>.</li>
-              <li>Now when you hire candidates on SimplyJob, clicking <strong>Invite</strong> will auto-fill your company Org ID!</li>
-            </ol>
-          </div>
-        </Modal.Body>
-        <Modal.Footer className="border-0 pt-0 pb-3 pe-4">
-          <Button variant="secondary" onClick={() => setShowOrgModal(false)}>
-            Got it, Close
-          </Button>
-        </Modal.Footer>
-      </Modal>
     </Fragment>
   );
 };

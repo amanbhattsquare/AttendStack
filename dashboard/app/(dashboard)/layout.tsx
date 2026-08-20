@@ -6,6 +6,7 @@ import { BrandingProvider } from "context/BrandingContext";
 import Header from "layouts/header/Header";
 import Sidebar from "layouts/Sidebar";
 import PlanExpiryAlertBanner from "components/PlanExpiryAlertBanner";
+import GlobalChatNotificationListener from "components/chat/GlobalChatNotificationListener";
 
 interface DashboardProps {
   children: React.ReactNode;
@@ -98,6 +99,7 @@ const DashboardLayout: React.FC<DashboardProps> = ({ children }) => {
 
   return (
     <BrandingProvider>
+      <GlobalChatNotificationListener />
       <div>
         <Sidebar hideLogo={false} containerId='miniSidebar' currentPath={pathname} isEmployee={isEmployeeSidebar} />
         <div id='content' className={`position-relative d-flex flex-column ${isChatPage ? 'chat-content-wrap' : 'min-vh-100'}`} style={{ minHeight: "100vh" }}>

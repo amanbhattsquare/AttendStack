@@ -1167,6 +1167,9 @@ export default function ChatPage() {
   const dragCounter = useRef<number>(0);
 
   // Dedicated file & media download handler
+  // Dedicated one-click file & media & PDF download handler
+  const [downloadingFileUrl, setDownloadingFileUrl] = useState<string | null>(null);
+
   const handleDownloadFile = async (
     e: React.MouseEvent,
     fileUrl: string,
@@ -1174,32 +1177,59 @@ export default function ChatPage() {
   ) => {
     e.stopPropagation();
     e.preventDefault();
+
+    if (!fileUrl) return;
+
     const safeName =
       fileName ||
       fileUrl.split("/").pop()?.split("?")[0] ||
-      `attendstack-chat-media-${Date.now()}`;
+      `attendstack-doc-${Date.now()}`;
+
+    setDownloadingFileUrl(fileUrl);
 
     try {
-      const response = await fetch(fileUrl);
-      if (!response.ok) throw new Error("Direct fetch failed");
-      const blob = await response.blob();
-      const blobUrl = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = blobUrl;
-      link.download = safeName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      setTimeout(() => window.URL.revokeObjectURL(blobUrl), 100);
-    } catch {
-      const link = document.createElement("a");
-      link.href = fileUrl;
-      link.target = "_blank";
-      link.download = safeName;
-      link.rel = "noreferrer";
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      const token = typeof window !== "undefined" ? localStorage.getItem("authToken") : null;
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+
+      // 1. Try Blob fetch
+      const response = await fetch(fileUrl, {
+        headers,
+        mode: "cors",
+      }).catch(() => fetch(fileUrl));
+
+      if (response && response.ok) {
+        const blob = await response.blob();
+        const blobUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = blobUrl;
+        link.download = safeName;
+        link.setAttribute("download", safeName);
+        link.style.display = "none";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => window.URL.revokeObjectURL(blobUrl), 3000);
+      } else {
+        // 2. Direct anchor click fallback
+        const link = document.createElement("a");
+        link.href = fileUrl;
+        link.target = "_blank";
+        link.download = safeName;
+        link.setAttribute("download", safeName);
+        link.rel = "noopener noreferrer";
+        link.style.display = "none";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+    } catch (err) {
+      console.warn("Direct download fallback to window.open:", err);
+      window.open(fileUrl, "_blank", "noopener,noreferrer");
+    } finally {
+      setTimeout(() => setDownloadingFileUrl(null), 600);
     }
   };
 
@@ -2005,9 +2035,14 @@ export default function ChatPage() {
                       <button
                         className="whatsapp-download-btn btn p-1.5 rounded-circle border-0 d-flex align-items-center justify-content-center flex-shrink-0"
                         title={`Download ${fileName}`}
+                        disabled={downloadingFileUrl === att.file_url}
                         onClick={(e) => handleDownloadFile(e, att.file_url, fileName)}
                       >
-                        <Download size={19} strokeWidth={2} />
+                        {downloadingFileUrl === att.file_url ? (
+                          <Spinner animation="border" size="sm" style={{ width: "16px", height: "16px" }} />
+                        ) : (
+                          <Download size={19} strokeWidth={2} />
+                        )}
                       </button>
                     </div>
                   );

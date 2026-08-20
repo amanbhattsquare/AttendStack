@@ -10,7 +10,7 @@ from asgiref.sync import async_to_sync
 
 from employees.models import Employee
 from organizations.models import Organization
-from .models import Conversation, ConversationMember, Message, Attachment
+from .models import Conversation, ConversationMember, Message, Attachment, MessageReaction
 from .serializers import (
     ConversationSerializer,
     MessageSerializer,
@@ -202,6 +202,18 @@ class ConversationViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        # Enforce 10 MB max file size per attachment
+        MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB
+        for f in files:
+            if f.size > MAX_FILE_SIZE_BYTES:
+                size_mb = round(f.size / (1024 * 1024), 2)
+                return Response(
+                    {
+                        "error": f"File '{f.name}' ({size_mb} MB) exceeds the maximum allowed file size of 10 MB. Please upload files under 10 MB."
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
         # Auto detect type if files attached
         if files and message_type == Message.MessageType.TEXT:
             first_file = files[0]
@@ -212,9 +224,15 @@ class ConversationViewSet(viewsets.ModelViewSet):
             else:
                 message_type = Message.MessageType.FILE
 
+        reply_to_id = request.data.get('reply_to') or request.data.get('reply_to_id')
+        reply_to_msg = None
+        if reply_to_id:
+            reply_to_msg = Message.objects.filter(id=reply_to_id, conversation=conversation).first()
+
         message = Message.objects.create(
             conversation=conversation,
             sender=request.user,
+            reply_to=reply_to_msg,
             content=content,
             message_type=message_type
         )
@@ -344,6 +362,66 @@ class ConversationViewSet(viewsets.ModelViewSet):
                         pass
                 attachment.delete()
         return Response({"status": "Chat cleared successfully"}, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post'], url_path='react')
+    def react_message(self, request, pk=None):
+        conversation = self.get_object()
+        message_id = request.data.get('message_id')
+        emoji = (request.data.get('emoji') or '').strip()
+
+        if not message_id or not emoji:
+            return Response(
+                {"error": "message_id and emoji are required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        message = get_object_or_404(Message, id=message_id, conversation=conversation)
+
+        # Enforce 1 reaction per user per message (WhatsApp/iMessage style)
+        # If user clicks the same emoji they previously selected -> remove it (toggle off)
+        # If user clicks a different emoji -> swap/replace their previous reaction with the new emoji
+        user_reactions = MessageReaction.objects.filter(
+            message=message,
+            user=request.user
+        )
+        existing_reaction = user_reactions.first()
+
+        if existing_reaction:
+            if existing_reaction.emoji == emoji:
+                # Same emoji: remove reaction
+                user_reactions.delete()
+            else:
+                # Different emoji: delete any other reactions and set the new emoji
+                user_reactions.exclude(id=existing_reaction.id).delete()
+                existing_reaction.emoji = emoji
+                existing_reaction.save()
+        else:
+            MessageReaction.objects.create(
+                message=message,
+                user=request.user,
+                emoji=emoji
+            )
+
+        msg_data = MessageSerializer(message, context={'request': request}).data
+
+        # Broadcast reaction update via WebSockets to all participants in real time
+        try:
+            channel_layer = get_channel_layer()
+            if channel_layer:
+                async_to_sync(channel_layer.group_send)(
+                    f"chat_{conversation.id}",
+                    {
+                        "type": "chat.message_reaction",
+                        "message_id": str(message.id),
+                        "reactions": msg_data.get('reactions', []),
+                        "conversation_id": str(conversation.id)
+                    }
+                )
+        except Exception as e:
+            import logging
+            logging.warning(f"Failed to broadcast WS reaction: {e}")
+
+        return Response(msg_data, status=status.HTTP_200_OK)
 
     @action(detail=False, methods=['post'], url_path='announcement')
     def send_announcement(self, request):

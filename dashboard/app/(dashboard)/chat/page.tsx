@@ -14,6 +14,8 @@ import {
   Dropdown,
   Row,
   Col,
+  Tooltip,
+  OverlayTrigger,
 } from "react-bootstrap";
 import {
   Send,
@@ -30,17 +32,21 @@ import {
   MoreVertical,
   UserCheck,
   User,
-  Sparkles,
   Trash2,
   CornerUpRight,
+  CornerUpLeft,
+  Reply,
   Copy,
   Smile,
   Megaphone,
-  Bell,
   Pin,
-  AtSign,
   UploadCloud,
   Image as ImageIcon,
+  Download,
+  Maximize2,
+  ExternalLink,
+  ChevronDown,
+  Check,
 } from "lucide-react";
 import {
   useQuery,
@@ -52,6 +58,7 @@ import {
   Conversation,
   Message,
   UserMinimal,
+  ReactionSummary,
   fetchConversations,
   fetchMessages,
   sendMessageWithAttachments,
@@ -65,6 +72,7 @@ import {
   clearChatHistory,
   sendAnnouncement,
   acknowledgeAnnouncement,
+  reactToMessage,
 } from "../../../helper/chatApi";
 
 // Redux for sidebar control
@@ -90,6 +98,87 @@ const getAvatarColor = (name: string) => {
     hash = name.charCodeAt(i) + ((hash << 5) - hash);
   }
   return solidColors[Math.abs(hash) % solidColors.length];
+};
+
+// Safe Avatar Component with graceful fallback
+interface SafeAvatarProps {
+  src?: string | null;
+  name?: string;
+  size?: number;
+  fontSize?: number;
+  className?: string;
+  style?: React.CSSProperties;
+  isGroup?: boolean;
+  showOnlineDot?: boolean;
+}
+
+const SafeAvatar: React.FC<SafeAvatarProps> = ({
+  src,
+  name = "User",
+  size = 40,
+  fontSize = 14,
+  className = "",
+  style = {},
+  isGroup = false,
+  showOnlineDot = false,
+}) => {
+  const [imgError, setImgError] = useState(false);
+  const initial = (name || "U")[0]?.toUpperCase() || "U";
+  const bg = getAvatarColor(name || "U");
+
+  useEffect(() => {
+    setImgError(false);
+  }, [src]);
+
+  const hasValidImg = Boolean(src && !imgError && src.trim() !== "");
+
+  return (
+    <div
+      className={`position-relative d-inline-flex align-items-center justify-content-center flex-shrink-0 rounded-circle user-select-none ${className}`}
+      style={{
+        width: `${size}px`,
+        height: `${size}px`,
+        backgroundColor: hasValidImg ? "#e2e8f0" : bg,
+        color: "#ffffff",
+        fontWeight: 700,
+        fontSize: `${fontSize}px`,
+        overflow: "visible",
+        ...style,
+      }}
+    >
+      <div
+        className="w-100 h-100 rounded-circle d-flex align-items-center justify-content-center overflow-hidden position-relative"
+        style={{ backgroundColor: hasValidImg ? "#e2e8f0" : bg }}
+      >
+        {hasValidImg ? (
+          <img
+            src={src!}
+            alt=""
+            className="w-100 h-100 rounded-circle"
+            style={{ objectFit: "cover", display: "block" }}
+            onError={() => setImgError(true)}
+          />
+        ) : isGroup ? (
+          <Users size={Math.max(14, Math.round(size * 0.44))} />
+        ) : (
+          <span>{initial}</span>
+        )}
+      </div>
+      {showOnlineDot && <span className="chat-online-dot" />}
+    </div>
+  );
+};
+
+// File type and badge color helper
+const getFileMeta = (fileName: string) => {
+  const ext = (fileName.split(".").pop() || "FILE").toUpperCase();
+  if (["PDF"].includes(ext)) return { ext, color: "#ef4444", bg: "#fef2f2", label: "PDF" };
+  if (["DOC", "DOCX"].includes(ext)) return { ext, color: "#2563eb", bg: "#eff6ff", label: "DOC" };
+  if (["XLS", "XLSX", "CSV"].includes(ext)) return { ext, color: "#16a34a", bg: "#f0fdf4", label: "XLS" };
+  if (["PPT", "PPTX"].includes(ext)) return { ext, color: "#ea580c", bg: "#fff7ed", label: "PPT" };
+  if (["ZIP", "RAR", "7Z", "TAR", "GZ"].includes(ext)) return { ext, color: "#9333ea", bg: "#faf5ff", label: "ZIP" };
+  if (["TXT", "LOG", "MD"].includes(ext)) return { ext, color: "#475569", bg: "#f8fafc", label: "TXT" };
+  return { ext, color: "#6366f1", bg: "#eef2ff", label: ext.slice(0, 4) };
 };
 
 // Format message timestamp
@@ -153,6 +242,16 @@ const getDateLabel = (dateStr: string) => {
   }
 };
 
+// Strictly Corporate & Workplace Emoji Reactions
+const CORPORATE_REACTIONS = ["👍", "👏", "✅", "🚀", "🎯", "💡", "🤝", "👀"];
+
+// Curated workplace emojis for message input bar
+const WORKPLACE_INPUT_EMOJIS = [
+  "👍", "👏", "✅", "🚀", "🎯", "💡", "🤝", "👀",
+  "😊", "🎉", "🔥", "💯", "🙌", "✨", "📌", "💬",
+  "⭐", "🙏", "👌", "💪", "⚡", "☕", "📊", "📁"
+];
+
 export default function ChatPage() {
   const dispatch = useAppDispatch();
   const queryClient = useQueryClient();
@@ -181,6 +280,32 @@ export default function ChatPage() {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [filePreviews, setFilePreviews] = useState<{ url: string; type: string; name: string; size: string }[]>([]);
 
+  // Click-to-show reaction & action bar state (WhatsApp style)
+  const [activeActionBarMsgId, setActiveActionBarMsgId] = useState<string | null>(null);
+
+  // Close reaction action bar when clicking anywhere outside
+  useEffect(() => {
+    const handleDocumentClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest(".chat-quick-reactions-bar") && !target.closest(".chat-bubble")) {
+        setActiveActionBarMsgId(null);
+      }
+    };
+    document.addEventListener("click", handleDocumentClick);
+    return () => document.removeEventListener("click", handleDocumentClick);
+  }, []);
+
+  // WhatsApp-style Reply To message state
+  const [replyingTo, setReplyingTo] = useState<Message | null>(null);
+  const [highlightedMsgId, setHighlightedMsgId] = useState<string | null>(null);
+
+  // Swipe-to-reply gesture state
+  const [swipingMsgId, setSwipingMsgId] = useState<string | null>(null);
+  const [swipeOffset, setSwipeOffset] = useState<number>(0);
+  const touchStartXRef = useRef<number>(0);
+  const touchStartYRef = useRef<number>(0);
+  const isSwipingRef = useRef<boolean>(false);
+
   // Search, Filter and Modal states
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [convFilter, setConvFilter] = useState<"all" | "direct" | "group">("all");
@@ -190,15 +315,25 @@ export default function ChatPage() {
   const [userSearchLoading, setUserSearchLoading] = useState<boolean>(false);
   const [userQuery, setUserQuery] = useState<string>("");
 
+  // In-chat message search state
+  const [showInChatSearch, setShowInChatSearch] = useState<boolean>(false);
+  const [inChatMessageQuery, setInChatMessageQuery] = useState<string>("");
+
   // Group creation state
   const [groupName, setGroupName] = useState<string>("");
   const [selectedGroupMembers, setSelectedGroupMembers] = useState<UserMinimal[]>([]);
 
   // Media preview lightbox
-  const [previewMediaUrl, setPreviewMediaUrl] = useState<string | null>(null);
+  const [previewMedia, setPreviewMedia] = useState<{
+    url: string;
+    type: "image" | "video" | "file";
+    name?: string;
+    size?: string;
+  } | null>(null);
 
   // Typing indicator state
   const [typingUser, setTypingUser] = useState<string | null>(null);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Forward message state
   const [forwardMsg, setForwardMsg] = useState<Message | null>(null);
@@ -206,7 +341,7 @@ export default function ChatPage() {
   const [forwardedConvIds, setForwardedConvIds] = useState<string[]>([]);
   const [copiedMsgId, setCopiedMsgId] = useState<string | null>(null);
 
-  // Emoji picker state
+  // Input bar emoji picker state
   const [showEmojiPicker, setShowEmojiPicker] = useState<boolean>(false);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
 
@@ -253,6 +388,14 @@ export default function ChatPage() {
       setAnnouncementText("");
       refetchConversations();
       refetchMessages();
+      Swal.fire({
+        title: "Announcement Sent",
+        text: "Company announcement broadcast successfully!",
+        icon: "success",
+        timer: 1800,
+        showConfirmButton: false,
+        customClass: { popup: "rounded-4 shadow" },
+      });
     },
   });
 
@@ -267,13 +410,6 @@ export default function ChatPage() {
   // Group @Mentions state
   const [showMentionSuggestions, setShowMentionSuggestions] = useState<boolean>(false);
   const [mentionQuery, setMentionQuery] = useState<string>("");
-
-  const EMOJI_LIST = [
-    "😊", "😂", "🥰", "😍", "😎", "😅", "🤔", "🥳",
-    "👍", "👏", "🙌", "🙏", "❤️", "🔥", "✨", "🎉",
-    "🚀", "💡", "💯", "✅", "⭐", "📌", "💬", "🤝",
-    "😭", "🙈", "💪", "✌️", "👌", "🎯", "🌟", "⚡"
-  ];
 
   const handleSelectEmoji = (emoji: string) => {
     setInputContent((prev) => prev + emoji);
@@ -307,6 +443,16 @@ export default function ChatPage() {
     setTimeout(() => setCopiedMsgId(null), 2000);
   };
 
+  // Scroll to quoted message on quote click
+  const scrollToQuotedMessage = (messageId: string) => {
+    const el = document.getElementById(`msg-${messageId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      setHighlightedMsgId(messageId);
+      setTimeout(() => setHighlightedMsgId(null), 1800);
+    }
+  };
+
   // Current user info & DP & role
   const [currentUserId, setCurrentUserId] = useState<string | number | null>(null);
   const [myProfilePhoto, setMyProfilePhoto] = useState<string | null>(null);
@@ -317,6 +463,8 @@ export default function ChatPage() {
   const wsRef = useRef<any>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatMessagesAreaRef = useRef<HTMLDivElement>(null);
+  const [showScrollBottom, setShowScrollBottom] = useState<boolean>(false);
 
   // Collapse the main sidebar when chat page mounts, restore on unmount
   useEffect(() => {
@@ -328,7 +476,7 @@ export default function ChatPage() {
     };
   }, [dispatch]);
 
-  // Load current user and fetch DP (profile photo)
+  // Load current user and fetch profile photo
   useEffect(() => {
     const loadUserData = async () => {
       try {
@@ -413,7 +561,6 @@ export default function ChatPage() {
       if (!activeConversationId) return [];
       const res = await fetchMessages(activeConversationId);
       markConversationAsRead(activeConversationId);
-      // Reset unread count locally in query cache
       queryClient.setQueryData<Conversation[]>(["conversations"], (old = []) =>
         old.map((c) => (c.id === activeConversationId ? { ...c, unread_count: 0 } : c))
       );
@@ -424,16 +571,50 @@ export default function ChatPage() {
 
   const messages = useMemo(() => messagesData || [], [messagesData]);
 
+  // Track pinned announcement in active conversation
+  const pinnedAnnouncement = useMemo(() => {
+    return messages.slice().reverse().find((m) => m.is_announcement && m.pinned && !m.is_deleted);
+  }, [messages]);
+
+  // Filter messages by in-chat search query
+  const displayedMessages = useMemo(() => {
+    if (!inChatMessageQuery.trim()) return messages;
+    const query = inChatMessageQuery.toLowerCase();
+    return messages.filter((m) => {
+      const matchText = (m.content || "").toLowerCase().includes(query);
+      const matchSender = (m.sender?.name || m.sender?.email || "").toLowerCase().includes(query);
+      return matchText || matchSender;
+    });
+  }, [messages, inChatMessageQuery]);
+
   // Scroll to bottom on new messages
-  const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  const scrollToBottom = useCallback((smooth = true) => {
+    if (chatMessagesAreaRef.current) {
+      chatMessagesAreaRef.current.scrollTo({
+        top: chatMessagesAreaRef.current.scrollHeight,
+        behavior: smooth ? "smooth" : "auto",
+      });
+    } else {
+      messagesEndRef.current?.scrollIntoView({ behavior: smooth ? "smooth" : "auto" });
+    }
   }, []);
 
   useEffect(() => {
-    scrollToBottom();
-  }, [messages, typingUser, scrollToBottom]);
+    scrollToBottom(false);
+  }, [activeConversationId, scrollToBottom]);
 
-  // WebSocket Connection with query cache mutation
+  useEffect(() => {
+    scrollToBottom(true);
+  }, [messages.length, typingUser, scrollToBottom]);
+
+  const handleScrollArea = () => {
+    if (!chatMessagesAreaRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = chatMessagesAreaRef.current;
+    const isUp = scrollHeight - scrollTop - clientHeight > 180;
+    setShowScrollBottom(isUp);
+  };
+
+  // WebSocket Connection with real-time query cache synchronization
   useEffect(() => {
     if (!activeConversationId) return;
 
@@ -441,53 +622,69 @@ export default function ChatPage() {
       wsRef.current.close();
     }
 
-    const controller = connectChatWebSocket(activeConversationId, (data) => {
-      console.log('Received WebSocket data in chat page:', data);
-      if (data.type === "new_message") {
-        const newMsg: Message = data.message;
-        console.log('Adding new message to cache:', newMsg);
+    const controller = connectChatWebSocket(
+      activeConversationId,
+      (data) => {
+        if (data.type === "new_message") {
+          const newMsg: Message = data.message;
+          queryClient.setQueryData<Message[]>(["messages", activeConversationId], (old = []) => {
+            if (old.some((m) => m.id === newMsg.id)) return old;
+            return [...old, newMsg];
+          });
 
-        // Append to current messages query cache
-        queryClient.setQueryData<Message[]>(["messages", activeConversationId], (old = []) => {
-          if (old.some((m) => m.id === newMsg.id)) return old;
-          return [...old, newMsg];
-        });
-
-        // Update conversation list last_message
-        queryClient.setQueryData<Conversation[]>(["conversations"], (old = []) =>
-          old.map((c) =>
-            c.id === activeConversationId
-              ? { ...c, last_message: newMsg, updated_at: new Date().toISOString() }
-              : c
-          )
-        );
-      } else if (data.type === "message_deleted") {
-        queryClient.setQueryData<Message[]>(["messages", activeConversationId], (old = []) =>
-          old.filter((m) => m.id !== data.message_id)
-        );
-        queryClient.invalidateQueries({ queryKey: ["conversations"] });
-      } else if (data.type === "typing") {
-        if (data.is_typing) {
-          setTypingUser(data.username);
-          setTimeout(() => setTypingUser(null), 3000);
-        } else {
-          setTypingUser(null);
+          queryClient.setQueryData<Conversation[]>(["conversations"], (old = []) =>
+            old.map((c) =>
+              c.id === activeConversationId
+                ? { ...c, last_message: newMsg, updated_at: new Date().toISOString() }
+                : c
+            )
+          );
+        } else if (data.type === "message_deleted") {
+          queryClient.setQueryData<Message[]>(["messages", activeConversationId], (old = []) =>
+            old.filter((m) => m.id !== data.message_id)
+          );
+          queryClient.invalidateQueries({ queryKey: ["conversations"] });
+        } else if (data.type === "message_reaction") {
+          queryClient.setQueryData<Message[]>(["messages", activeConversationId], (old = []) => {
+            return old.map((m) => {
+              if (m.id === data.message_id) {
+                const updatedReactions: ReactionSummary[] = (data.reactions || []).map((r: any) => ({
+                  emoji: r.emoji,
+                  count: r.count,
+                  users: r.users || [],
+                  reacted_by_me: (r.users || []).some((u: any) => String(u.id) === String(currentUserId)),
+                }));
+                return { ...m, reactions: updatedReactions };
+              }
+              return m;
+            });
+          });
+        } else if (data.type === "typing") {
+          if (data.is_typing) {
+            setTypingUser(data.username);
+            if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+            typingTimeoutRef.current = setTimeout(() => setTypingUser(null), 3000);
+          } else {
+            setTypingUser(null);
+          }
         }
+      },
+      (err) => {
+        console.warn("WebSocket error in chat page:", err);
       }
-    }, (err) => {
-      console.error('WebSocket error in chat page:', err);
-    });
+    );
 
     wsRef.current = controller;
 
-    // Cleanup function to close WebSocket when unmounting or conversation changes
     return () => {
       if (wsRef.current) {
-        console.log('Cleaning up WebSocket connection');
         wsRef.current.close();
       }
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
     };
-  }, [activeConversationId, queryClient]);
+  }, [activeConversationId, currentUserId, queryClient]);
 
   // Select conversation
   const selectConversation = (conv: Conversation) => {
@@ -496,6 +693,9 @@ export default function ChatPage() {
     setMobileView("chat");
     setShowDirectModal(false);
     setShowGroupModal(false);
+    setShowInChatSearch(false);
+    setInChatMessageQuery("");
+    setReplyingTo(null);
     markConversationAsRead(conv.id);
     queryClient.setQueryData<Conversation[]>(["conversations"], (old = []) =>
       old.map((c) => (c.id === conv.id ? { ...c, unread_count: 0 } : c))
@@ -549,6 +749,125 @@ export default function ChatPage() {
         deleteMessageMutation.mutate(messageId);
       }
     });
+  };
+
+  // TanStack Mutation: React to message with emoji
+  const reactMutation = useMutation({
+    mutationFn: async ({ messageId, emoji }: { messageId: string; emoji: string }) => {
+      if (!activeConversationId) return;
+      return await reactToMessage(activeConversationId, messageId, emoji);
+    },
+    onSuccess: (updatedMsg) => {
+      if (!activeConversationId || !updatedMsg) return;
+      queryClient.setQueryData<Message[]>(["messages", activeConversationId], (old = []) =>
+        old.map((m) => {
+          if (m.id === updatedMsg.id) {
+            const recomputedReactions = (updatedMsg.reactions || []).map((r: any) => ({
+              ...r,
+              reacted_by_me: (r.users || []).some((u: any) => String(u.id) === String(currentUserId)),
+            }));
+            return { ...m, reactions: recomputedReactions };
+          }
+          return m;
+        })
+      );
+    },
+  });
+
+  // Strict 1-emoji per user per message toggle / swap logic with instant optimistic feedback
+  const handleToggleReaction = (messageId: string, emoji: string) => {
+    if (!activeConversationId) return;
+
+    queryClient.setQueryData<Message[]>(["messages", activeConversationId], (old = []) => {
+      return old.map((m) => {
+        if (m.id !== messageId) return m;
+
+        const currentReactions: ReactionSummary[] = m.reactions
+          ? m.reactions.map((r) => ({
+              ...r,
+              users: [...r.users],
+            }))
+          : [];
+
+        const previousReactionIdx = currentReactions.findIndex(
+          (r) => r.reacted_by_me || r.users.some((u) => String(u.id) === String(currentUserId))
+        );
+
+        let newReactions = [...currentReactions];
+
+        if (previousReactionIdx > -1) {
+          const prev = newReactions[previousReactionIdx];
+
+          if (prev.emoji === emoji) {
+            if (prev.count <= 1) {
+              newReactions.splice(previousReactionIdx, 1);
+            } else {
+              newReactions[previousReactionIdx] = {
+                ...prev,
+                count: prev.count - 1,
+                reacted_by_me: false,
+                users: prev.users.filter((u) => String(u.id) !== String(currentUserId)),
+              };
+            }
+          } else {
+            if (prev.count <= 1) {
+              newReactions.splice(previousReactionIdx, 1);
+            } else {
+              newReactions[previousReactionIdx] = {
+                ...prev,
+                count: prev.count - 1,
+                reacted_by_me: false,
+                users: prev.users.filter((u) => String(u.id) !== String(currentUserId)),
+              };
+            }
+
+            const targetIdx = newReactions.findIndex((r) => r.emoji === emoji);
+            if (targetIdx > -1) {
+              newReactions[targetIdx] = {
+                ...newReactions[targetIdx],
+                count: newReactions[targetIdx].count + 1,
+                reacted_by_me: true,
+                users: [
+                  ...newReactions[targetIdx].users,
+                  { id: String(currentUserId), name: myUserName || "You" },
+                ],
+              };
+            } else {
+              newReactions.push({
+                emoji,
+                count: 1,
+                reacted_by_me: true,
+                users: [{ id: String(currentUserId), name: myUserName || "You" }],
+              });
+            }
+          }
+        } else {
+          const targetIdx = newReactions.findIndex((r) => r.emoji === emoji);
+          if (targetIdx > -1) {
+            newReactions[targetIdx] = {
+              ...newReactions[targetIdx],
+              count: newReactions[targetIdx].count + 1,
+              reacted_by_me: true,
+              users: [
+                ...newReactions[targetIdx].users,
+                { id: String(currentUserId), name: myUserName || "You" },
+              ],
+            };
+          } else {
+            newReactions.push({
+              emoji,
+              count: 1,
+              reacted_by_me: true,
+              users: [{ id: String(currentUserId), name: myUserName || "You" }],
+            });
+          }
+        }
+
+        return { ...m, reactions: newReactions };
+      });
+    });
+
+    reactMutation.mutate({ messageId, emoji });
   };
 
   // TanStack Mutation: Delete Conversation from Sidebar
@@ -630,14 +949,60 @@ export default function ChatPage() {
     forwardMessageMutation.mutate({ targetConvId: convId, content: contentToForward });
   };
 
-  // TanStack Mutation: Send Message
+  // Trigger reply on a message
+  const handleInitiateReply = (msg: Message) => {
+    setReplyingTo(msg);
+    if (inputRef.current) {
+      inputRef.current.focus();
+    }
+  };
+
+  // Swipe-to-reply Touch Handlers (WhatsApp mobile & touch gestures)
+  const handleTouchStart = (e: React.TouchEvent, msgId: string) => {
+    touchStartXRef.current = e.touches[0].clientX;
+    touchStartYRef.current = e.touches[0].clientY;
+    isSwipingRef.current = false;
+    setSwipingMsgId(msgId);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent, msg: Message) => {
+    const deltaX = e.touches[0].clientX - touchStartXRef.current;
+    const deltaY = Math.abs(e.touches[0].clientY - touchStartYRef.current);
+
+    if (deltaY > 30 && !isSwipingRef.current) {
+      return;
+    }
+
+    if (deltaX > 8) {
+      isSwipingRef.current = true;
+      const offset = Math.min(deltaX * 0.6, 68);
+      setSwipeOffset(offset);
+    }
+  };
+
+  const handleTouchEnd = (msg: Message) => {
+    if (swipeOffset >= 40) {
+      handleInitiateReply(msg);
+      if (typeof navigator !== "undefined" && navigator.vibrate) {
+        try {
+          navigator.vibrate(25);
+        } catch {}
+      }
+    }
+    setSwipingMsgId(null);
+    setSwipeOffset(0);
+    isSwipingRef.current = false;
+  };
+
+  // TanStack Mutation: Send Message (supports reply_to)
   const sendMessageMutation = useMutation({
     mutationFn: async () => {
       if (!activeConversationId || (!inputContent.trim() && selectedFiles.length === 0)) return;
       return await sendMessageWithAttachments(
         activeConversationId,
         inputContent.trim(),
-        selectedFiles
+        selectedFiles,
+        replyingTo?.id || null
       );
     },
     onSuccess: (newMsg) => {
@@ -646,18 +1011,17 @@ export default function ChatPage() {
       setInputContent("");
       setSelectedFiles([]);
       setFilePreviews([]);
+      setReplyingTo(null);
 
       if (inputRef.current) {
         inputRef.current.style.height = "auto";
       }
 
-      // Update message cache instantly
       queryClient.setQueryData<Message[]>(["messages", activeConversationId], (old = []) => {
         if (old.some((m) => m.id === newMsg.id)) return old;
         return [...old, newMsg];
       });
 
-      // Update conversations cache
       queryClient.setQueryData<Conversation[]>(["conversations"], (old = []) =>
         old.map((c) =>
           c.id === activeConversationId
@@ -665,6 +1029,8 @@ export default function ChatPage() {
             : c
         )
       );
+
+      scrollToBottom(true);
     },
   });
 
@@ -672,23 +1038,105 @@ export default function ChatPage() {
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const dragCounter = useRef<number>(0);
 
-  // Helper to add files (supports drag-and-drop, paste, and file-picker)
+  // Dedicated file & media download handler
+  const handleDownloadFile = async (
+    e: React.MouseEvent,
+    fileUrl: string,
+    fileName?: string
+  ) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const safeName =
+      fileName ||
+      fileUrl.split("/").pop()?.split("?")[0] ||
+      `attendstack-chat-media-${Date.now()}`;
+
+    try {
+      const response = await fetch(fileUrl);
+      if (!response.ok) throw new Error("Direct fetch failed");
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = safeName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => window.URL.revokeObjectURL(blobUrl), 100);
+    } catch {
+      const link = document.createElement("a");
+      link.href = fileUrl;
+      link.target = "_blank";
+      link.download = safeName;
+      link.rel = "noreferrer";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  };
+
+  const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB limit
+
+  // Helper to add files
   const addFiles = useCallback((newFiles: File[]) => {
     if (!newFiles || newFiles.length === 0) return;
 
-    const processedFiles = newFiles.map((file, idx) => {
-      // Fix pasted blob files without names
-      if (file.name === "image.png" || !file.name || file.name === "blob") {
-        const ext = file.type.split("/")[1]?.replace("+xml", "") || "png";
-        const newName = `pasted-image-${Date.now()}-${idx + 1}.${ext}`;
-        return new File([file], newName, { type: file.type || "image/png" });
+    const oversizedFiles: { name: string; sizeMB: string }[] = [];
+    const validFiles: File[] = [];
+
+    newFiles.forEach((file, idx) => {
+      if (file.size > MAX_FILE_SIZE) {
+        oversizedFiles.push({
+          name: file.name || `Attachment ${idx + 1}`,
+          sizeMB: (file.size / (1024 * 1024)).toFixed(1),
+        });
+      } else {
+        if (file.name === "image.png" || !file.name || file.name === "blob") {
+          const ext = file.type.split("/")[1]?.replace("+xml", "") || "png";
+          const newName = `pasted-image-${Date.now()}-${idx + 1}.${ext}`;
+          validFiles.push(new File([file], newName, { type: file.type || "image/png" }));
+        } else {
+          validFiles.push(file);
+        }
       }
-      return file;
     });
 
-    setSelectedFiles((prev) => [...prev, ...processedFiles]);
+    if (oversizedFiles.length > 0) {
+      const fileListHtml = oversizedFiles
+        .map(
+          (f) =>
+            `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; font-size:13px; background:#fff; border:1px solid #fee2e2; border-radius:6px; padding:6px 10px;">
+              <span style="font-weight:600; color:#1e293b; max-width:210px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${f.name}</span>
+              <span style="color:#ef4444; font-weight:700; background:#fef2f2; padding:2px 8px; border-radius:12px; font-size:11.5px;">${f.sizeMB} MB</span>
+            </div>`
+        )
+        .join("");
 
-    const newPreviews = processedFiles.map((file) => ({
+      Swal.fire({
+        icon: "warning",
+        title: "File Exceeds 10 MB Limit",
+        html: `
+          <p style="font-size:13.5px; color:#64748b; margin-bottom:12px; line-height:1.5;">
+            Only files up to <strong>10 MB</strong> are allowed in chat. The following file(s) exceed the size limit:
+          </p>
+          <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:10px; text-align:left; margin-bottom:12px;">
+            ${fileListHtml}
+          </div>
+        `,
+        confirmButtonText: "Got it",
+        customClass: {
+          popup: "rounded-4 shadow-lg",
+          confirmButton: "btn btn-primary px-4 py-2 rounded-pill fw-bold",
+        },
+        buttonsStyling: false,
+      });
+    }
+
+    if (validFiles.length === 0) return;
+
+    setSelectedFiles((prev) => [...prev, ...validFiles]);
+
+    const newPreviews = validFiles.map((file) => ({
       url: URL.createObjectURL(file),
       type: file.type,
       name: file.name,
@@ -705,7 +1153,7 @@ export default function ChatPage() {
     if (!e.target.files) return;
     const files = Array.from(e.target.files);
     addFiles(files);
-    e.target.value = ""; // Reset file input so re-selecting same file works
+    e.target.value = "";
   };
 
   const removeFile = (index: number) => {
@@ -713,7 +1161,7 @@ export default function ChatPage() {
     setFilePreviews((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // Clipboard Paste Handler (Ctrl+V image / file paste)
+  // Clipboard Paste Handler (Ctrl+V image / screenshot paste)
   const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
     if (e.clipboardData) {
       const items = Array.from(e.clipboardData.items || []);
@@ -732,12 +1180,11 @@ export default function ChatPage() {
     }
   };
 
-  // Global window paste listener for convenience when viewing active chat
+  // Global window paste listener
   useEffect(() => {
     const handleGlobalPaste = (e: ClipboardEvent) => {
       if (!activeConversationId) return;
       const target = e.target as HTMLElement;
-      // Don't duplicate if already focused in our textarea (handled by onPaste)
       if (target === inputRef.current) return;
       if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return;
 
@@ -811,6 +1258,8 @@ export default function ChatPage() {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSendMessage();
+    } else if (e.key === "Escape" && replyingTo) {
+      setReplyingTo(null);
     }
   };
 
@@ -839,17 +1288,12 @@ export default function ChatPage() {
   });
 
   const handleStartDirectChat = (user: UserMinimal) => {
-    // 1. Check if a direct conversation already exists in active conversation list with this employee
     const existingConv = conversations.find((c) => {
       if (c.type !== "DIRECT") return false;
-
-      // Match by other_user
       if (c.other_user) {
         if (String(c.other_user.id) === String(user.id)) return true;
         if (c.other_user.email && user.email && c.other_user.email.toLowerCase() === user.email.toLowerCase()) return true;
       }
-
-      // Match by members
       if (c.members && c.members.length > 0) {
         const otherMember = c.members.find(
           (m) => String(m.user?.id) !== String(currentUserId)
@@ -859,16 +1303,15 @@ export default function ChatPage() {
           if (otherMember.user?.email && user.email && otherMember.user?.email?.toLowerCase() === user.email?.toLowerCase()) return true;
         }
       }
-
       return false;
     });
 
     if (existingConv) {
       selectConversation(existingConv);
+      setShowDirectModal(false);
       return;
     }
 
-    // 2. Otherwise trigger API mutation (backend returns existing or creates new)
     createDirectChatMutation.mutate(user);
   };
 
@@ -894,10 +1337,6 @@ export default function ChatPage() {
   };
 
   const openGroupModal = () => {
-    if (userRole === "EMPLOYEE") {
-      alert("Only Administrators and HR Managers are authorized to create group chats.");
-      return;
-    }
     setShowGroupModal(true);
     setGroupName("");
     setSelectedGroupMembers([]);
@@ -905,21 +1344,19 @@ export default function ChatPage() {
     handleSearchUsers("");
   };
 
+  // Filter conversations
   const filteredConversations = useMemo(() => {
     const seenDirectUserIds = new Set<string>();
 
     return conversations.filter((c) => {
-      // Deduplicate DIRECT chats with the same target user in sidebar
-      if (c.type === "DIRECT") {
-        const otherUserId = c.other_user?.id
-          ? String(c.other_user.id)
-          : c.members?.find((m) => String(m.user.id) !== String(currentUserId))?.user?.id
+      if (c.type === "DIRECT" && c.members && currentUserId) {
+        const otherUserId = c.members.some((m) => String(m.user.id) !== String(currentUserId))
           ? String(c.members.find((m) => String(m.user.id) !== String(currentUserId))!.user.id)
           : null;
 
         if (otherUserId) {
           if (seenDirectUserIds.has(otherUserId)) {
-            return false; // Skip duplicate conversation entry for the same target user!
+            return false;
           }
           seenDirectUserIds.add(otherUserId);
         }
@@ -933,7 +1370,7 @@ export default function ChatPage() {
     });
   }, [conversations, searchQuery, convFilter, currentUserId]);
 
-  // Active members only filter for user search (excludes admins from employee chat popup)
+  // Active members filter for user search
   const activeUserSearchResults = useMemo(() => {
     return userSearchResults.filter((u) => {
       if (u.is_active === false) return false;
@@ -944,9 +1381,10 @@ export default function ChatPage() {
     });
   }, [userSearchResults]);
 
-  // Helper to render text with highlighted @mentions
-  const renderTextWithMentions = (content: string) => {
+  // Render text with highlighted @mentions & search highlights
+  const renderTextWithMentionsAndHighlights = (content: string) => {
     if (!content) return null;
+
     const parts = content.split(/(@[A-Za-z0-9._-]+(?:\s+[A-Za-z0-9._-]+)?)/g);
     return parts.map((part, idx) => {
       if (part.startsWith("@")) {
@@ -960,6 +1398,26 @@ export default function ChatPage() {
           </span>
         );
       }
+
+      if (inChatMessageQuery.trim()) {
+        const q = inChatMessageQuery.trim();
+        const searchRegex = new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi");
+        const subParts = part.split(searchRegex);
+        return (
+          <React.Fragment key={idx}>
+            {subParts.map((sub, sIdx) =>
+              sub.toLowerCase() === q.toLowerCase() ? (
+                <mark key={sIdx} className="bg-warning bg-opacity-75 text-dark rounded px-0.5">
+                  {sub}
+                </mark>
+              ) : (
+                sub
+              )
+            )}
+          </React.Fragment>
+        );
+      }
+
       return part;
     });
   };
@@ -968,6 +1426,11 @@ export default function ChatPage() {
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
     setInputContent(val);
+
+    const textarea = e.target;
+    textarea.style.height = "auto";
+    const newHeight = Math.min(textarea.scrollHeight, 150);
+    textarea.style.height = `${newHeight}px`;
 
     const cursorPos = e.target.selectionStart;
     const textBeforeCursor = val.slice(0, cursorPos);
@@ -979,6 +1442,17 @@ export default function ChatPage() {
       setShowMentionSuggestions(true);
     } else {
       setShowMentionSuggestions(false);
+    }
+
+    if (wsRef.current?.ws && wsRef.current.ws.readyState === WebSocket.OPEN) {
+      try {
+        wsRef.current.ws.send(
+          JSON.stringify({
+            action: "typing",
+            is_typing: val.trim().length > 0,
+          })
+        );
+      } catch {}
     }
   };
 
@@ -992,12 +1466,12 @@ export default function ChatPage() {
     if (inputRef.current) inputRef.current.focus();
   };
 
-  // Render date separators & message bubbles in clean flex container
+  // Render date separators & message bubbles
   const renderMessagesWithDateSeparators = () => {
     const elements: React.ReactNode[] = [];
     let lastDateLabel = "";
 
-    messages.forEach((msg) => {
+    displayedMessages.forEach((msg) => {
       const dateLabel = getDateLabel(msg.created_at);
       if (dateLabel !== lastDateLabel) {
         lastDateLabel = dateLabel;
@@ -1010,81 +1484,191 @@ export default function ChatPage() {
 
       const isMe = String(msg.sender?.id) === String(currentUserId);
       const timeStr = formatMessageTime(msg.created_at);
-
       const canDelete = isMe || activeConversation?.members?.some((m) => String(m.user.id) === String(currentUserId) && m.role === "ADMIN");
 
-      const messageActionsMenu = (
-        <Dropdown className="chat-msg-actions-dropdown" align="end">
-          <Dropdown.Toggle variant="light" size="sm" className="chat-msg-more-btn no-caret border-0">
-            <MoreVertical size={13} />
-          </Dropdown.Toggle>
-          <Dropdown.Menu className="shadow-sm border rounded-3 py-1" style={{ minWidth: "130px" }}>
-            {msg.content && (
-              <Dropdown.Item
-                className="d-flex align-items-center gap-2 text-secondary px-3 py-1.5"
-                onClick={() => handleCopyMessage(msg.id, msg.content)}
-              >
-                <Copy size={14} />
-                <span>{copiedMsgId === msg.id ? "Copied!" : "Copy"}</span>
-              </Dropdown.Item>
-            )}
-            <Dropdown.Item
-              className="d-flex align-items-center gap-2 text-secondary px-3 py-1.5"
-              onClick={() => {
-                setForwardMsg(msg);
-                setForwardSearch("");
-                setForwardedConvIds([]);
-              }}
-            >
-              <CornerUpRight size={14} />
-              <span>Forward</span>
-            </Dropdown.Item>
-            {canDelete && (
-              <Dropdown.Item
-                className="d-flex align-items-center gap-2 text-danger px-3 py-1.5"
-                onClick={() => handleDeleteMessage(msg.id)}
-              >
-                <Trash2 size={14} />
-                <span>Delete</span>
-              </Dropdown.Item>
-            )}
-          </Dropdown.Menu>
-        </Dropdown>
-      );
-
       const senderPhoto = (msg.sender as any)?.profile_photo_url || (msg.sender as any)?.avatar || (isMe ? myProfilePhoto : null);
+      const senderName = msg.sender?.name || msg.sender?.email || (isMe ? myUserName || "You" : "User");
+      const hasReactions = msg.reactions && msg.reactions.length > 0;
+      const isHighlighted = highlightedMsgId === msg.id;
+
+      const isBeingSwiped = swipingMsgId === msg.id;
+      const currentSwipeX = isBeingSwiped ? swipeOffset : 0;
 
       elements.push(
         <div
           key={msg.id}
-          className={`chat-message-row ${isMe ? "sent" : "received"}`}
+          id={`msg-${msg.id}`}
+          className={`chat-message-row ${isMe ? "sent" : "received"} ${hasReactions ? "has-reactions" : ""} ${isHighlighted ? "highlight-flash" : ""} position-relative`}
+          onTouchStart={(e) => handleTouchStart(e, msg.id)}
+          onTouchMove={(e) => handleTouchMove(e, msg)}
+          onTouchEnd={() => handleTouchEnd(msg)}
         >
-          {/* Avatar for received messages */}
-          {!isMe && (
+          {/* Swipe-to-Reply curved icon indicator behind the bubble */}
+          {isBeingSwiped && currentSwipeX > 8 && (
             <div
-              className="chat-msg-avatar"
+              className="chat-swipe-reply-icon-wrap"
               style={{
-                backgroundColor: getAvatarColor(msg.sender?.name || msg.sender?.email || "U"),
+                opacity: Math.min(currentSwipeX / 40, 1),
+                transform: `scale(${Math.min(currentSwipeX / 40, 1)})`,
               }}
-              title={msg.sender?.name || msg.sender?.email || "User"}
             >
-              {senderPhoto ? (
-                <BSImage src={senderPhoto} className="w-100 h-100 rounded-circle" style={{ objectFit: "cover" }} />
-              ) : (
-                (msg.sender?.name || msg.sender?.email || "U")[0].toUpperCase()
-              )}
+              <div className="chat-swipe-reply-icon-circle">
+                <Reply size={16} />
+              </div>
             </div>
           )}
 
-          <div className={`chat-bubble ${isMe ? "bubble-sent" : "bubble-received"}`}>
-            {/* Top-right 3-dots action menu */}
-            {messageActionsMenu}
+          {/* Avatar for received messages */}
+          {!isMe && (
+            <SafeAvatar
+              src={senderPhoto}
+              name={senderName}
+              size={30}
+              fontSize={11}
+              className="chat-msg-avatar mb-1 me-1"
+            />
+          )}
+
+          <div
+            className={`chat-bubble ${isMe ? "bubble-sent" : "bubble-received"} ${activeActionBarMsgId === msg.id ? "active-bubble-focused" : ""}`}
+            style={{
+              transform: currentSwipeX > 0 ? `translateX(${currentSwipeX}px)` : undefined,
+              transition: isBeingSwiped ? "none" : "transform 0.2s cubic-bezier(0.18, 0.89, 0.32, 1.28)",
+              cursor: "pointer",
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+              setActiveActionBarMsgId((prev) => (prev === msg.id ? null : msg.id));
+            }}
+          >
+            {/* WhatsApp-Style Click-to-Show Reaction & Action Bar */}
+            {activeActionBarMsgId === msg.id && (
+              <div className="chat-quick-reactions-bar shadow-sm" onClick={(e) => e.stopPropagation()}>
+                {CORPORATE_REACTIONS.map((em) => (
+                  <button
+                    key={em}
+                    type="button"
+                    className="quick-reaction-btn"
+                    title={`React ${em}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleToggleReaction(msg.id, em);
+                      setActiveActionBarMsgId(null);
+                    }}
+                  >
+                    {em}
+                  </button>
+                ))}
+
+                {/* Quick Reply Button on Action Bar */}
+                <button
+                  type="button"
+                  className="quick-reaction-btn reply-quick-btn"
+                  title="Reply to message"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleInitiateReply(msg);
+                    setActiveActionBarMsgId(null);
+                  }}
+                >
+                  <CornerUpLeft size={14} />
+                </button>
+
+                {/* Message 3-dots Dropdown Actions */}
+                <Dropdown align="end" className="d-inline-block">
+                  <Dropdown.Toggle
+                    variant="light"
+                    size="sm"
+                    className="quick-reaction-btn no-caret border-0 bg-transparent p-0 d-flex align-items-center justify-content-center"
+                  >
+                    <MoreVertical size={13} />
+                  </Dropdown.Toggle>
+                  <Dropdown.Menu className="shadow-lg border rounded-3 py-1 dropdown-menu-end" style={{ minWidth: "150px", zIndex: 1060 }}>
+                    <Dropdown.Item
+                      className="d-flex align-items-center gap-2 text-secondary px-3 py-1.5 small"
+                      onClick={() => {
+                        handleInitiateReply(msg);
+                        setActiveActionBarMsgId(null);
+                      }}
+                    >
+                      <Reply size={13} />
+                      <span>Reply</span>
+                    </Dropdown.Item>
+                    {msg.content && (
+                      <Dropdown.Item
+                        className="d-flex align-items-center gap-2 text-secondary px-3 py-1.5 small"
+                        onClick={() => {
+                          handleCopyMessage(msg.id, msg.content);
+                          setActiveActionBarMsgId(null);
+                        }}
+                      >
+                        <Copy size={13} />
+                        <span>{copiedMsgId === msg.id ? "Copied!" : "Copy Text"}</span>
+                      </Dropdown.Item>
+                    )}
+                    <Dropdown.Item
+                      className="d-flex align-items-center gap-2 text-secondary px-3 py-1.5 small"
+                      onClick={() => {
+                        setForwardMsg(msg);
+                        setForwardSearch("");
+                        setForwardedConvIds([]);
+                        setActiveActionBarMsgId(null);
+                      }}
+                    >
+                      <CornerUpRight size={13} />
+                      <span>Forward</span>
+                    </Dropdown.Item>
+                    {canDelete && (
+                      <>
+                        <Dropdown.Divider className="my-1" />
+                        <Dropdown.Item
+                          className="d-flex align-items-center gap-2 text-danger px-3 py-1.5 small"
+                          onClick={() => {
+                            handleDeleteMessage(msg.id);
+                            setActiveActionBarMsgId(null);
+                          }}
+                        >
+                          <Trash2 size={13} />
+                          <span>Delete</span>
+                        </Dropdown.Item>
+                      </>
+                    )}
+                  </Dropdown.Menu>
+                </Dropdown>
+              </div>
+            )}
 
             {/* Sender name for group chat */}
             {!isMe && activeConversation?.type === "GROUP" && (
               <span className="chat-sender-name">
                 {msg.sender?.name || msg.sender?.email}
               </span>
+            )}
+
+            {/* Quoted Message Snippet (If this message is a reply) */}
+            {msg.reply_to && (
+              <div
+                className="chat-quoted-bubble-card mb-1.5 p-2 rounded-2 cursor-pointer"
+                onClick={() => scrollToQuotedMessage(msg.reply_to!.id)}
+                title="Click to jump to quoted message"
+              >
+                <span
+                  className="chat-quoted-sender fw-bold d-block mb-0.5"
+                  style={{
+                    color: getAvatarColor(msg.reply_to.sender?.name || msg.reply_to.sender?.email || "User"),
+                    fontSize: "11.5px",
+                  }}
+                >
+                  {msg.reply_to.sender?.name || msg.reply_to.sender?.email || "User"}
+                </span>
+                <span className="chat-quoted-snippet text-truncate d-block small" style={{ fontSize: "12px", color: "#475569" }}>
+                  {msg.reply_to.is_deleted ? (
+                    <em className="text-muted">This message was deleted</em>
+                  ) : (
+                    msg.reply_to.content || `[${msg.reply_to.message_type || "Attachment"}]`
+                  )}
+                </span>
+              </div>
             )}
 
             {/* Announcement Banner or Regular Text */}
@@ -1107,7 +1691,7 @@ export default function ChatPage() {
                   )}
                 </div>
                 <p className="mb-2 text-dark fw-medium" style={{ fontSize: "14px", lineHeight: "1.5" }}>
-                  {renderTextWithMentions(msg.content || "")}
+                  {renderTextWithMentionsAndHighlights(msg.content || "")}
                 </p>
                 {msg.requires_acknowledgement && (
                   <div
@@ -1119,7 +1703,7 @@ export default function ChatPage() {
                     </small>
                     {msg.is_acknowledged_by_me ? (
                       <span className="badge bg-success-subtle text-success border border-success-subtle rounded-pill px-2.5 py-1" style={{ fontSize: "11px", fontWeight: 600 }}>
-                        Acknowledged
+                        <Check size={12} className="me-1" /> Acknowledged
                       </span>
                     ) : (
                       <Button
@@ -1138,7 +1722,7 @@ export default function ChatPage() {
               </div>
             ) : (
               msg.content && !msg.is_deleted && (
-                <p className="chat-text">{renderTextWithMentions(msg.content)}</p>
+                <p className="chat-text">{renderTextWithMentionsAndHighlights(msg.content)}</p>
               )
             )}
 
@@ -1151,62 +1735,153 @@ export default function ChatPage() {
 
             {/* Attachments */}
             {msg.attachments && msg.attachments.length > 0 && (
-              <div className="chat-attachments">
+              <div className="chat-attachments mt-1">
                 {msg.attachments.map((att) => {
-                  const isImg = att.file_type?.startsWith("image/");
-                  const isVid = att.file_type?.startsWith("video/");
+                  const isImg = att.file_type?.startsWith("image/") || (att.file && /\.(png|jpe?g|gif|webp|svg)$/i.test(att.file));
+                  const isVid = att.file_type?.startsWith("video/") || (att.file && /\.(mp4|webm|mov|ogg|mkv)$/i.test(att.file));
+                  const fileName = att.file ? att.file.split("/").pop()?.split("?")[0] || "Attachment" : "Attachment";
+                  const fileSizeStr = att.file_size ? (
+                    att.file_size < 1024 * 1024 
+                      ? `${Math.round(att.file_size / 1024)} kB`
+                      : `${(att.file_size / (1024 * 1024)).toFixed(1)} MB`
+                  ) : "";
 
                   if (isImg) {
                     return (
                       <div
                         key={att.id}
-                        className="chat-att-image"
-                        onClick={() => setPreviewMediaUrl(att.file_url)}
+                        className="whatsapp-media-card position-relative overflow-hidden rounded-2"
+                        style={{ cursor: "pointer", maxWidth: "330px" }}
+                        onClick={() =>
+                          setPreviewMedia({
+                            url: att.file_url,
+                            type: "image",
+                            name: fileName,
+                            size: fileSizeStr,
+                          })
+                        }
                       >
                         <BSImage
                           src={att.file_url}
-                          alt="attachment"
+                          alt={fileName}
                           className="w-100"
-                          style={{
-                            maxHeight: "220px",
-                            objectFit: "contain",
-                            borderRadius: "8px",
-                            cursor: "pointer",
-                            backgroundColor: "rgba(0,0,0,0.03)",
-                          }}
+                          style={{ maxHeight: "280px", objectFit: "cover", borderRadius: "6px", display: "block" }}
                         />
+                        <div className="whatsapp-media-overlay position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center">
+                          <button
+                            className="btn btn-dark bg-opacity-75 text-white rounded-circle p-2 border-0 shadow"
+                            title="Download Image"
+                            onClick={(e) => handleDownloadFile(e, att.file_url, fileName)}
+                          >
+                            <Download size={18} />
+                          </button>
+                        </div>
                       </div>
                     );
                   }
 
                   if (isVid) {
                     return (
-                      <div key={att.id} className="chat-att-video">
+                      <div key={att.id} className="whatsapp-video-card rounded-2 overflow-hidden bg-black position-relative" style={{ maxWidth: "330px" }}>
+                        <div className="d-flex align-items-center justify-content-between p-2 bg-dark bg-opacity-80 text-white small">
+                          <div className="d-flex align-items-center gap-1.5 overflow-hidden text-truncate me-2">
+                            <VideoIcon size={14} className="text-primary flex-shrink-0" />
+                            <span className="text-truncate fw-semibold" style={{ fontSize: "12px" }}>{fileName}</span>
+                            {fileSizeStr && <span className="badge bg-secondary py-0.5 px-1.5" style={{ fontSize: "10px" }}>{fileSizeStr}</span>}
+                          </div>
+                          <div className="d-flex align-items-center gap-1">
+                            <button
+                              className="btn btn-sm btn-dark text-white p-1 rounded border-0"
+                              title="Full Preview"
+                              onClick={() =>
+                                setPreviewMedia({
+                                  url: att.file_url,
+                                  type: "video",
+                                  name: fileName,
+                                  size: fileSizeStr,
+                                })
+                              }
+                            >
+                              <Maximize2 size={13} />
+                            </button>
+                            <button
+                              className="btn btn-sm btn-primary text-white p-1 rounded border-0 d-flex align-items-center gap-1"
+                              title="Download Video"
+                              onClick={(e) => handleDownloadFile(e, att.file_url, fileName)}
+                            >
+                              <Download size={13} />
+                            </button>
+                          </div>
+                        </div>
                         <video
                           controls
+                          preload="metadata"
+                          playsInline
                           className="w-100"
-                          style={{ maxHeight: "220px", borderRadius: "8px" }}
+                          style={{ maxHeight: "260px", display: "block" }}
                         >
                           <source src={att.file_url} type={att.file_type || "video/mp4"} />
+                          Your browser does not support playing this video format.
                         </video>
                       </div>
                     );
                   }
 
+                  const fileMeta = getFileMeta(fileName);
+
                   return (
-                    <a
+                    <div
                       key={att.id}
-                      href={att.file_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="chat-att-file"
+                      className="whatsapp-file-card d-flex align-items-center justify-content-between p-2 rounded-2"
+                      onClick={(e) => handleDownloadFile(e, att.file_url, fileName)}
                     >
-                      <FileText size={16} />
-                      <div className="chat-att-file-info">
-                        <span className="chat-att-file-name">Attachment</span>
-                        <small>{(att.file_size / (1024 * 1024)).toFixed(2)} MB</small>
+                      <div className="d-flex align-items-center gap-2.5 overflow-hidden me-2">
+                        <div
+                          className="whatsapp-doc-badge d-flex flex-column align-items-center justify-content-center flex-shrink-0 rounded-1"
+                          style={{
+                            width: "36px",
+                            height: "44px",
+                            backgroundColor: fileMeta.color,
+                            color: "#ffffff",
+                          }}
+                        >
+                          <FileText size={18} strokeWidth={2.2} />
+                          <span style={{ fontSize: "8.5px", fontWeight: 800, marginTop: "1px", letterSpacing: "0.03em" }}>
+                            {fileMeta.label}
+                          </span>
+                        </div>
+                        <div className="d-flex flex-column overflow-hidden text-start">
+                          <span
+                            className="fw-semibold text-truncate"
+                            title={fileName}
+                            style={{
+                              color: "#111b21",
+                              fontSize: "13.5px",
+                              lineHeight: "1.35",
+                            }}
+                          >
+                            {fileName}
+                          </span>
+                          <span
+                            style={{
+                              color: "#667781",
+                              fontSize: "11px",
+                              marginTop: "2px",
+                              fontWeight: 400,
+                            }}
+                          >
+                            {fileMeta.label} • {fileSizeStr || "Document"}
+                          </span>
+                        </div>
                       </div>
-                    </a>
+                      <button
+                        className="whatsapp-download-btn btn p-1.5 rounded-circle border-0 d-flex align-items-center justify-content-center flex-shrink-0"
+                        title={`Download ${fileName}`}
+                        onClick={(e) => handleDownloadFile(e, att.file_url, fileName)}
+                      >
+                        <Download size={19} strokeWidth={2} />
+                      </button>
+                    </div>
                   );
                 })}
               </div>
@@ -1217,24 +1892,39 @@ export default function ChatPage() {
               <span className="chat-time">{timeStr}</span>
               {isMe && <CheckCheck size={13} className="chat-read-icon" />}
             </div>
-          </div>
 
-          {/* My DP Avatar for sent messages */}
-          {isMe && (
-            <div
-              className="chat-msg-avatar chat-msg-avatar-sent"
-              style={{
-                backgroundColor: getAvatarColor(msg.sender?.name || myUserName || "Me"),
-              }}
-              title={myUserName || "You"}
-            >
-              {myProfilePhoto ? (
-                <BSImage src={myProfilePhoto} alt="My DP" className="w-100 h-100 rounded-circle" style={{ objectFit: "cover" }} />
-              ) : (
-                (msg.sender?.name || myUserName || "M")[0].toUpperCase()
-              )}
-            </div>
-          )}
+            {/* WhatsApp-style Overlapping Reaction Badges (Transparent background) */}
+            {hasReactions && (
+              <div className="chat-msg-reactions-container">
+                {msg.reactions!.map((r) => {
+                  const userNames = r.users.map((u) => (String(u.id) === String(currentUserId) ? "You" : u.name)).join(", ");
+                  const tooltipText = `${userNames} reacted with ${r.emoji}`;
+
+                  return (
+                    <OverlayTrigger
+                      key={r.emoji}
+                      placement="top"
+                      overlay={<Tooltip id={`tooltip-reaction-${msg.id}-${r.emoji}`}>{tooltipText}</Tooltip>}
+                    >
+                      <button
+                        type="button"
+                        className={`chat-reaction-badge ${r.reacted_by_me ? "active-reaction" : ""}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleToggleReaction(msg.id, r.emoji);
+                        }}
+                      >
+                        <span className="reaction-emoji">{r.emoji}</span>
+                        {r.count > 1 && (
+                          <span className="reaction-count">{r.count}</span>
+                        )}
+                      </button>
+                    </OverlayTrigger>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       );
     });
@@ -1267,43 +1957,30 @@ export default function ChatPage() {
           <div className="chat-sidebar-header">
             <div className="chat-sidebar-title-row">
               <div className="chat-sidebar-title d-flex align-items-center gap-2">
-                {myProfilePhoto ? (
-                  <BSImage
-                    src={myProfilePhoto}
-                    alt="My DP"
-                    className="rounded-circle shadow-sm border border-2 border-white flex-shrink-0"
-                    style={{ width: "38px", height: "38px", objectFit: "cover" }}
-                  />
-                ) : (
-                  <div
-                    className="rounded-circle shadow-sm border border-2 border-white flex-shrink-0 d-flex align-items-center justify-content-center fw-bold text-white"
-                    style={{
-                      width: "38px",
-                      height: "38px",
-                      backgroundColor: getAvatarColor(myUserName || "User"),
-                      fontSize: "14px",
-                    }}
-                  >
-                    {(myUserName || "U")[0].toUpperCase()}
-                  </div>
-                )}
+                <SafeAvatar
+                  src={myProfilePhoto}
+                  name={myUserName || "User"}
+                  size={38}
+                  fontSize={14}
+                  className="shadow-xs border border-2 border-white flex-shrink-0"
+                />
                 <div>
-                  <h2 className="mb-0 fs-5 fw-bold text-dark">Chats</h2>
+                  <h2 className="mb-0 fs-5 fw-bold text-dark">Team Chat</h2>
                   <span className="chat-count text-muted small">{conversations.length} conversations</span>
                 </div>
               </div>
               <div className="chat-sidebar-actions">
                 <button className="chat-icon-btn" title="New Direct Message" onClick={openDirectModal}>
-                  <PlusCircle size={20} />
+                  <PlusCircle size={18} />
                 </button>
                 {userRole !== "EMPLOYEE" && (
                   <button className="chat-icon-btn text-warning" title="Send Company Announcement" onClick={() => setShowAnnouncementModal(true)}>
-                    <Megaphone size={18} />
+                    <Megaphone size={17} />
                   </button>
                 )}
                 {userRole !== "EMPLOYEE" ? (
                   <button className="chat-icon-btn accent" title="Create Group Chat" onClick={openGroupModal}>
-                    <Users size={20} />
+                    <Users size={18} />
                   </button>
                 ) : (
                   <button
@@ -1311,15 +1988,43 @@ export default function ChatPage() {
                     title="Only Admins can create group chats"
                     onClick={() => alert("Only Administrators and HR Managers are authorized to create group chats.")}
                   >
-                    <Users size={20} />
+                    <Users size={18} />
                   </button>
                 )}
               </div>
             </div>
 
+            {/* Conversation Filter Tabs */}
+            <div className="d-flex gap-1 mb-2 bg-light p-1 rounded-3">
+              <button
+                type="button"
+                className={`btn btn-sm flex-fill rounded-2 fw-semibold py-1 ${convFilter === "all" ? "bg-white text-primary shadow-xs" : "text-muted border-0"}`}
+                style={{ fontSize: "12px" }}
+                onClick={() => setConvFilter("all")}
+              >
+                All
+              </button>
+              <button
+                type="button"
+                className={`btn btn-sm flex-fill rounded-2 fw-semibold py-1 ${convFilter === "direct" ? "bg-white text-primary shadow-xs" : "text-muted border-0"}`}
+                style={{ fontSize: "12px" }}
+                onClick={() => setConvFilter("direct")}
+              >
+                Direct
+              </button>
+              <button
+                type="button"
+                className={`btn btn-sm flex-fill rounded-2 fw-semibold py-1 ${convFilter === "group" ? "bg-white text-primary shadow-xs" : "text-muted border-0"}`}
+                style={{ fontSize: "12px" }}
+                onClick={() => setConvFilter("group")}
+              >
+                Groups
+              </button>
+            </div>
+
             {/* Search */}
             <div className="chat-search-box">
-              <Search size={16} className="chat-search-icon" />
+              <Search size={15} className="chat-search-icon" />
               <input
                 type="text"
                 placeholder="Search conversations..."
@@ -1339,7 +2044,7 @@ export default function ChatPage() {
             {loadingConversations ? (
               <div className="chat-empty-state">
                 <Spinner animation="border" variant="primary" size="sm" />
-                <p>Loading chats...</p>
+                <p className="mt-2">Loading chats...</p>
               </div>
             ) : filteredConversations.length === 0 ? (
               <div className="chat-empty-state">
@@ -1347,38 +2052,29 @@ export default function ChatPage() {
                   <MessageSquare size={28} />
                 </div>
                 <h6>No conversations yet</h6>
-                <p>Start a new chat with your team</p>
-                <Button variant="outline-primary" size="sm" className="rounded-pill px-3" onClick={openDirectModal}>
+                <p>Start a new chat with your team members</p>
+                <Button variant="outline-primary" size="sm" className="rounded-pill px-3 mt-2" onClick={openDirectModal}>
                   Start Chat
                 </Button>
               </div>
             ) : (
               filteredConversations.map((conv) => {
                 const isActive = activeConversationId === conv.id;
-                const avatarBg = getAvatarColor(conv.display_name || "Chat");
                 return (
                   <div
                     key={conv.id}
                     onClick={() => selectConversation(conv)}
                     className={`chat-conv-item ${isActive ? "active" : ""}`}
                   >
-                    <div className="chat-conv-avatar-wrap">
-                      <div
-                        className="chat-conv-avatar"
-                        style={{ backgroundColor: avatarBg }}
-                      >
-                        {conv.avatar ? (
-                          <BSImage src={conv.avatar} alt="avatar" className="w-100 h-100 rounded-circle" style={{ objectFit: "cover" }} />
-                        ) : conv.type === "GROUP" ? (
-                          <Users size={18} />
-                        ) : (
-                          (conv.display_name || "U")[0].toUpperCase()
-                        )}
-                      </div>
-                      {conv.type === "DIRECT" && (
-                        <span className="chat-online-dot" />
-                      )}
-                    </div>
+                    <SafeAvatar
+                      src={conv.avatar}
+                      name={conv.display_name || "Chat"}
+                      size={42}
+                      fontSize={15}
+                      isGroup={conv.type === "GROUP"}
+                      showOnlineDot={conv.type === "DIRECT"}
+                      className="flex-shrink-0"
+                    />
 
                     <div className="chat-conv-info">
                       <div className="chat-conv-top">
@@ -1439,6 +2135,7 @@ export default function ChatPage() {
               </div>
             </div>
           )}
+
           {activeConversation ? (
             <>
               {/* Chat Header */}
@@ -1447,87 +2144,147 @@ export default function ChatPage() {
                   <button
                     className="chat-back-btn"
                     onClick={() => setMobileView("list")}
+                    title="Back to conversation list"
                   >
-                    <ArrowLeft size={20} />
+                    <ArrowLeft size={18} />
                   </button>
 
-                  <div
-                    className="chat-header-avatar"
-                    style={{ backgroundColor: getAvatarColor(activeConversation.display_name || "Chat") }}
-                  >
-                    {activeConversation.avatar ? (
-                      <BSImage src={activeConversation.avatar} alt="avatar" className="w-100 h-100 rounded-circle" style={{ objectFit: "cover" }} />
-                    ) : activeConversation.type === "GROUP" ? (
-                      <Users size={18} />
-                    ) : (
-                      (activeConversation.display_name || "C")[0].toUpperCase()
-                    )}
-                  </div>
+                  <SafeAvatar
+                    src={activeConversation.avatar}
+                    name={activeConversation.display_name || "Chat"}
+                    size={40}
+                    fontSize={15}
+                    isGroup={activeConversation.type === "GROUP"}
+                    className="flex-shrink-0 shadow-xs"
+                  />
 
                   <div className="chat-header-info">
                     <h3>{activeConversation.display_name}</h3>
                     <span className="chat-header-meta">
                       {activeConversation.type === "GROUP"
-                        ? `${activeConversation.members.length} members`
-                        : "Online"}
+                        ? `${activeConversation.members?.length || 0} members`
+                        : "Active Now"}
                     </span>
                   </div>
                 </div>
 
-                <div className="chat-header-right">
+                <div className="chat-header-right d-flex align-items-center gap-1">
+                  <button
+                    className={`chat-icon-btn ${showInChatSearch ? "active" : ""}`}
+                    title="Search in conversation"
+                    onClick={() => {
+                      setShowInChatSearch((prev) => !prev);
+                      if (showInChatSearch) setInChatMessageQuery("");
+                    }}
+                  >
+                    <Search size={16} />
+                  </button>
+
                   <Dropdown align="end">
                     <Dropdown.Toggle variant="light" size="sm" className="chat-icon-btn no-caret border-0">
-                      <MoreVertical size={18} />
+                      <MoreVertical size={16} />
                     </Dropdown.Toggle>
-                    <Dropdown.Menu className="shadow-sm border rounded-3">
-                      <Dropdown.Item onClick={() => refetchMessages()}>
+                    <Dropdown.Menu className="shadow-lg border rounded-3 py-1 dropdown-menu-end">
+                      <Dropdown.Item onClick={() => refetchMessages()} className="small px-3 py-1.5">
                         Refresh Messages
                       </Dropdown.Item>
-                      {/* {userRole !== "EMPLOYEE" && (
-                        <Dropdown.Item onClick={() => setShowAnnouncementModal(true)}>
-                          <Megaphone size={14} className="me-2 text-primary" /> Broadcast Announcement
+                      {userRole !== "EMPLOYEE" && (
+                        <Dropdown.Item onClick={() => setShowAnnouncementModal(true)} className="small px-3 py-1.5">
+                          <Megaphone size={13} className="me-2 text-primary" /> Broadcast Announcement
                         </Dropdown.Item>
-                      )} */}
-                      <Dropdown.Item className="text-danger" onClick={() => setShowClearModal(true)}>
-                        Clear Chat History
-                      </Dropdown.Item>
-                      <Dropdown.Item onClick={() => setMobileView("list")}>
-                        Back to Conversations
+                      )}
+                      <Dropdown.Divider className="my-1" />
+                      <Dropdown.Item className="text-danger small px-3 py-1.5" onClick={() => setShowClearModal(true)}>
+                        <Trash2 size={13} className="me-2" /> Clear Chat History
                       </Dropdown.Item>
                     </Dropdown.Menu>
                   </Dropdown>
                 </div>
               </div>
 
+              {/* In-Chat Message Search Bar */}
+              {showInChatSearch && (
+                <div className="chat-in-chat-search-bar d-flex align-items-center justify-content-between p-2 px-3 bg-light border-bottom">
+                  <div className="d-flex align-items-center gap-2 flex-grow-1">
+                    <Search size={15} className="text-muted flex-shrink-0" />
+                    <input
+                      type="text"
+                      className="form-control form-control-sm bg-white border shadow-none"
+                      placeholder="Search messages in this conversation..."
+                      value={inChatMessageQuery}
+                      onChange={(e) => setInChatMessageQuery(e.target.value)}
+                      autoFocus
+                    />
+                  </div>
+                  <div className="d-flex align-items-center gap-2 ms-2">
+                    {inChatMessageQuery && (
+                      <span className="badge bg-secondary-subtle text-secondary small">
+                        {displayedMessages.length} found
+                      </span>
+                    )}
+                    <button
+                      className="btn btn-sm btn-link text-muted p-1"
+                      onClick={() => {
+                        setShowInChatSearch(false);
+                        setInChatMessageQuery("");
+                      }}
+                    >
+                      <X size={15} />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Pinned Company Announcement Banner */}
+              {pinnedAnnouncement && (
+                <div className="chat-pinned-announcement-banner d-flex align-items-center justify-content-between p-2.5 px-3 border-bottom shadow-xs">
+                  <div className="d-flex align-items-center gap-2 overflow-hidden me-2">
+                    <Pin size={15} className="text-primary flex-shrink-0" />
+                    <span className="fw-bold text-dark small flex-shrink-0">Announcement:</span>
+                    <span className="text-truncate text-secondary small">{pinnedAnnouncement.content}</span>
+                  </div>
+                  {pinnedAnnouncement.requires_acknowledgement && !pinnedAnnouncement.is_acknowledged_by_me && (
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      className="rounded-pill px-2.5 py-0.5 border-0 flex-shrink-0 fw-semibold"
+                      style={{ backgroundColor: "#6366f1", fontSize: "11px" }}
+                      onClick={() => acknowledgeMutation.mutate(pinnedAnnouncement.id)}
+                    >
+                      Acknowledge
+                    </Button>
+                  )}
+                </div>
+              )}
+
               {/* Messages Flex Scroll Area */}
-              <div className="chat-messages-area">
+              <div
+                className="chat-messages-area"
+                ref={chatMessagesAreaRef}
+                onScroll={handleScrollArea}
+              >
                 {loadingMessages ? (
                   <div className="chat-empty-state">
                     <Spinner animation="border" variant="primary" />
-                    <p>Loading messages...</p>
+                    <p className="mt-2">Loading messages...</p>
                   </div>
-                ) : messages.length === 0 ? (
+                ) : displayedMessages.length === 0 ? (
                   <div className="chat-empty-state" style={{ marginTop: "auto", marginBottom: "auto" }}>
                     <div
                       className="chat-mascot-wrapper"
                       style={{
-                        width: "120px",
-                        height: "120px",
+                        width: "100px",
+                        height: "100px",
                         margin: "0 auto 12px",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
-                        filter: "drop-shadow(0 8px 16px rgba(245, 158, 11, 0.2))",
                       }}
                     >
-                      <img
-                        src="/smiling-mascot.svg"
-                        alt="Smiling Mascot"
-                        style={{ width: "100%", height: "100%", objectFit: "contain" }}
-                      />
+                      <MessageSquare size={48} className="text-primary opacity-50" />
                     </div>
-                    <h6>No messages yet</h6>
-                    <p>Send a message to start the conversation with {activeConversation.display_name}</p>
+                    <h6>{inChatMessageQuery ? "No matching messages" : "No messages yet"}</h6>
+                    <p>{inChatMessageQuery ? "Try a different search keyword" : `Send a message to start conversation with ${activeConversation.display_name}`}</p>
                   </div>
                 ) : (
                   <div className="chat-messages-flex">
@@ -1536,7 +2293,19 @@ export default function ChatPage() {
                   </div>
                 )}
 
-                {/* Typing Indicator */}
+                {/* Floating Scroll to Bottom Button */}
+                {showScrollBottom && (
+                  <button
+                    type="button"
+                    className="chat-scroll-bottom-btn shadow-lg"
+                    onClick={() => scrollToBottom(true)}
+                    title="Scroll to bottom"
+                  >
+                    <ChevronDown size={18} />
+                  </button>
+                )}
+
+                {/* Real-time Typing Indicator */}
                 {typingUser && (
                   <div className="chat-typing-indicator">
                     <div className="chat-typing-dots">
@@ -1579,6 +2348,35 @@ export default function ChatPage() {
                 </div>
               )}
 
+              {/* Quoted Reply Preview Bar above Input */}
+              {replyingTo && (
+                <div className="chat-reply-preview-bar d-flex align-items-center justify-content-between px-3 py-2 bg-light border-top">
+                  <div className="d-flex align-items-center overflow-hidden me-2">
+                    <div className="d-flex flex-column overflow-hidden text-start">
+                      <span
+                        className="fw-bold text-truncate small"
+                        style={{
+                          color: getAvatarColor(replyingTo.sender?.name || replyingTo.sender?.email || "User"),
+                          fontSize: "12px",
+                        }}
+                      >
+                        Replying to {replyingTo.sender?.name || replyingTo.sender?.email || "User"}
+                      </span>
+                      <span className="text-truncate text-muted small" style={{ fontSize: "12px" }}>
+                        {replyingTo.content || (replyingTo.attachments?.length ? `[${replyingTo.attachments.length} attachment(s)]` : "Quoted message")}
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    className="btn btn-sm btn-link text-muted p-1 border-0"
+                    title="Cancel reply (Esc)"
+                    onClick={() => setReplyingTo(null)}
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              )}
+
               {/* Message Input Area */}
               <div className="chat-input-area position-relative">
                 {/* Floating Mention Suggestions Overlay */}
@@ -1610,7 +2408,7 @@ export default function ChatPage() {
                   ref={fileInputRef}
                   className="d-none"
                   multiple
-                  accept="image/*,video/*,.pdf,.doc,.docx"
+                  accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.zip,.txt"
                   onChange={handleFileSelect}
                 />
 
@@ -1618,31 +2416,31 @@ export default function ChatPage() {
                 <button
                   className="chat-input-icon-btn"
                   onClick={() => fileInputRef.current?.click()}
-                  title="Attach file"
+                  title="Attach images, videos, documents"
                 >
-                  <Paperclip size={20} />
+                  <Paperclip size={18} />
                 </button>
 
-                {/* Emoji picker button & popover */}
+                {/* Workplace Emoji picker button & popover */}
                 <div className="chat-emoji-wrapper" ref={emojiPickerRef}>
                   <button
                     className={`chat-input-icon-btn ${showEmojiPicker ? "active" : ""}`}
                     onClick={() => setShowEmojiPicker((prev) => !prev)}
-                    title="Add emoji"
+                    title="Insert emoji"
                   >
-                    <Smile size={20} />
+                    <Smile size={18} />
                   </button>
 
                   {showEmojiPicker && (
-                    <div className="chat-emoji-popover">
-                      <div className="chat-emoji-header">
-                        <span>Select Emoji</span>
-                        <button className="chat-emoji-close" onClick={() => setShowEmojiPicker(false)}>
+                    <div className="chat-emoji-popover shadow-xl rounded-3 border bg-white p-2">
+                      <div className="chat-emoji-header d-flex align-items-center justify-content-between pb-1 mb-2 border-bottom">
+                        <span className="fw-bold text-dark small" style={{ fontSize: "12px" }}>Workplace Emojis</span>
+                        <button className="chat-emoji-close btn btn-sm btn-link text-muted p-0" onClick={() => setShowEmojiPicker(false)}>
                           <X size={14} />
                         </button>
                       </div>
                       <div className="chat-emoji-grid">
-                        {EMOJI_LIST.map((emoji, idx) => (
+                        {WORKPLACE_INPUT_EMOJIS.map((emoji, idx) => (
                           <button
                             key={idx}
                             className="chat-emoji-btn"
@@ -1660,16 +2458,10 @@ export default function ChatPage() {
                 <div className="chat-input-wrapper">
                   <textarea
                     ref={inputRef}
-                    placeholder="Type a message or paste images (Ctrl+V)..."
+                    placeholder={replyingTo ? "Type your reply..." : "Type a message or paste images (Ctrl+V)..."}
                     value={inputContent}
                     onPaste={handlePaste}
-                    onChange={(e) => {
-                      setInputContent(e.target.value);
-                      const textarea = e.target;
-                      textarea.style.height = "auto";
-                      const newHeight = Math.min(textarea.scrollHeight, 150);
-                      textarea.style.height = `${newHeight}px`;
-                    }}
+                    onChange={handleInputChange}
                     onKeyDown={handleKeyDown}
                     disabled={sending}
                     rows={1}
@@ -1680,38 +2472,27 @@ export default function ChatPage() {
                   className={`chat-send-btn ${(inputContent.trim() || selectedFiles.length > 0) ? "active" : ""}`}
                   onClick={() => handleSendMessage()}
                   disabled={sending || (!inputContent.trim() && selectedFiles.length === 0)}
+                  title="Send message (Enter)"
                 >
-                  {sending ? <Spinner animation="border" size="sm" /> : <Send size={18} />}
+                  {sending ? <Spinner animation="border" size="sm" /> : <Send size={17} />}
                 </button>
               </div>
             </>
           ) : (
             /* No conversation selected placeholder */
             <div className="chat-no-selection">
-              <div className="chat-no-selection-content">
+              <div className="chat-no-selection-content text-center">
                 <div
-                  className="chat-mascot-wrapper"
-                  style={{
-                    width: "140px",
-                    height: "140px",
-                    margin: "0 auto 16px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    filter: "drop-shadow(0 10px 20px rgba(245, 158, 11, 0.25))",
-                  }}
+                  className="chat-empty-icon accent large mx-auto mb-3"
+                  style={{ width: "70px", height: "70px", borderRadius: "50%", background: "#eef2ff", display: "flex", alignItems: "center", justifyContent: "center" }}
                 >
-                  <img
-                    src="/smiling-mascot.svg"
-                    alt="Welcome to Chat"
-                    style={{ width: "100%", height: "100%", objectFit: "contain" }}
-                  />
+                  <MessageSquare size={32} className="text-primary" />
                 </div>
-                <h4>Welcome to Chat</h4>
-                <p>Select a conversation or start a new one to begin messaging your team.</p>
+                <h4 className="fw-bold text-dark mb-2">Welcome to Team Chat</h4>
+                <p className="text-muted small mb-4">Select a conversation or start a new direct or group chat with your team.</p>
                 <Button
                   variant="primary"
-                  className="rounded-pill px-4 border-0 mt-2"
+                  className="rounded-pill px-4 border-0 shadow-sm"
                   style={{ backgroundColor: "#6366f1" }}
                   onClick={openDirectModal}
                 >
@@ -1732,13 +2513,13 @@ export default function ChatPage() {
         </Modal.Header>
         <Modal.Body className="p-3">
           <Form.Group className="mb-3">
-            <Form.Label className="small fw-semibold text-muted">Search Active Employees</Form.Label>
+            <Form.Label className="small fw-semibold text-muted">Search Active Team Members</Form.Label>
             <InputGroup className="bg-light rounded-3 border">
               <InputGroup.Text className="bg-transparent border-0">
                 <Search size={16} className="text-muted" />
               </InputGroup.Text>
               <Form.Control
-                placeholder="Search active members by name or email..."
+                placeholder="Search by name or email..."
                 className="bg-transparent border-0 shadow-none small"
                 value={userQuery}
                 onChange={(e) => handleSearchUsers(e.target.value)}
@@ -1749,12 +2530,12 @@ export default function ChatPage() {
           {userSearchLoading ? (
             <div className="text-center py-4">
               <Spinner animation="border" size="sm" variant="primary" />
-              <p className="text-muted small mt-2">Fetching active members...</p>
+              <p className="text-muted small mt-2">Fetching members...</p>
             </div>
           ) : activeUserSearchResults.length === 0 ? (
             <div className="text-center py-4">
               <User size={32} className="text-muted opacity-50 mb-2" />
-              <p className="text-muted mb-0 small">No active employees found.</p>
+              <p className="text-muted mb-0 small">No team members found.</p>
             </div>
           ) : (
             <div className="list-group" style={{ maxHeight: "280px", overflowY: "auto" }}>
@@ -1765,17 +2546,13 @@ export default function ChatPage() {
                   onClick={() => handleStartDirectChat(user)}
                 >
                   <div className="d-flex align-items-center gap-3">
-                    <div
-                      className="rounded-circle text-white fw-bold d-flex align-items-center justify-content-center"
-                      style={{
-                        width: "38px",
-                        height: "38px",
-                        fontSize: "14px",
-                        backgroundColor: getAvatarColor(user.name || user.email),
-                      }}
-                    >
-                      {(user.name || user.email)[0].toUpperCase()}
-                    </div>
+                    <SafeAvatar
+                      src={user.avatar || user.profile_photo_url}
+                      name={user.name || user.email}
+                      size={38}
+                      fontSize={14}
+                      className="flex-shrink-0"
+                    />
                     <div>
                       <div className="d-flex align-items-center gap-2">
                         <h6 className="mb-0 small fw-bold text-dark">{user.name || user.email}</h6>
@@ -1838,21 +2615,14 @@ export default function ChatPage() {
                     className="d-flex align-items-center justify-content-between p-2 rounded-3 hover-bg-light"
                   >
                     <div className="d-flex align-items-center gap-2">
-                      <div
-                        className="chat-conv-avatar"
-                        style={{
-                          width: "32px",
-                          height: "32px",
-                          fontSize: "12px",
-                          backgroundColor: getAvatarColor(conv.display_name || "C"),
-                        }}
-                      >
-                        {conv.type === "GROUP" ? (
-                          <Users size={14} />
-                        ) : (
-                          (conv.display_name || "C")[0].toUpperCase()
-                        )}
-                      </div>
+                      <SafeAvatar
+                        src={conv.avatar}
+                        name={conv.display_name || "Chat"}
+                        size={32}
+                        fontSize={12}
+                        isGroup={conv.type === "GROUP"}
+                        className="flex-shrink-0"
+                      />
                       <span className="fw-semibold text-dark small">{conv.display_name}</span>
                     </div>
 
@@ -1884,7 +2654,7 @@ export default function ChatPage() {
           <Form.Group className="mb-3">
             <Form.Label className="small fw-semibold text-muted">Group Name</Form.Label>
             <Form.Control
-              placeholder="e.g. HR Team, Project Launch..."
+              placeholder="e.g. Engineering, Sales Team, Project Delta..."
               className="rounded-3 shadow-none border"
               value={groupName}
               onChange={(e) => setGroupName(e.target.value)}
@@ -1898,7 +2668,7 @@ export default function ChatPage() {
                 <Search size={16} className="text-muted" />
               </InputGroup.Text>
               <Form.Control
-                placeholder="Search active employees to add..."
+                placeholder="Search team members to add..."
                 className="bg-transparent border-0 shadow-none small"
                 value={userQuery}
                 onChange={(e) => handleSearchUsers(e.target.value)}
@@ -1934,7 +2704,7 @@ export default function ChatPage() {
               <Spinner animation="border" size="sm" variant="primary" />
             </div>
           ) : activeUserSearchResults.length === 0 ? (
-            <p className="text-muted text-center py-3 mb-0 small">No active employees found.</p>
+            <p className="text-muted text-center py-3 mb-0 small">No active team members found.</p>
           ) : (
             <div className="list-group" style={{ maxHeight: "220px", overflowY: "auto" }}>
               {activeUserSearchResults.map((user) => {
@@ -1942,8 +2712,9 @@ export default function ChatPage() {
                 return (
                   <div
                     key={user.id}
-                    className={`list-group-item list-group-item-action d-flex align-items-center justify-content-between p-3 border-0 rounded-3 mb-1 cursor-pointer ${isSelected ? "bg-primary-subtle" : ""
-                      }`}
+                    className={`list-group-item list-group-item-action d-flex align-items-center justify-content-between p-3 border-0 rounded-3 mb-1 cursor-pointer ${
+                      isSelected ? "bg-primary-subtle" : ""
+                    }`}
                     onClick={() => {
                       if (isSelected) {
                         setSelectedGroupMembers((prev) => prev.filter((m) => m.id !== user.id));
@@ -1953,17 +2724,13 @@ export default function ChatPage() {
                     }}
                   >
                     <div className="d-flex align-items-center gap-3">
-                      <div
-                        className="rounded-circle text-white fw-bold d-flex align-items-center justify-content-center"
-                        style={{
-                          width: "36px",
-                          height: "36px",
-                          fontSize: "13px",
-                          backgroundColor: getAvatarColor(user.name || user.email),
-                        }}
-                      >
-                        {(user.name || user.email)[0].toUpperCase()}
-                      </div>
+                      <SafeAvatar
+                        src={user.avatar || user.profile_photo_url}
+                        name={user.name || user.email}
+                        size={36}
+                        fontSize={13}
+                        className="flex-shrink-0"
+                      />
                       <div>
                         <div className="d-flex align-items-center gap-2">
                           <h6 className="mb-0 small fw-bold text-dark">{user.name || user.email}</h6>
@@ -2009,7 +2776,7 @@ export default function ChatPage() {
         </Modal.Header>
         <Modal.Body className="p-3">
           <p className="small text-muted mb-0">
-            Are you sure you want to clear all message history in this chat? Physical media attachments will be deleted from storage.
+            Are you sure you want to clear all message history in this chat? Media attachments will also be cleaned up.
           </p>
         </Modal.Body>
         <Modal.Footer className="border-0 pt-0">
@@ -2041,7 +2808,7 @@ export default function ChatPage() {
             <Form.Control
               as="textarea"
               rows={3}
-              placeholder="e.g. Office Holiday Announcement: The office will remain closed on 15 August..."
+              placeholder="e.g. Office Holiday Announcement: Office will remain closed on Friday for festival celebrations..."
               className="rounded-3 shadow-none border small"
               value={announcementText}
               onChange={(e) => setAnnouncementText(e.target.value)}
@@ -2084,7 +2851,7 @@ export default function ChatPage() {
             <Form.Check
               type="checkbox"
               id="ann-pin"
-              label={<span className="small fw-semibold text-dark">Pin Announcement to top</span>}
+              label={<span className="small fw-semibold text-dark">Pin Announcement to top of chat</span>}
               checked={announcementPinned}
               onChange={(e) => setAnnouncementPinned(e.target.checked)}
             />
@@ -2114,52 +2881,128 @@ export default function ChatPage() {
         </Modal.Footer>
       </Modal>
 
-      {/* MEDIA LIGHTBOX MODAL */}
-      <Modal show={!!previewMediaUrl} onHide={() => setPreviewMediaUrl(null)} centered size="lg">
-        <Modal.Body className="p-0 bg-dark rounded-3 overflow-hidden position-relative">
-          <Button
-            variant="link"
-            className="position-absolute top-0 end-0 text-white p-3 z-index-10 border-0 shadow-none"
-            onClick={() => setPreviewMediaUrl(null)}
-          >
-            <X size={28} />
-          </Button>
-          {previewMediaUrl && (
-            <BSImage src={previewMediaUrl} alt="preview" className="w-100 h-auto" />
+      {/* MEDIA LIGHTBOX PREVIEW MODAL */}
+      <Modal
+        show={!!previewMedia}
+        onHide={() => setPreviewMedia(null)}
+        centered
+        size="xl"
+        contentClassName="bg-dark text-white border-0 rounded-4 overflow-hidden shadow-2xl"
+      >
+        <Modal.Header className="border-secondary border-opacity-25 bg-black bg-opacity-50 py-2.5 px-4 d-flex align-items-center justify-content-between">
+          <div className="d-flex align-items-center gap-2 overflow-hidden me-3">
+            {previewMedia?.type === "video" ? (
+              <VideoIcon size={18} className="text-primary flex-shrink-0" />
+            ) : (
+              <ImageIcon size={18} className="text-info flex-shrink-0" />
+            )}
+            <span className="fw-semibold text-truncate small text-white" title={previewMedia?.name}>
+              {previewMedia?.name || "Media Preview"}
+            </span>
+            {previewMedia?.size && (
+              <Badge bg="secondary" className="bg-opacity-50 text-white fw-normal py-0.5 px-2 small">
+                {previewMedia.size}
+              </Badge>
+            )}
+          </div>
+          <div className="d-flex align-items-center gap-2 flex-shrink-0">
+            {previewMedia?.url && (
+              <>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  className="d-flex align-items-center gap-1.5 px-3 rounded-pill fw-semibold border-0 shadow-sm"
+                  onClick={(e) => handleDownloadFile(e, previewMedia.url, previewMedia.name)}
+                >
+                  <Download size={14} />
+                  <span>Download</span>
+                </Button>
+                <Button
+                  variant="outline-light"
+                  size="sm"
+                  className="d-flex align-items-center gap-1.5 px-2.5 rounded-pill border-opacity-50"
+                  onClick={() => window.open(previewMedia.url, "_blank")}
+                  title="Open in new tab"
+                >
+                  <ExternalLink size={14} />
+                </Button>
+              </>
+            )}
+            <Button
+              variant="link"
+              className="text-white p-1 rounded-circle border-0 shadow-none"
+              onClick={() => setPreviewMedia(null)}
+              title="Close Preview (Esc)"
+            >
+              <X size={22} />
+            </Button>
+          </div>
+        </Modal.Header>
+        <Modal.Body className="p-0 bg-black d-flex align-items-center justify-content-center position-relative" style={{ minHeight: "360px", maxHeight: "82vh" }}>
+          {previewMedia?.type === "video" ? (
+            <video
+              controls
+              autoPlay
+              playsInline
+              className="w-100 h-auto"
+              style={{ maxHeight: "80vh", objectFit: "contain", background: "#000" }}
+            >
+              <source src={previewMedia.url} />
+              Your browser does not support this video format.
+            </video>
+          ) : (
+            <BSImage
+              src={previewMedia?.url}
+              alt={previewMedia?.name || "Preview"}
+              className="img-fluid"
+              style={{
+                maxHeight: "80vh",
+                maxWidth: "100%",
+                objectFit: "contain",
+                userSelect: "none",
+              }}
+            />
           )}
         </Modal.Body>
       </Modal>
 
-      {/* === SCOPED STYLES === */}
+      {/* === PRODUCTION-READY RESPONSIVE SCOPED STYLES === */}
       <style jsx global>{`
-        /* ===== CHAT APP LAYOUT ===== */
+        /* ===== CHAT APP CONTAINER ===== */
         .chat-app-container {
           display: flex;
           height: 100%;
+          max-height: 100%;
+          min-height: 0;
           width: 100%;
           background: #ffffff;
           border-radius: 0;
           overflow: hidden;
-          border: none;
-          box-shadow: none;
           margin: 0;
+          position: relative;
         }
 
         /* ===== SIDEBAR ===== */
         .chat-sidebar {
-          width: 340px;
-          min-width: 340px;
-          max-width: 340px;
+          width: 360px;
+          min-width: 360px;
+          max-width: 360px;
           display: flex;
           flex-direction: column;
-          border-right: 1px solid #e5e7eb;
-          background: #fff;
-          transition: transform 0.25s ease;
+          border-right: 1px solid #e2e8f0;
+          background: #ffffff;
+          transition: all 0.2s ease;
+          height: 100%;
+          max-height: 100%;
+          min-height: 0;
+          overflow: hidden;
         }
 
         .chat-sidebar-header {
-          padding: 16px;
+          padding: 14px 16px;
           border-bottom: 1px solid #f1f5f9;
+          background: #ffffff;
+          flex-shrink: 0;
         }
 
         .chat-sidebar-title-row {
@@ -2177,24 +3020,21 @@ export default function ChatPage() {
 
         .chat-sidebar-title h2 {
           margin: 0;
-          font-size: 18px;
+          font-size: 17px;
           font-weight: 700;
-          color: #1e293b;
+          color: #0f172a;
           line-height: 1.2;
         }
 
         .chat-count {
           font-size: 11px;
-          color: #94a3b8;
+          color: #64748b;
           font-weight: 500;
-        }
-
-        .chat-icon-accent {
-          color: #16a34a;
         }
 
         .chat-sidebar-actions {
           display: flex;
+          align-items: center;
           gap: 6px;
         }
 
@@ -2202,9 +3042,9 @@ export default function ChatPage() {
           width: 34px;
           height: 34px;
           border-radius: 8px;
-          border: 1px solid #e5e7eb;
-          background: #fff;
-          color: #64748b;
+          border: 1px solid #e2e8f0;
+          background: #ffffff;
+          color: #475569;
           cursor: pointer;
           display: flex;
           align-items: center;
@@ -2212,20 +3052,21 @@ export default function ChatPage() {
           transition: all 0.15s ease;
         }
 
-        .chat-icon-btn:hover {
-          background: #f0fdf4;
-          color: #16a34a;
-          border-color: #86efac;
+        .chat-icon-btn:hover,
+        .chat-icon-btn.active {
+          background: #eef2ff;
+          color: #4f46e5;
+          border-color: #c7d2fe;
         }
 
         .chat-icon-btn.accent {
-          background: #16a34a;
-          color: white;
-          border-color: #16a34a;
+          background: #4f46e5;
+          color: #ffffff;
+          border-color: #4f46e5;
         }
 
         .chat-icon-btn.accent:hover {
-          background: #15803d;
+          background: #4338ca;
         }
 
         /* Search box */
@@ -2234,9 +3075,15 @@ export default function ChatPage() {
           align-items: center;
           gap: 8px;
           background: #f8fafc;
-          border: 1px solid #e5e7eb;
-          border-radius: 8px;
-          padding: 8px 12px;
+          border: 1px solid #e2e8f0;
+          border-radius: 10px;
+          padding: 7px 12px;
+          transition: border-color 0.15s;
+        }
+
+        .chat-search-box:focus-within {
+          border-color: #818cf8;
+          background: #ffffff;
         }
 
         .chat-search-box input {
@@ -2245,7 +3092,7 @@ export default function ChatPage() {
           background: transparent;
           outline: none;
           font-size: 13px;
-          color: #1e293b;
+          color: #0f172a;
         }
 
         .chat-search-box input::placeholder {
@@ -2266,10 +3113,16 @@ export default function ChatPage() {
           display: flex;
         }
 
+        .chat-search-clear:hover {
+          color: #ef4444;
+        }
+
         /* Conversation list */
         .chat-conv-list {
-          flex: 1;
+          flex: 1 1 0%;
+          min-height: 0;
           overflow-y: auto;
+          overflow-x: hidden;
           padding: 8px;
         }
 
@@ -2278,10 +3131,11 @@ export default function ChatPage() {
           align-items: center;
           gap: 12px;
           padding: 10px 12px;
-          border-radius: 10px;
+          border-radius: 12px;
           cursor: pointer;
           transition: all 0.15s ease;
-          margin-bottom: 2px;
+          margin-bottom: 3px;
+          position: relative;
         }
 
         .chat-conv-item:hover {
@@ -2289,35 +3143,19 @@ export default function ChatPage() {
         }
 
         .chat-conv-item.active {
-          background: #dcfce7;
-        }
-
-        .chat-conv-avatar-wrap {
-          position: relative;
-          flex-shrink: 0;
-        }
-
-        .chat-conv-avatar {
-          width: 44px;
-          height: 44px;
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: #fff;
-          font-weight: 700;
-          font-size: 15px;
+          background: #eef2ff;
         }
 
         .chat-online-dot {
           position: absolute;
-          bottom: 1px;
-          right: 1px;
-          width: 10px;
-          height: 10px;
-          background: #22c55e;
-          border: 2px solid #fff;
+          bottom: 0px;
+          right: 0px;
+          width: 11px;
+          height: 11px;
+          background: #10b981;
+          border: 2px solid #ffffff;
           border-radius: 50%;
+          z-index: 2;
         }
 
         .chat-conv-info {
@@ -2342,12 +3180,13 @@ export default function ChatPage() {
         }
 
         .chat-conv-item.active .chat-conv-name {
-          color: #15803d;
+          color: #4f46e5;
+          font-weight: 700;
         }
 
         .chat-conv-time {
           font-size: 10.5px;
-          color: #94a3b8;
+          color: #64748b;
           white-space: nowrap;
           margin-left: 8px;
           flex-shrink: 0;
@@ -2361,15 +3200,19 @@ export default function ChatPage() {
 
         .chat-conv-preview {
           font-size: 12px;
-          color: #94a3b8;
+          color: #64748b;
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
         }
 
+        .chat-conv-item.active .chat-conv-preview {
+          color: #4338ca;
+        }
+
         .chat-unread-badge {
-          background: #ef4444;
-          color: white;
+          background: #4f46e5;
+          color: #ffffff;
           font-size: 10px;
           font-weight: 700;
           min-width: 18px;
@@ -2383,13 +3226,26 @@ export default function ChatPage() {
           margin-left: 6px;
         }
 
+        .chat-conv-delete-wrap {
+          opacity: 0;
+          transition: opacity 0.15s ease;
+        }
+
+        .chat-conv-item:hover .chat-conv-delete-wrap {
+          opacity: 1;
+        }
+
         /* ===== CHAT MAIN AREA ===== */
         .chat-main {
-          flex: 1;
+          flex: 1 1 0%;
           display: flex;
           flex-direction: column;
           min-width: 0;
-          background: #fff;
+          min-height: 0;
+          height: 100%;
+          max-height: 100%;
+          background: #f8fafc;
+          overflow: hidden;
         }
 
         /* Chat header */
@@ -2397,10 +3253,13 @@ export default function ChatPage() {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          padding: 12px 16px;
-          border-bottom: 1px solid #f1f5f9;
-          background: #fff;
-          min-height: 64px;
+          padding: 10px 18px;
+          border-bottom: 1px solid #e2e8f0;
+          background: #ffffff;
+          min-height: 60px;
+          height: 60px;
+          flex-shrink: 0;
+          z-index: 10;
         }
 
         .chat-header-left {
@@ -2414,63 +3273,75 @@ export default function ChatPage() {
           display: none;
           width: 36px;
           height: 36px;
-          border-radius: 50%;
-          border: 1px solid #e5e7eb;
-          background: #fff;
+          border-radius: 8px;
+          border: 1px solid #e2e8f0;
+          background: #ffffff;
           color: #475569;
           cursor: pointer;
           align-items: center;
           justify-content: center;
           flex-shrink: 0;
+          transition: all 0.15s ease;
         }
 
-        .chat-header-avatar {
-          width: 40px;
-          height: 40px;
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: #fff;
-          font-weight: 700;
-          font-size: 15px;
-          flex-shrink: 0;
+        .chat-back-btn:hover {
+          background: #f1f5f9;
+          color: #0f172a;
+        }
+
+        .chat-header-info {
+          min-width: 0;
         }
 
         .chat-header-info h3 {
           margin: 0;
           font-size: 15px;
           font-weight: 700;
-          color: #1e293b;
-          line-height: 1.3;
+          color: #0f172a;
+          line-height: 1.2;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
 
         .chat-header-meta {
           font-size: 11.5px;
-          color: #94a3b8;
-          font-weight: 500;
+          color: #10b981;
+          font-weight: 600;
         }
 
         .chat-header-right {
-          display: flex;
-          align-items: center;
-          gap: 6px;
+          flex-shrink: 0;
         }
 
-        /* Messages scroll area */
+        /* Pinned announcement banner */
+        .chat-pinned-announcement-banner {
+          background: #eff6ff;
+          border-bottom: 1px solid #dbeafe;
+          flex-shrink: 0;
+        }
+
+        /* Message scroll area */
         .chat-messages-area {
-          flex: 1;
+          flex: 1 1 0%;
+          min-height: 0;
           overflow-y: auto;
+          overflow-x: hidden;
           padding: 16px 20px;
-          background: #f8fafc;
           display: flex;
           flex-direction: column;
+          position: relative;
+          background-color: #f8fafc;
+          background-image: radial-gradient(#e2e8f0 1px, transparent 1px);
+          background-size: 20px 20px;
         }
 
         .chat-messages-flex {
           display: flex;
           flex-direction: column;
-          gap: 4px;
+          gap: 10px;
+          width: 100%;
+          margin-top: auto;
         }
 
         /* Date separator */
@@ -2478,26 +3349,48 @@ export default function ChatPage() {
           display: flex;
           align-items: center;
           justify-content: center;
-          padding: 10px 0;
+          margin: 14px 0 8px;
         }
 
         .chat-date-separator span {
-          background: #e2e8f0;
+          background: #ffffff;
           color: #64748b;
           font-size: 11px;
           font-weight: 600;
-          padding: 4px 12px;
-          border-radius: 12px;
-          letter-spacing: 0.02em;
+          padding: 4px 14px;
+          border-radius: 20px;
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+          border: 1px solid #e2e8f0;
         }
 
-        /* Message rows */
+        /* Message row */
         .chat-message-row {
           display: flex;
           align-items: flex-end;
           gap: 8px;
-          margin-bottom: 2px;
-          width: 100%;
+          position: relative;
+          transition: background-color 0.25s ease;
+        }
+
+        .chat-message-row.has-reactions {
+          margin-bottom: 12px;
+        }
+
+        .chat-message-row.highlight-flash {
+          animation: highlightMsgFlash 1.6s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes highlightMsgFlash {
+          0% {
+            background-color: rgba(99, 102, 241, 0.25);
+            border-radius: 12px;
+          }
+          70% {
+            background-color: rgba(99, 102, 241, 0.08);
+          }
+          100% {
+            background-color: transparent;
+          }
         }
 
         .chat-message-row.sent {
@@ -2508,98 +3401,117 @@ export default function ChatPage() {
           justify-content: flex-start;
         }
 
-        .chat-msg-actions-dropdown {
+        /* Swipe-to-reply spring icon indicator */
+        .chat-swipe-reply-icon-wrap {
           position: absolute;
-          top: 4px;
-          right: 4px;
-          opacity: 0;
-          transition: opacity 0.15s ease;
-          z-index: 5;
-        }
-
-        .chat-bubble:hover .chat-msg-actions-dropdown,
-        .chat-msg-actions-dropdown.show {
-          opacity: 1;
-        }
-
-        .bubble-sent .chat-msg-more-btn {
-          color: rgba(255, 255, 255, 0.8) !important;
-          background: transparent !important;
-          padding: 2px 4px !important;
-          border-radius: 4px !important;
-          box-shadow: none !important;
-        }
-
-        .bubble-sent .chat-msg-more-btn:hover {
-          color: #ffffff !important;
-          background: rgba(255, 255, 255, 0.22) !important;
-        }
-
-        .bubble-received .chat-msg-more-btn {
-          color: #94a3b8 !important;
-          background: transparent !important;
-          padding: 2px 4px !important;
-          border-radius: 4px !important;
-          box-shadow: none !important;
-        }
-
-        .bubble-received .chat-msg-more-btn:hover {
-          color: #475569 !important;
-          background: rgba(148, 163, 184, 0.18) !important;
-        }
-
-        /* Avatar for received / sent */
-        .chat-msg-avatar {
-          width: 28px;
-          height: 28px;
-          border-radius: 50%;
+          left: 4px;
+          top: 50%;
+          transform-origin: center;
+          margin-top: -16px;
+          z-index: 1;
           display: flex;
           align-items: center;
           justify-content: center;
-          color: white;
-          font-weight: 700;
-          font-size: 11px;
-          flex-shrink: 0;
-          margin-bottom: 2px;
-          overflow: hidden;
+          pointer-events: none;
         }
 
-        .chat-msg-avatar-sent {
-          margin-left: 2px;
-          margin-right: 0;
+        .chat-swipe-reply-icon-circle {
+          width: 32px;
+          height: 32px;
+          border-radius: 50%;
+          background: #4f46e5;
+          color: #ffffff;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          box-shadow: 0 2px 8px rgba(79, 70, 229, 0.35);
         }
 
-        /* Clean message bubble */
+        /* Chat Bubbles */
         .chat-bubble {
-          max-width: 65%;
+          max-width: 68%;
           min-width: 90px;
-          padding: 8px 12px;
-          border-radius: 14px;
+          padding: 9px 13px;
+          border-radius: 16px;
           position: relative;
+          overflow: visible;
           word-wrap: break-word;
           display: flex;
           flex-direction: column;
+          box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+          transition: box-shadow 0.15s ease, transform 0.15s ease;
+          touch-action: pan-y;
         }
 
         .bubble-sent {
-          background: #16a34a;
-          color: #fff;
-          border-bottom-right-radius: 4px;
+          background: #4f46e5;
+          color: #ffffff;
+          border-bottom-right-radius: 3px;
+          border: 1px solid #4338ca;
+          box-shadow: 0 1px 3px rgba(79, 70, 229, 0.2);
+        }
+
+        .bubble-sent .chat-text {
+          color: #ffffff;
+        }
+
+        .bubble-sent .chat-time {
+          color: rgba(255, 255, 255, 0.75);
+        }
+
+        .bubble-sent .chat-read-icon {
+          color: #c7d2fe;
+        }
+
+        .bubble-sent .chat-quoted-bubble-card {
+          background: rgba(0, 0, 0, 0.2);
+          border-radius: 8px;
+          border: 1px solid rgba(255, 255, 255, 0.12);
+        }
+
+        .bubble-sent .chat-quoted-sender {
+          color: #e0e7ff !important;
+        }
+
+        .bubble-sent .chat-quoted-snippet {
+          color: rgba(255, 255, 255, 0.85) !important;
         }
 
         .bubble-received {
-          background: #fff;
+          background: #ffffff;
           color: #1e293b;
+          border-bottom-left-radius: 3px;
           border: 1px solid #e2e8f0;
-          border-bottom-left-radius: 4px;
+          box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+        }
+
+        .bubble-received .chat-text {
+          color: #1e293b;
+        }
+
+        .bubble-received .chat-time {
+          color: #94a3b8;
         }
 
         .chat-sender-name {
-          font-size: 11px;
+          font-size: 11.5px;
           font-weight: 700;
-          color: #16a34a;
+          color: #4f46e5;
           margin-bottom: 2px;
           line-height: 1.2;
+        }
+
+        /* Quoted Snippet inside Message Bubble */
+        .chat-quoted-bubble-card {
+          background: rgba(0, 0, 0, 0.04);
+          border-radius: 8px;
+          border: 1px solid rgba(0, 0, 0, 0.06);
+          transition: background-color 0.15s ease;
+          cursor: pointer;
+        }
+
+        .chat-quoted-bubble-card:hover {
+          background: rgba(0, 0, 0, 0.08);
         }
 
         .chat-text {
@@ -2621,62 +3533,217 @@ export default function ChatPage() {
         }
 
         .chat-time {
-          font-size: 10px;
-          opacity: 0.7;
+          font-size: 10.5px;
           line-height: 1;
         }
 
-        .bubble-sent .chat-read-icon {
-          color: #bbf7d0;
+        /* Click-to-Show Action & Reaction Bar */
+        .chat-quick-reactions-bar {
+          position: absolute;
+          top: -28px;
+          background: #ffffff;
+          border: 1px solid #e2e8f0;
+          border-radius: 24px;
+          padding: 2px 6px;
+          display: flex;
+          align-items: center;
+          gap: 2px;
+          z-index: 30;
+          box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+          animation: popoverFadeIn 0.15s ease-out;
         }
 
-        .bubble-received .chat-read-icon {
-          color: #94a3b8;
+        .bubble-sent .chat-quick-reactions-bar {
+          right: 6px;
+        }
+
+        .bubble-received .chat-quick-reactions-bar {
+          left: 6px;
+        }
+
+        .chat-bubble.active-bubble-focused {
+          box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.35), 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        .quick-reaction-btn {
+          border: none;
+          background: transparent;
+          font-size: 15px;
+          line-height: 1;
+          padding: 3px 5px;
+          border-radius: 12px;
+          cursor: pointer;
+          transition: transform 0.12s ease, background 0.12s ease;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: #64748b;
+        }
+
+        .quick-reaction-btn:hover {
+          background: #f1f5f9;
+          transform: scale(1.25);
+        }
+
+        .quick-reaction-btn.reply-quick-btn {
+          color: #4f46e5;
+          font-size: 13px;
+        }
+
+        /* Reaction Badges */
+        .chat-msg-reactions-container {
+          position: absolute;
+          bottom: -11px;
+          display: flex;
+          align-items: center;
+          gap: 3px;
+          z-index: 10;
+          pointer-events: auto;
+        }
+
+        .bubble-sent .chat-msg-reactions-container {
+          right: 8px;
+        }
+
+        .bubble-received .chat-msg-reactions-container {
+          left: 8px;
+        }
+
+        .chat-reaction-badge {
+          border: none;
+          outline: none;
+          background: #ffffff;
+          color: #334155;
+          padding: 1px 5px;
+          border-radius: 12px;
+          border: 1px solid #e2e8f0;
+          cursor: pointer;
+          display: inline-flex;
+          align-items: center;
+          gap: 3px;
+          line-height: 1;
+          box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+          transition: transform 0.15s ease;
+        }
+
+        .chat-reaction-badge:hover {
+          transform: scale(1.15);
+          background: #f8fafc;
+        }
+
+        .chat-reaction-badge.active-reaction {
+          background: #eef2ff;
+          border-color: #c7d2fe;
+          color: #4f46e5;
+        }
+
+        .chat-reaction-badge .reaction-emoji {
+          font-size: 13px;
+          line-height: 1;
+        }
+
+        .chat-reaction-badge .reaction-count {
+          font-size: 10px;
+          font-weight: 700;
+          color: #475569;
+        }
+
+        /* Floating Scroll to bottom button */
+        .chat-scroll-bottom-btn {
+          position: absolute;
+          bottom: 16px;
+          right: 24px;
+          width: 36px;
+          height: 36px;
+          border-radius: 50%;
+          background: #ffffff;
+          border: 1px solid #e2e8f0;
+          color: #475569;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          z-index: 30;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+          transition: all 0.2s ease;
+        }
+
+        .chat-scroll-bottom-btn:hover {
+          background: #4f46e5;
+          color: #ffffff;
+          border-color: #4f46e5;
+          transform: translateY(-2px);
+        }
+
+        /* Reply preview bar */
+        .chat-reply-preview-bar {
+          background: #f8fafc;
+          border-top: 1px solid #e2e8f0;
+          animation: slideUpReply 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+          flex-shrink: 0;
+        }
+
+        @keyframes slideUpReply {
+          from {
+            opacity: 0;
+            transform: translateY(6px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
         }
 
         /* Attachments */
         .chat-attachments {
-          margin-top: 6px;
           display: flex;
           flex-direction: column;
           gap: 6px;
+          max-width: 100%;
         }
 
-        .chat-att-image {
+        .whatsapp-file-card {
+          background: rgba(0, 0, 0, 0.04);
           border-radius: 8px;
-          overflow: hidden;
+          min-width: 240px;
+          max-width: 320px;
+          cursor: pointer;
+          transition: background-color 0.15s ease;
         }
 
-        .chat-att-file {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          padding: 6px 10px;
+        .bubble-sent .whatsapp-file-card {
+          background: rgba(0, 0, 0, 0.18);
+        }
+
+        .bubble-sent .whatsapp-file-card:hover {
+          background: rgba(0, 0, 0, 0.26);
+        }
+
+        .whatsapp-file-card:hover {
+          background: rgba(0, 0, 0, 0.08);
+        }
+
+        .bubble-sent .whatsapp-file-card span {
+          color: #ffffff !important;
+        }
+
+        .bubble-sent .whatsapp-download-btn {
+          color: #ffffff !important;
+        }
+
+        .whatsapp-media-card {
+          background: #000000;
           border-radius: 8px;
-          text-decoration: none;
-          font-size: 12px;
-          transition: opacity 0.15s;
         }
 
-        .bubble-sent .chat-att-file {
-          background: rgba(255,255,255,0.15);
-          color: #fff;
+        .whatsapp-media-overlay {
+          background: rgba(0, 0, 0, 0.3);
+          opacity: 0;
+          transition: opacity 0.2s ease;
         }
 
-        .bubble-received .chat-att-file {
-          background: #f1f5f9;
-          color: #1e293b;
-        }
-
-        .chat-att-file-info {
-          display: flex;
-          flex-direction: column;
-          min-width: 0;
-        }
-
-        .chat-att-file-name {
-          font-weight: 600;
-          font-size: 12px;
+        .whatsapp-media-card:hover .whatsapp-media-overlay {
+          opacity: 1;
         }
 
         /* Typing indicator */
@@ -2685,9 +3752,9 @@ export default function ChatPage() {
           align-items: center;
           gap: 8px;
           font-size: 12px;
-          color: #94a3b8;
+          color: #64748b;
           font-style: italic;
-          padding: 6px 0;
+          padding: 6px 4px;
         }
 
         .chat-typing-dots {
@@ -2699,7 +3766,7 @@ export default function ChatPage() {
           width: 6px;
           height: 6px;
           border-radius: 50%;
-          background: #16a34a;
+          background: #4f46e5;
           animation: typingBounce 1.4s infinite both;
         }
 
@@ -2718,22 +3785,23 @@ export default function ChatPage() {
           flex-wrap: wrap;
           padding: 10px 16px;
           background: #f8fafc;
-          border-top: 1px solid #f1f5f9;
+          border-top: 1px solid #e2e8f0;
+          flex-shrink: 0;
         }
 
         .chat-file-preview-item {
           display: flex;
           align-items: center;
           gap: 8px;
-          background: #fff;
-          border: 1px solid #e5e7eb;
+          background: #ffffff;
+          border: 1px solid #e2e8f0;
           border-radius: 8px;
           padding: 6px 10px;
         }
 
         .chat-file-preview-icon {
-          width: 36px;
-          height: 36px;
+          width: 34px;
+          height: 34px;
           border-radius: 6px;
           display: flex;
           align-items: center;
@@ -2742,7 +3810,7 @@ export default function ChatPage() {
 
         .chat-file-preview-icon.video {
           background: #1e293b;
-          color: #fff;
+          color: #ffffff;
         }
 
         .chat-file-preview-icon.doc {
@@ -2753,7 +3821,7 @@ export default function ChatPage() {
         .chat-file-preview-info {
           display: flex;
           flex-direction: column;
-          max-width: 100px;
+          max-width: 120px;
         }
 
         .chat-file-preview-name {
@@ -2789,10 +3857,11 @@ export default function ChatPage() {
           display: flex;
           align-items: center;
           gap: 8px;
-          padding: 12px 16px;
-          border-top: 1px solid #f1f5f9;
-          background: #fff;
+          padding: 10px 16px;
+          border-top: 1px solid #e2e8f0;
+          background: #ffffff;
           position: relative;
+          flex-shrink: 0;
         }
 
         .chat-input-icon-btn {
@@ -2812,8 +3881,8 @@ export default function ChatPage() {
 
         .chat-input-icon-btn:hover,
         .chat-input-icon-btn.active {
-          background: #dcfce7;
-          color: #16a34a;
+          background: #eef2ff;
+          color: #4f46e5;
         }
 
         .chat-emoji-wrapper {
@@ -2827,52 +3896,10 @@ export default function ChatPage() {
           bottom: 48px;
           left: 0;
           background: #ffffff;
-          border: 1px solid #e2e8f0;
-          border-radius: 12px;
-          box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
-          width: 260px;
+          width: 270px;
           padding: 10px;
           z-index: 100;
           animation: popoverFadeIn 0.15s ease-out;
-        }
-
-        @keyframes popoverFadeIn {
-          from {
-            opacity: 0;
-            transform: translateY(6px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-
-        .chat-emoji-header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding-bottom: 6px;
-          margin-bottom: 6px;
-          border-bottom: 1px solid #f1f5f9;
-          font-size: 11px;
-          font-weight: 600;
-          color: #64748b;
-        }
-
-        .chat-emoji-close {
-          border: none;
-          background: transparent;
-          color: #94a3b8;
-          cursor: pointer;
-          padding: 2px;
-          border-radius: 4px;
-          display: flex;
-          align-items: center;
-        }
-
-        .chat-emoji-close:hover {
-          color: #ef4444;
-          background: #fee2e2;
         }
 
         .chat-emoji-grid {
@@ -2890,7 +3917,7 @@ export default function ChatPage() {
           padding: 4px;
           border-radius: 6px;
           cursor: pointer;
-          transition: transform 0.1s, background-color 0.1s;
+          transition: transform 0.1s;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -2910,7 +3937,7 @@ export default function ChatPage() {
 
         .chat-input-wrapper textarea {
           width: 100%;
-          border: 1px solid #e5e7eb;
+          border: 1px solid #e2e8f0;
           border-radius: 20px;
           padding: 9px 16px;
           font-size: 13.5px;
@@ -2918,7 +3945,7 @@ export default function ChatPage() {
           resize: none;
           outline: none;
           background: #f8fafc;
-          color: #1e293b;
+          color: #0f172a;
           min-height: 38px;
           max-height: 150px;
           overflow-y: auto;
@@ -2926,12 +3953,8 @@ export default function ChatPage() {
         }
 
         .chat-input-wrapper textarea:focus {
-          border-color: #86efac;
-          background: #fff;
-        }
-
-        .chat-input-wrapper textarea::placeholder {
-          color: #94a3b8;
+          border-color: #818cf8;
+          background: #ffffff;
         }
 
         .chat-send-btn {
@@ -2950,14 +3973,14 @@ export default function ChatPage() {
         }
 
         .chat-send-btn.active {
-          background: #16a34a;
-          color: #fff;
-          box-shadow: 0 2px 8px rgba(22, 163, 74, 0.3);
+          background: #4f46e5;
+          color: #ffffff;
+          box-shadow: 0 2px 8px rgba(79, 70, 229, 0.35);
         }
 
         .chat-send-btn:disabled {
           cursor: not-allowed;
-          opacity: 0.7;
+          opacity: 0.6;
         }
 
         /* No conversation selected */
@@ -2967,22 +3990,11 @@ export default function ChatPage() {
           align-items: center;
           justify-content: center;
           background: #f8fafc;
+          padding: 24px;
         }
 
         .chat-no-selection-content {
-          text-align: center;
-          max-width: 320px;
-        }
-
-        .chat-no-selection-content h4 {
-          font-weight: 700;
-          color: #1e293b;
-          margin-bottom: 8px;
-        }
-
-        .chat-no-selection-content p {
-          color: #94a3b8;
-          font-size: 13px;
+          max-width: 340px;
         }
 
         /* Empty state */
@@ -3003,7 +4015,7 @@ export default function ChatPage() {
         }
 
         .chat-empty-state p {
-          color: #94a3b8;
+          color: #64748b;
           font-size: 12.5px;
           margin-bottom: 0;
         }
@@ -3021,12 +4033,7 @@ export default function ChatPage() {
 
         .chat-empty-icon.accent {
           background: #eef2ff;
-          color: #6366f1;
-        }
-
-        .chat-empty-icon.large {
-          width: 72px;
-          height: 72px;
+          color: #4f46e5;
         }
 
         /* Drag and Drop Overlay */
@@ -3034,14 +4041,14 @@ export default function ChatPage() {
           position: absolute;
           inset: 0;
           z-index: 999;
-          background: rgba(255, 255, 255, 0.9);
+          background: rgba(255, 255, 255, 0.92);
           backdrop-filter: blur(8px);
           display: flex;
           align-items: center;
           justify-content: center;
-          border: 3px dashed #6366f1;
-          border-radius: 12px;
-          margin: 8px;
+          border: 3px dashed #4f46e5;
+          border-radius: 0;
+          margin: 0;
           pointer-events: none;
           animation: dropzoneFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
         }
@@ -3062,7 +4069,7 @@ export default function ChatPage() {
           padding: 32px 48px;
           background: #ffffff;
           border-radius: 20px;
-          box-shadow: 0 20px 40px -10px rgba(99, 102, 241, 0.25);
+          box-shadow: 0 20px 40px -10px rgba(79, 70, 229, 0.25);
           border: 1px solid #e0e7ff;
         }
 
@@ -3081,58 +4088,57 @@ export default function ChatPage() {
         @keyframes pulseDropzone {
           0% {
             transform: scale(0.95);
-            box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.4);
+            box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.4);
           }
           70% {
             transform: scale(1.05);
-            box-shadow: 0 0 0 16px rgba(99, 102, 241, 0);
+            box-shadow: 0 0 0 16px rgba(79, 70, 229, 0);
           }
           100% {
             transform: scale(0.95);
-            box-shadow: 0 0 0 0 rgba(99, 102, 241, 0);
+            box-shadow: 0 0 0 0 rgba(79, 70, 229, 0);
           }
         }
 
-        /* Dropdown caret fix */
         .no-caret::after {
           display: none !important;
         }
 
-        .chat-conv-delete-wrap {
-          opacity: 0;
-          transition: opacity 0.2s ease;
-        }
-        .chat-conv-item:hover .chat-conv-delete-wrap {
-          opacity: 1;
+        /* ===== RESPONSIVENESS: TABLET & MOBILE ===== */
+
+        /* Tablet (768px - 1024px) */
+        @media (min-width: 768px) and (max-width: 1024px) {
+          .chat-sidebar {
+            width: 290px;
+            min-width: 290px;
+            max-width: 290px;
+          }
+
+          .chat-bubble {
+            max-width: 76%;
+          }
         }
 
-        /* ===== MOBILE RESPONSIVE ===== */
-        @media (max-width: 768px) {
+        /* Mobile (< 768px) */
+        @media (max-width: 767.98px) {
           .chat-app-container {
-            height: calc(100vh - 80px);
-            min-height: 0;
-            border-radius: 0;
-            border: none;
-            box-shadow: none;
+            height: calc(100vh - 60px);
+            width: 100vw;
           }
 
           .chat-sidebar {
-            width: 100%;
-            min-width: 100%;
-            max-width: 100%;
+            width: 100% !important;
+            min-width: 100% !important;
+            max-width: 100% !important;
             border-right: none;
-            position: absolute;
-            inset: 0;
-            z-index: 10;
           }
 
           .chat-main {
-            position: absolute;
-            inset: 0;
-            z-index: 10;
+            width: 100% !important;
+            min-width: 100% !important;
+            max-width: 100% !important;
           }
 
-          /* Toggle visibility on mobile */
           .mobile-hide {
             display: none !important;
           }
@@ -3142,43 +4148,35 @@ export default function ChatPage() {
           }
 
           .chat-back-btn {
-            display: flex;
+            display: flex !important;
           }
 
           .chat-bubble {
-            max-width: 82%;
+            max-width: 86%;
           }
 
           .chat-messages-area {
-            padding: 12px 12px;
+            padding: 12px 10px;
           }
 
           .chat-input-area {
-            padding: 10px 12px;
+            padding: 8px 10px;
           }
 
           .chat-header {
-            padding: 10px 12px;
+            padding: 8px 12px;
+          }
+
+          .chat-emoji-popover {
+            width: calc(100vw - 32px);
+            left: -8px;
           }
         }
 
-        /* Tablet */
-        @media (min-width: 769px) and (max-width: 1024px) {
-          .chat-sidebar {
-            width: 280px;
-            min-width: 280px;
-            max-width: 280px;
-          }
-
-          .chat-bubble {
-            max-width: 72%;
-          }
-        }
-
-        /* Fix scrollbar styling */
+        /* Custom Slim Scrollbar */
         .chat-conv-list::-webkit-scrollbar,
         .chat-messages-area::-webkit-scrollbar {
-          width: 4px;
+          width: 5px;
         }
 
         .chat-conv-list::-webkit-scrollbar-track,
@@ -3195,13 +4193,6 @@ export default function ChatPage() {
         .chat-conv-list::-webkit-scrollbar-thumb:hover,
         .chat-messages-area::-webkit-scrollbar-thumb:hover {
           background: #94a3b8;
-        }
-
-        /* Make chat container relative for mobile abs positioning */
-        @media (max-width: 768px) {
-          .chat-app-container {
-            position: relative;
-          }
         }
       `}</style>
     </>

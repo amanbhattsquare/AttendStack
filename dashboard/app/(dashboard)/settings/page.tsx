@@ -1,7 +1,8 @@
 "use client"
 
 import React, { useState, useEffect } from 'react';
-import { Card, Col, Row, Button, Form, Alert, Tabs, Tab, Badge, Spinner, Modal } from "react-bootstrap";
+import Link from 'next/link';
+import { Card, Col, Row, Button, Form, Alert, Tabs, Tab, Badge, Spinner } from "react-bootstrap";
 import Swal from 'sweetalert2';
 import {
   IconSettings,
@@ -590,54 +591,6 @@ const SettingsPage = () => {
     }
   };
 
-  const [showRenewModal, setShowRenewModal] = useState(false);
-  const [isRenewingPlan, setIsRenewingPlan] = useState(false);
-  const [selectedPlanToRenew, setSelectedPlanToRenew] = useState({
-    name: "Growth Pro Plan",
-    durationDays: 30,
-    maxEmployees: 50,
-    price: "₹999/mo",
-  });
-
-  const handleRenewPlan = async (planName: string, durationDays: number, maxEmployees: number) => {
-    if (!organizationAccess?.id) return;
-    setIsRenewingPlan(true);
-    try {
-      const response = await fetch(`${apiRoot}/api/v1/organizations/${organizationAccess.id}/renew-plan/`, {
-        method: "POST",
-        headers: authHeaders(),
-        body: JSON.stringify({
-          plan_name: planName,
-          duration_days: durationDays,
-          max_employees: maxEmployees,
-          plan_source: "ATTENDSTACK_DIRECT",
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to renew plan.");
-      }
-
-      const data = await response.json();
-      setOrganizationAccess(data);
-      setShowRenewModal(false);
-      Swal.fire({
-        icon: "success",
-        title: "Subscription Renewed!",
-        text: `Your ${planName} has been activated successfully for ${durationDays} days.`,
-        timer: 3000,
-        showConfirmButton: false,
-      });
-    } catch (err: any) {
-      Swal.fire({
-        icon: "error",
-        title: "Renewal Failed",
-        text: err.message || "Could not complete renewal. Please try again.",
-      });
-    } finally {
-      setIsRenewingPlan(false);
-    }
-  };
 
   const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -2179,10 +2132,11 @@ const SettingsPage = () => {
 
                               <div className="mt-3 pt-3 border-top d-flex gap-2 flex-wrap">
                                 <Button
+                                  as={Link as any}
+                                  href="/plans"
                                   variant="primary"
                                   size="sm"
-                                  className="fw-bold flex-grow-1"
-                                  onClick={() => setShowRenewModal(true)}
+                                  className="fw-bold flex-grow-1 text-decoration-none d-inline-flex align-items-center justify-content-center"
                                 >
                                   <IconSparkles size={16} className="me-1" />
                                   {organizationAccess?.is_plan_expired ? "Reactivate Subscription" : "Renew / Upgrade Plan"}
@@ -2234,133 +2188,6 @@ const SettingsPage = () => {
           </div>
         </Col>
       </Row>
-
-      {/* Direct AttendStack Plan Renewal & Upgrade Modal */}
-      <Modal show={showRenewModal} onHide={() => setShowRenewModal(false)} centered size="lg">
-        <Modal.Header closeButton className="bg-primary text-white border-0 py-3">
-          <Modal.Title className="fw-bold d-flex align-items-center gap-2 text-white">
-            <IconCreditCard size={24} />
-            Renew or Upgrade AttendStack Subscription
-          </Modal.Title>
-        </Modal.Header>
-        <Modal.Body className="p-4">
-          <p className="text-secondary mb-4">
-            Choose a plan to renew your AttendStack workspace. You can select an AttendStack-direct plan below, or renew your bundled plan directly through SimplyJob.
-          </p>
-
-          <Row className="g-3 mb-4">
-            {[
-              {
-                id: "starter",
-                name: "Starter Plan",
-                price: "₹499",
-                period: "/month",
-                employees: 15,
-                features: ["Up to 15 Active Employees", "Real-time Attendance Tracking", "SimplyJob 1-Click Invites", "Basic Reports"],
-              },
-              {
-                id: "pro",
-                name: "Growth Pro Plan",
-                price: "₹999",
-                period: "/month",
-                employees: 50,
-                popular: true,
-                features: ["Up to 50 Active Employees", "Geofencing & IP Restrictions", "Automated Payroll Reports", "Priority Sync Engine"],
-              },
-              {
-                id: "enterprise",
-                name: "Enterprise Plan",
-                price: "₹1,999",
-                period: "/month",
-                employees: 500,
-                features: ["Unlimited Employees (500+)", "Custom Shift Rules & Overtime", "Dedicated API Key & Webhooks", "24/7 SLA Support"],
-              },
-            ].map((plan) => {
-              const isSelected = selectedPlanToRenew.name === plan.name;
-              return (
-                <Col md={4} key={plan.id}>
-                  <Card
-                    className={`h-100 cursor-pointer border-2 transition-all ${isSelected ? "border-primary bg-primary-subtle shadow" : "border-secondary-subtle"}`}
-                    onClick={() =>
-                      setSelectedPlanToRenew({
-                        name: plan.name,
-                        durationDays: 30,
-                        maxEmployees: plan.employees,
-                        price: plan.price + plan.period,
-                      })
-                    }
-                    style={{ cursor: "pointer" }}
-                  >
-                    <Card.Body className="p-3 d-flex flex-column">
-                      {plan.popular && (
-                        <Badge bg="primary" className="align-self-start mb-2">
-                          RECOMMENDED
-                        </Badge>
-                      )}
-                      <h6 className="fw-bold text-dark mb-1">{plan.name}</h6>
-                      <div className="mb-2">
-                        <span className="fs-4 fw-bold text-primary">{plan.price}</span>
-                        <small className="text-muted">{plan.period}</small>
-                      </div>
-                      <ul className="list-unstyled small text-secondary flex-grow-1 mb-3">
-                        {plan.features.map((f, i) => (
-                          <li key={i} className="mb-1 d-flex align-items-center gap-1.5">
-                            <IconCheck size={14} className="text-success flex-shrink-0" />
-                            <span>{f}</span>
-                          </li>
-                        ))}
-                      </ul>
-                      <Button
-                        variant={isSelected ? "primary" : "outline-primary"}
-                        size="sm"
-                        className="w-100 fw-semibold"
-                        onClick={() =>
-                          setSelectedPlanToRenew({
-                            name: plan.name,
-                            durationDays: 30,
-                            maxEmployees: plan.employees,
-                            price: plan.price + plan.period,
-                          })
-                        }
-                      >
-                        {isSelected ? "Selected" : "Select Plan"}
-                      </Button>
-                    </Card.Body>
-                  </Card>
-                </Col>
-              );
-            })}
-          </Row>
-
-          <div className="bg-light p-3 rounded border d-flex align-items-center justify-content-between flex-wrap gap-2">
-            <div>
-              <strong className="text-dark d-block">Selected: {selectedPlanToRenew.name} ({selectedPlanToRenew.price})</strong>
-              <small className="text-muted">Includes {selectedPlanToRenew.maxEmployees} employees capacity for 30 days.</small>
-            </div>
-            <div className="d-flex gap-2">
-              <Button
-                variant="primary"
-                className="fw-bold px-4"
-                disabled={isRenewingPlan}
-                onClick={() =>
-                  handleRenewPlan(
-                    selectedPlanToRenew.name,
-                    selectedPlanToRenew.durationDays,
-                    selectedPlanToRenew.maxEmployees
-                  )
-                }
-              >
-                {isRenewingPlan ? <><Spinner size="sm" className="me-1" /> Activating…</> : <>Activate & Renew Plan</>}
-              </Button>
-            </div>
-          </div>
-        </Modal.Body>
-        <Modal.Footer className="border-0 pt-0 pb-3 pe-4">
-          <Button variant="secondary" onClick={() => setShowRenewModal(false)}>
-            Close
-          </Button>
-        </Modal.Footer>
-      </Modal>
     </div>
   );
 };

@@ -84,6 +84,13 @@ class Message(models.Model):
         blank=True,
         related_name='sent_chat_messages'
     )
+    reply_to = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='replies'
+    )
     content = models.TextField(blank=True, null=True)
     message_type = models.CharField(
         max_length=10,
@@ -128,6 +135,31 @@ class Attachment(models.Model):
 
     def __str__(self):
         return f"Attachment {self.id} for Message {self.message_id}"
+
+
+class MessageReaction(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    message = models.ForeignKey(
+        Message,
+        on_delete=models.CASCADE,
+        related_name='reactions'
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='chat_reactions'
+    )
+    emoji = models.CharField(max_length=16)  # e.g. 👍, ❤️, 😂, 😮, 😢, 🙏
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('message', 'user', 'emoji')
+        indexes = [
+            models.Index(fields=['message', 'emoji']),
+        ]
+
+    def __str__(self):
+        return f"{self.user} reacted {self.emoji} on {self.message_id}"
 
 
 from django.db.models.signals import post_delete

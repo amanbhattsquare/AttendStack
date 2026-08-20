@@ -475,10 +475,21 @@ const SettingsPage = () => {
     setOrganizationCodeError("");
     setOrganizationCodeNotice("");
     try {
-      const response = await fetch(`${apiRoot}/api/v1/organizations/${organizationAccess.id}/regenerate-invite-code/`, {
+      const orgId = organizationAccess.id || "me";
+      let response = await fetch(`${apiRoot}/api/v1/organizations/${orgId}/regenerate-invite-code/`, {
         method: "POST",
         headers: authHeaders(),
       });
+      if (response.status === 404 && orgId !== "me") {
+        response = await fetch(`${apiRoot}/api/v1/organizations/me/regenerate-invite-code/`, {
+          method: "POST",
+          headers: authHeaders(),
+        });
+      }
+      if (!response.ok) {
+        const errJson = await response.json().catch(() => ({}));
+        throw new Error(errJson.detail || errJson.error || "The code could not be generated. Please try again.");
+      }
       const organization = await response.json();
       setOrganizationAccess(organization);
       const newCode = organization.invite_code;
@@ -497,8 +508,8 @@ const SettingsPage = () => {
         confirmButtonText: "I Understand & Will Update SimplyJob",
         confirmButtonColor: "#0d6efd",
       });
-    } catch {
-      setOrganizationCodeError("The code could not be generated. Please try again.");
+    } catch (err: any) {
+      setOrganizationCodeError(err.message || "The code could not be generated. Please try again.");
     } finally {
       setIsUpdatingOrganizationCode(false);
     }
@@ -540,12 +551,20 @@ const SettingsPage = () => {
 
     setIsUpdatingApiKey(true);
     try {
-      const response = await fetch(`${apiRoot}/api/v1/organizations/${organizationAccess.id}/regenerate-api-key/`, {
+      const orgId = organizationAccess.id || "me";
+      let response = await fetch(`${apiRoot}/api/v1/organizations/${orgId}/regenerate-api-key/`, {
         method: "POST",
         headers: authHeaders(),
       });
+      if (response.status === 404 && orgId !== "me") {
+        response = await fetch(`${apiRoot}/api/v1/organizations/me/regenerate-api-key/`, {
+          method: "POST",
+          headers: authHeaders(),
+        });
+      }
       if (!response.ok) {
-        throw new Error("Failed to regenerate API Key.");
+        const errJson = await response.json().catch(() => ({}));
+        throw new Error(errJson.detail || errJson.error || "Failed to regenerate API Key.");
       }
       const data = await response.json();
       setOrganizationAccess(data);

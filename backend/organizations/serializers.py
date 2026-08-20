@@ -122,7 +122,12 @@ class OrganizationSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         if request is None or not request.user.is_authenticated:
             return False
-        return request.user.is_superuser or request.user.role == "SUPER_ADMIN" or obj.owner_id == request.user.id
+        return (
+            request.user.is_superuser
+            or getattr(request.user, "role", "") in ["SUPER_ADMIN", "HR"]
+            or getattr(request.user, "is_staff", False)
+            or obj.owner_id == request.user.id
+        )
 
     def get_employee_count(self, obj):
         return obj.employees.count()

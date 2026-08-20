@@ -18,12 +18,21 @@ export default function PlanExpiryAlertBanner() {
 
   const fetchPlanStatus = async () => {
     try {
-      const res = await fetch(`${BASE_URL}/organizations/me/`, { headers: authHeaders() });
+      let res = await fetch(`${BASE_URL}/organizations/me/`, { headers: authHeaders() });
+      if (!res.ok) {
+        res = await fetch(`${BASE_URL}/organizations/?scope=me`, { headers: authHeaders() });
+      }
+      if (!res.ok) {
+        res = await fetch(`${BASE_URL}/organizations/`, { headers: authHeaders() });
+      }
       if (res.ok) {
         const data = await res.json();
-        setOrg(data);
-        if (typeof window !== "undefined") {
-          localStorage.setItem("organization", JSON.stringify(data));
+        const orgData = Array.isArray(data) ? data[0] : (data.results ? data.results[0] : data);
+        if (orgData) {
+          setOrg(orgData);
+          if (typeof window !== "undefined") {
+            localStorage.setItem("organization", JSON.stringify(orgData));
+          }
         }
       }
     } catch {

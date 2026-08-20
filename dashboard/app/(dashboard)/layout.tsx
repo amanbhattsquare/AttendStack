@@ -108,14 +108,15 @@ const DashboardLayout: React.FC<DashboardProps> = ({ children }) => {
             style={
               isChatPage
                 ? {
-                    flex: "1 1 auto",
-                    height: "100%",
-                    maxHeight: "100%",
-                    padding: 0,
-                    margin: 0,
-                    maxWidth: "100%",
-                    overflow: "hidden",
-                  }
+                  flex: "1 1 0%",
+                  height: "calc(100vh - 60px)",
+                  maxHeight: "calc(100vh - 60px)",
+                  minHeight: 0,
+                  padding: 0,
+                  margin: 0,
+                  maxWidth: "100%",
+                  overflow: "hidden",
+                }
                 : { flex: "1 0 auto" }
             }
           >
@@ -133,7 +134,7 @@ const DashboardLayout: React.FC<DashboardProps> = ({ children }) => {
           html #content.chat-content-wrap,
           html.collapsed #content.chat-content-wrap,
           html.expanded #content.chat-content-wrap {
-            padding-top: 62px !important;
+            padding-top: 60px !important;
             padding-bottom: 0 !important;
             padding-left: 0 !important;
             padding-right: 0 !important;
@@ -141,6 +142,16 @@ const DashboardLayout: React.FC<DashboardProps> = ({ children }) => {
             min-height: 100vh !important;
             max-height: 100vh !important;
             overflow: hidden !important;
+          }
+
+          html #content.chat-content-wrap .navbar-glass,
+          html.collapsed #content.chat-content-wrap .navbar-glass,
+          html.expanded #content.chat-content-wrap .navbar-glass {
+            background-color: #ffffff !important;
+            backdrop-filter: blur(12px) !important;
+            border-bottom: 1px solid #e2e8f0 !important;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04) !important;
+            height: 60px !important;
           }
         `}</style>
       )}

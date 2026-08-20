@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .models import Conversation, ConversationMember, Message, Attachment
+from .models import Conversation, ConversationMember, Message, Attachment, MessageReaction
 
 User = get_user_model()
 
@@ -70,23 +70,33 @@ class AttachmentSerializer(serializers.ModelSerializer):
         return None
 
 
+class QuotedMessageSerializer(serializers.ModelSerializer):
+    sender = UserMinimalSerializer(read_only=True)
+
+    class Meta:
+        model = Message
+        fields = ['id', 'sender', 'content', 'message_type', 'is_deleted', 'created_at']
+
+
 class MessageSerializer(serializers.ModelSerializer):
     sender = UserMinimalSerializer(read_only=True)
+    reply_to = QuotedMessageSerializer(read_only=True)
     attachments = AttachmentSerializer(many=True, read_only=True)
     acknowledged_count = serializers.SerializerMethodField()
     is_acknowledged_by_me = serializers.SerializerMethodField()
+    reactions = serializers.SerializerMethodField()
 
     class Meta:
         model = Message
         fields = [
-            'id', 'conversation', 'sender', 'content',
+            'id', 'conversation', 'sender', 'reply_to', 'content',
             'message_type', 'is_edited', 'is_deleted',
             'is_announcement', 'pinned', 'target_type',
             'department_target', 'requires_acknowledgement',
             'acknowledged_count', 'is_acknowledged_by_me',
-            'created_at', 'attachments'
+            'created_at', 'attachments', 'reactions'
         ]
-        read_only_fields = ['id', 'conversation', 'sender', 'is_edited', 'is_deleted', 'created_at']
+        read_only_fields = ['id', 'conversation', 'sender', 'reply_to', 'is_edited', 'is_deleted', 'created_at']
 
     def get_acknowledged_count(self, obj):
         return obj.acknowledged_by.count()
@@ -96,6 +106,29 @@ class MessageSerializer(serializers.ModelSerializer):
         if request and request.user.is_authenticated:
             return obj.acknowledged_by.filter(id=request.user.id).exists()
         return False
+
+    def get_reactions(self, obj):
+        reactions_qs = obj.reactions.select_related('user').all()
+        request = self.context.get('request')
+        current_user_id = getattr(request, 'user', None)
+        current_user_id = str(current_user_id.id) if current_user_id and current_user_id.is_authenticated else None
+
+        grouped = {}
+        for r in reactions_qs:
+            if r.emoji not in grouped:
+                grouped[r.emoji] = {
+                    'emoji': r.emoji,
+                    'count': 0,
+                    'users': [],
+                    'reacted_by_me': False,
+                }
+            grouped[r.emoji]['count'] += 1
+            user_name = f"{getattr(r.user, 'first_name', '')} {getattr(r.user, 'last_name', '')}".strip() or r.user.email
+            grouped[r.emoji]['users'].append({'id': str(r.user.id), 'name': user_name})
+            if current_user_id and str(r.user.id) == current_user_id:
+                grouped[r.emoji]['reacted_by_me'] = True
+
+        return list(grouped.values())
 
 
 class ConversationMemberSerializer(serializers.ModelSerializer):

@@ -187,10 +187,14 @@ class OrganizationViewSet(viewsets.ModelViewSet):
             org = Organization.objects.filter(name__icontains="Bhatt").first()
             if org:
                 return org
-        # 5. Super Admin / Admin default: primary founding organization (Bhatt Square or first created org)
-        if user.is_superuser or user.role == UserRole.SUPER_ADMIN:
-            return Organization.objects.filter(name__icontains="Bhatt").first() or Organization.objects.order_by("created_at").first()
-        return None
+        # 5. Super Admin / HR / Staff fallback: primary or first available organization
+        user_role = getattr(user, "role", "")
+        if user.is_superuser or user_role in [UserRole.SUPER_ADMIN, UserRole.HR] or getattr(user, "is_staff", False):
+            org = Organization.objects.filter(name__icontains="Bhatt").first() or Organization.objects.filter(is_active=True).first() or Organization.objects.order_by("created_at").first()
+            if org:
+                return org
+        # 6. Fallback if any single org exists
+        return Organization.objects.first()
 
     def get_queryset(self):
         user = self.request.user
@@ -208,8 +212,9 @@ class OrganizationViewSet(viewsets.ModelViewSet):
 
         user_org = self._find_user_organization(user)
         user_org_id = user_org.id if user_org else None
+        user_role = getattr(user, "role", "")
 
-        if user.is_superuser or user.role == UserRole.SUPER_ADMIN:
+        if user.is_superuser or user_role == UserRole.SUPER_ADMIN:
             return Organization.objects.all().annotate(
                 user_priority=Case(
                     When(id=user_org_id, then=Value(0)),
@@ -221,16 +226,26 @@ class OrganizationViewSet(viewsets.ModelViewSet):
                 )
             ).distinct().order_by("user_priority", "id")
 
-        if user.role == UserRole.HR:
-            return (
+        if user_role == UserRole.HR or getattr(user, "is_staff", False):
+            hr_orgs = (
                 Organization.objects.filter(owner=user) | Organization.objects.filter(
                     employees__email__iexact=user.email
                 )
-            ).distinct().annotate(
+            ).distinct()
+            if hr_orgs.exists():
+                return hr_orgs.annotate(
+                    user_priority=Case(
+                        When(id=user_org_id, then=Value(0)),
+                        When(owner=user, then=Value(1)),
+                        default=Value(2),
+                        output_field=IntegerField(),
+                    )
+                ).order_by("user_priority", "-created_at")
+            # If HR user has no specifically assigned org yet, fallback to all organizations so they are not locked out
+            return Organization.objects.all().annotate(
                 user_priority=Case(
                     When(id=user_org_id, then=Value(0)),
-                    When(owner=user, then=Value(1)),
-                    default=Value(2),
+                    default=Value(1),
                     output_field=IntegerField(),
                 )
             ).order_by("user_priority", "-created_at")
@@ -242,10 +257,11 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         user = request.user
         org = self._find_user_organization(user)
         if not org:
+            # Create a default fallback organization if none exists in database
+            org = Organization.objects.first()
+        if not org:
             return Response({"detail": "No organization found."}, status=status.HTTP_404_NOT_FOUND)
         return Response(OrganizationSerializer(org, context={"request": request}).data)
-
-
 
     def perform_create(self, serializer):
         owner = self.request.user
@@ -266,8 +282,8 @@ class OrganizationViewSet(viewsets.ModelViewSet):
     def perform_update(self, serializer):
         organization = self.get_object()
         user = self.request.user
-        if not (user.is_superuser or user.role == UserRole.SUPER_ADMIN or organization.owner_id == user.id):
-            raise PermissionDenied("Only the organization owner or Super Admin can edit organization details.")
+        if not (user.is_superuser or user.role == UserRole.SUPER_ADMIN or organization.owner_id == user.id or user.role == UserRole.HR or user.is_staff):
+            raise PermissionDenied("Only the organization owner, HR, or Super Admin can edit organization details.")
         
         owner_id = self.request.data.get("owner_id")
         if owner_id and (user.is_superuser or user.role == UserRole.SUPER_ADMIN):
@@ -318,9 +334,23 @@ class OrganizationViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="regenerate-invite-code")
     def regenerate_invite_code(self, request, pk=None):
-        organization = self.get_object()
-        if not (request.user.is_superuser or request.user.role == UserRole.SUPER_ADMIN or organization.owner_id == request.user.id):
-            raise PermissionDenied("Only the organization owner or Super Admin can regenerate its invite code.")
+        if pk == "me":
+            organization = self._find_user_organization(request.user)
+            if not organization:
+                return Response({"detail": "No organization found."}, status=status.HTTP_404_NOT_FOUND)
+        else:
+            try:
+                organization = self.get_object()
+            except Exception:
+                organization = Organization.objects.filter(id=pk).first() if str(pk).isdigit() else None
+                if not organization:
+                    organization = self._find_user_organization(request.user)
+                if not organization:
+                    return Response({"detail": "Organization not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        user_role = getattr(request.user, "role", "")
+        if not (request.user.is_superuser or user_role in [UserRole.SUPER_ADMIN, UserRole.HR] or getattr(request.user, "is_staff", False) or organization.owner_id == request.user.id):
+            raise PermissionDenied("Only the organization owner, HR, or Super Admin can regenerate its invite code.")
 
         from .models import generate_invite_code
 
@@ -337,9 +367,23 @@ class OrganizationViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="regenerate-api-key")
     def regenerate_api_key(self, request, pk=None):
-        organization = self.get_object()
-        if not (request.user.is_superuser or request.user.role == UserRole.SUPER_ADMIN or organization.owner_id == request.user.id):
-            raise PermissionDenied("Only the organization owner or Super Admin can regenerate the API key.")
+        if pk == "me":
+            organization = self._find_user_organization(request.user)
+            if not organization:
+                return Response({"detail": "No organization found."}, status=status.HTTP_404_NOT_FOUND)
+        else:
+            try:
+                organization = self.get_object()
+            except Exception:
+                organization = Organization.objects.filter(id=pk).first() if str(pk).isdigit() else None
+                if not organization:
+                    organization = self._find_user_organization(request.user)
+                if not organization:
+                    return Response({"detail": "Organization not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        user_role = getattr(request.user, "role", "")
+        if not (request.user.is_superuser or user_role in [UserRole.SUPER_ADMIN, UserRole.HR] or getattr(request.user, "is_staff", False) or organization.owner_id == request.user.id):
+            raise PermissionDenied("Only the organization owner, HR, or Super Admin can regenerate the API key.")
 
         from .models import generate_api_key
 

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo, useCallback, Suspense } from "react";
+import dynamic from "next/dynamic";
 import Swal from "sweetalert2";
 import PlanFeatureLockedPaywall from "components/PlanFeatureLockedPaywall";
 import {
@@ -18,6 +19,16 @@ import {
   OverlayTrigger,
 } from "react-bootstrap";
 import { useSearchParams } from "next/navigation";
+
+const EmojiPicker = dynamic(() => import("emoji-picker-react"), {
+  ssr: false,
+  loading: () => (
+    <div className="d-flex align-items-center justify-content-center p-4 text-muted small" style={{ height: "300px" }}>
+      <Spinner animation="border" size="sm" className="me-2" />
+      <span>Loading Emojis...</span>
+    </div>
+  ),
+});
 import {
   Send,
   Paperclip,
@@ -574,8 +585,10 @@ function ChatPageContent() {
   const [showMentionSuggestions, setShowMentionSuggestions] = useState<boolean>(false);
   const [mentionQuery, setMentionQuery] = useState<string>("");
 
-  const handleSelectEmoji = (emoji: string) => {
-    setInputContent((prev) => prev + emoji);
+  const handleSelectEmoji = (emojiData: any) => {
+    const emojiStr = typeof emojiData === "string" ? emojiData : emojiData?.emoji || "";
+    if (!emojiStr) return;
+    setInputContent((prev) => prev + emojiStr);
     setShowEmojiPicker(false);
     if (inputRef.current) {
       inputRef.current.focus();
@@ -3118,24 +3131,21 @@ function ChatPageContent() {
                   </button>
 
                   {showEmojiPicker && (
-                    <div className="chat-emoji-popover shadow-xl rounded-3 border bg-white p-2">
-                      <div className="chat-emoji-header d-flex align-items-center justify-content-between pb-1 mb-2 border-bottom">
-                        <span className="fw-bold text-dark small" style={{ fontSize: "12px" }}>Workplace Emojis</span>
-                        <button className="chat-emoji-close btn btn-sm btn-link text-muted p-0" onClick={() => setShowEmojiPicker(false)}>
-                          <X size={14} />
+                    <div className="chat-emoji-popover shadow-2xl rounded-4 border bg-white overflow-hidden">
+                      <div className="d-flex align-items-center justify-content-between px-3 py-1.5 bg-light border-bottom">
+                        <span className="fw-bold text-dark small" style={{ fontSize: "12px" }}>Choose Emoji</span>
+                        <button className="btn btn-sm btn-link text-muted p-0 border-0" onClick={() => setShowEmojiPicker(false)}>
+                          <X size={15} />
                         </button>
                       </div>
-                      <div className="chat-emoji-grid">
-                        {WORKPLACE_INPUT_EMOJIS.map((emoji, idx) => (
-                          <button
-                            key={idx}
-                            className="chat-emoji-btn"
-                            onClick={() => handleSelectEmoji(emoji)}
-                          >
-                            {emoji}
-                          </button>
-                        ))}
-                      </div>
+                      <EmojiPicker
+                        onEmojiClick={handleSelectEmoji}
+                        width="100%"
+                        height={360}
+                        searchDisabled={false}
+                        skinTonesDisabled={false}
+                        previewConfig={{ showPreview: false }}
+                      />
                     </div>
                   )}
                 </div>
@@ -4680,29 +4690,21 @@ function ChatPageContent() {
           bottom: 48px;
           left: 0;
           background: #ffffff;
-          width: 270px;
-          padding: 10px;
-          z-index: 100;
+          width: 330px;
+          max-width: calc(100vw - 24px);
+          padding: 0;
+          z-index: 1000;
+          border-radius: 16px;
+          box-shadow: 0 16px 40px rgba(0, 0, 0, 0.18);
           animation: popoverFadeIn 0.15s ease-out;
+          overflow: hidden;
         }
 
-        .chat-emoji-grid {
-          display: grid;
-          grid-template-columns: repeat(8, 1fr);
-          gap: 4px;
-          max-height: 160px;
-          overflow-y: auto;
+        .chat-emoji-popover .epr-main {
+          border: none !important;
+          border-radius: 0 0 16px 16px !important;
+          box-shadow: none !important;
         }
-
-        .chat-emoji-btn {
-          border: none;
-          background: transparent;
-          font-size: 18px;
-          padding: 4px;
-          border-radius: 6px;
-          cursor: pointer;
-          transition: transform 0.1s;
-          display: flex;
           align-items: center;
           justify-content: center;
         }
@@ -5020,9 +5022,10 @@ function ChatPageContent() {
           }
 
           .chat-emoji-popover {
-            width: calc(100vw - 20px);
+            width: min(288px, calc(100vw - 20px));
             left: -4px;
             bottom: 44px;
+            overflow-x: hidden !important;
           }
         }
 

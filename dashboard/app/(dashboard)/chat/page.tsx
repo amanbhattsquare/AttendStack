@@ -2497,15 +2497,33 @@ function ChatPageContent() {
                     <div
                       className="chat-mascot-wrapper"
                       style={{
-                        width: "100px",
-                        height: "100px",
+                        width: "120px",
+                        height: "120px",
                         margin: "0 auto 12px",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
                       }}
                     >
-                      <MessageSquare size={48} className="text-primary opacity-50" />
+                      <img
+                        src="/images/chat/smiling-mascot.svg"
+                        alt="Chat Mascot"
+                        style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                        onError={(e) => {
+                          // Fallback to /smiling-mascot.svg or icon if path fails
+                          const target = e.currentTarget;
+                          if (target.src.indexOf("/images/chat/smiling-mascot.svg") !== -1) {
+                            target.src = "/smiling-mascot.svg";
+                          } else {
+                            target.style.display = "none";
+                            const fallback = target.parentElement?.querySelector(".chat-mascot-fallback") as HTMLElement | null;
+                            if (fallback) fallback.style.display = "flex";
+                          }
+                        }}
+                      />
+                      <div className="chat-mascot-fallback" style={{ display: "none", alignItems: "center", justifyContent: "center" }}>
+                        <MessageSquare size={48} className="text-primary opacity-50" />
+                      </div>
                     </div>
                     <h6>{inChatMessageQuery ? "No matching messages" : "No messages yet"}</h6>
                     <p>{inChatMessageQuery ? "Try a different search keyword" : `Send a message to start conversation with ${activeConversation.display_name}`}</p>

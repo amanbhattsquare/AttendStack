@@ -91,9 +91,14 @@ export const sendBrowserChatNotification = async ({
 }: ChatNotificationPayload): Promise<void> => {
   if (typeof window === 'undefined') return;
 
-  // 1. Play Audio Chime
+  // 1. Play Audio Chime & trigger phone vibration
   if (playSound) {
     playMessageChime();
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      try {
+        navigator.vibrate([200, 100, 200]);
+      } catch (_) {}
+    }
   }
 
   // 2. If Notification API is not supported or permission not granted, return early
@@ -111,6 +116,7 @@ export const sendBrowserChatNotification = async ({
     badge: '/favicon.png',
     tag: notificationTag,
     renotify: true,
+    silent: true,
     data: {
       url: targetUrl,
       conversationId,

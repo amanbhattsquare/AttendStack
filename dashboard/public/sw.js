@@ -27,7 +27,7 @@ self.addEventListener('push', (event) => {
     badge: '/favicon.png',
     tag: data.tag || (data.conversationId ? `chat_${data.conversationId}` : 'chat_notification'),
     renotify: true,
-    vibrate: [200, 100, 200],
+    silent: true,
     data: {
       url: data.url || (data.conversationId ? `/chat?convId=${data.conversationId}` : '/chat'),
       conversationId: data.conversationId,

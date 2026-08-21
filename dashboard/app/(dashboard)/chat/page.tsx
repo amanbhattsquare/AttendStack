@@ -66,6 +66,7 @@ import {
 } from "../../../helper/browserNotification";
 import {
   playMessageChime,
+  preloadNotificationSound,
   isChatSoundMuted,
   setChatSoundMuted,
 } from "../../../helper/notificationSound";
@@ -542,6 +543,7 @@ export default function ChatPage() {
     setNotificationPermission(getNotificationPermission());
     setIsSoundMuted(isChatSoundMuted());
     registerChatServiceWorker();
+    preloadNotificationSound();
   }, []);
 
   const handleToggleSound = () => {

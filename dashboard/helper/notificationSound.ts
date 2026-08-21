@@ -1,19 +1,62 @@
-// Professional Chat Audio Chime Synthesizer using Web Audio API (Zero external assets needed)
+// Chat Notification Sound Helper
+// Exclusively plays /nofication-sound.mp3
 
-let audioCtx: AudioContext | null = null;
+const NOTIFICATION_SOUND_PATH = '/nofication-sound.mp3';
 
-const getAudioContext = (): AudioContext | null => {
-  if (typeof window === 'undefined') return null;
-  if (!audioCtx) {
-    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-    if (AudioContextClass) {
-      audioCtx = new AudioContextClass();
+let notificationAudio: HTMLAudioElement | null = null;
+let lastPlayedAt = 0;
+let isAudioUnlocked = false;
+
+/**
+ * Unlock audio playback on mobile browsers on first user interaction
+ */
+const unlockMobileAudio = (): void => {
+  if (isAudioUnlocked || typeof window === 'undefined') return;
+
+  try {
+    if (!notificationAudio) {
+      notificationAudio = new Audio(NOTIFICATION_SOUND_PATH);
+      notificationAudio.preload = 'auto';
     }
+
+    // Unmute & unlock on user touch
+    notificationAudio.volume = 0;
+    const p = notificationAudio.play();
+    if (p !== undefined) {
+      p.then(() => {
+        if (notificationAudio) {
+          notificationAudio.pause();
+          notificationAudio.currentTime = 0;
+          notificationAudio.volume = 0.85;
+        }
+        isAudioUnlocked = true;
+      }).catch(() => {});
+    } else {
+      isAudioUnlocked = true;
+    }
+  } catch (err) {
+    console.debug('Mobile audio unlock attempt:', err);
   }
-  if (audioCtx && audioCtx.state === 'suspended') {
-    audioCtx.resume().catch(() => {});
+};
+
+/**
+ * Preload and cache the audio element for low-latency playback
+ */
+export const preloadNotificationSound = (): void => {
+  if (typeof window === 'undefined') return;
+  try {
+    if (!notificationAudio) {
+      notificationAudio = new Audio(NOTIFICATION_SOUND_PATH);
+      notificationAudio.preload = 'auto';
+      notificationAudio.volume = 0.85;
+    }
+
+    ['touchstart', 'touchend', 'click', 'keydown'].forEach((evt) => {
+      window.addEventListener(evt, unlockMobileAudio, { once: true, passive: true });
+    });
+  } catch (err) {
+    console.debug('Failed to preload notification sound:', err);
   }
-  return audioCtx;
 };
 
 export const isChatSoundMuted = (): boolean => {
@@ -27,43 +70,33 @@ export const setChatSoundMuted = (muted: boolean): void => {
 };
 
 /**
- * Plays a pleasant, modern Slack/Apple-style harmonic dual-tone chime
+ * Plays ONLY /nofication-sound.mp3
  */
 export const playMessageChime = (): void => {
+  if (typeof window === 'undefined') return;
+  if (isChatSoundMuted()) return;
+
+  // Prevent double-play within 400ms
+  const now = Date.now();
+  if (now - lastPlayedAt < 400) {
+    return;
+  }
+  lastPlayedAt = now;
+
   try {
-    if (isChatSoundMuted()) return;
-    const ctx = getAudioContext();
-    if (!ctx) return;
-
-    const now = ctx.currentTime;
-
-    // First Tone (Soft high note: 587.33 Hz - D5)
-    const osc1 = ctx.createOscillator();
-    const gain1 = ctx.createGain();
-    osc1.type = 'sine';
-    osc1.frequency.setValueAtTime(587.33, now);
-    gain1.gain.setValueAtTime(0.001, now);
-    gain1.gain.exponentialRampToValueAtTime(0.2, now + 0.02);
-    gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
-    osc1.connect(gain1);
-    gain1.connect(ctx.destination);
-    osc1.start(now);
-    osc1.stop(now + 0.18);
-
-    // Second Tone (Harmonic resolution: 880 Hz - A5)
-    const osc2 = ctx.createOscillator();
-    const gain2 = ctx.createGain();
-    osc2.type = 'sine';
-    osc2.frequency.setValueAtTime(880, now + 0.08);
-    gain2.gain.setValueAtTime(0.001, now + 0.08);
-    gain2.gain.exponentialRampToValueAtTime(0.25, now + 0.10);
-    gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
-    osc2.connect(gain2);
-    gain2.connect(ctx.destination);
-    osc2.start(now + 0.08);
-    osc2.stop(now + 0.38);
+    const sound = new Audio(NOTIFICATION_SOUND_PATH);
+    sound.volume = 0.85;
+    const playPromise = sound.play();
+    if (playPromise !== undefined) {
+      playPromise.catch((err) => {
+        console.debug('Notification audio playback prevented:', err);
+      });
+    }
   } catch (err) {
-    // Non-fatal if audio context blocked by browser autoplay policy
-    console.debug('Audio chime unable to play:', err);
+    console.debug('Error playing notification sound:', err);
   }
 };
+
+// Convenient alias
+export const playNotificationSound = playMessageChime;
+

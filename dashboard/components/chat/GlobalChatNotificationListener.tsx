@@ -10,15 +10,17 @@ import {
   updateTabTitleBadge,
   clearTabTitleBadge,
 } from '../../helper/browserNotification';
+import { preloadNotificationSound } from '../../helper/notificationSound';
 
 export const GlobalChatNotificationListener: React.FC = () => {
   const pathname = usePathname();
   const prevConversationsRef = useRef<Record<string, { lastMsgId?: string; unread: number }>>({});
   const isFirstLoadRef = useRef(true);
 
-  // Initialize service worker once on mount
+  // Initialize service worker & preload audio on mount
   useEffect(() => {
     registerChatServiceWorker();
+    preloadNotificationSound();
   }, []);
 
   // Poll conversations every 12 seconds in background to detect incoming messages

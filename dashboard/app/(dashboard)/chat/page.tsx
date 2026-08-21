@@ -507,6 +507,42 @@ function ChatPageContent() {
     setPreviewMedia(media);
   };
 
+  // Helper to format clean preview text for sidebar and quoted cards (WhatsApp style)
+  const getCleanMessagePreview = (msg: any) => {
+    if (!msg) return "No messages yet";
+
+    if (msg.message_type === "STICKER") {
+      if (msg.content?.includes("giphy.com") || msg.content?.match(/\.(gif|webp)(\?.*)?$/i)) {
+        return "👾 GIF";
+      }
+      return "👾 Sticker";
+    }
+
+    if (msg.message_type === "IMAGE") {
+      return "📷 Photo";
+    }
+
+    if (msg.message_type === "VIDEO") {
+      return "🎥 Video";
+    }
+
+    if (msg.message_type === "FILE") {
+      return "📄 Document";
+    }
+
+    if (msg.content) {
+      if (msg.content.includes("giphy.com") || msg.content.match(/\.gif(\?.*)?$/i)) {
+        return "👾 GIF";
+      }
+      if (msg.content.match(/\.(png|jpg|jpeg|webp)(\?.*)?$/i)) {
+        return "👾 Sticker";
+      }
+      return msg.content;
+    }
+
+    return `[${msg.message_type || "Message"}]`;
+  };
+
   // Typing indicator state
   const [typingUser, setTypingUser] = useState<string | null>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -2369,7 +2405,7 @@ function ChatPageContent() {
                   {msg.reply_to.is_deleted ? (
                     <em className="text-muted">This message was deleted</em>
                   ) : (
-                    msg.reply_to.content || `[${msg.reply_to.message_type || "Attachment"}]`
+                    getCleanMessagePreview(msg.reply_to)
                   )}
                 </span>
               </div>
@@ -2885,7 +2921,7 @@ function ChatPageContent() {
                       <div className="chat-conv-bottom">
                         <span className="chat-conv-preview">
                           {conv.last_message ? (
-                            conv.last_message.content || `[${conv.last_message.message_type}]`
+                            getCleanMessagePreview(conv.last_message)
                           ) : (
                             <em>{conv.designation ? conv.designation : "No messages yet"}</em>
                           )}
@@ -3202,7 +3238,7 @@ function ChatPageContent() {
                         Replying to {replyingTo.sender?.name || replyingTo.sender?.email || "User"}
                       </span>
                       <span className="text-truncate text-muted small" style={{ fontSize: "12px" }}>
-                        {replyingTo.content || (replyingTo.attachments?.length ? `[${replyingTo.attachments.length} attachment(s)]` : "Quoted message")}
+                        {getCleanMessagePreview(replyingTo)}
                       </span>
                     </div>
                   </div>

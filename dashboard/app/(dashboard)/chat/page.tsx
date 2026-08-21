@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback, Suspense } from "react";
 import Swal from "sweetalert2";
 import PlanFeatureLockedPaywall from "components/PlanFeatureLockedPaywall";
 import {
@@ -269,7 +269,7 @@ const WORKPLACE_INPUT_EMOJIS = [
   "⭐", "🙏", "👌", "💪", "⚡", "☕", "📊", "📁"
 ];
 
-export default function ChatPage() {
+function ChatPageContent() {
   const dispatch = useAppDispatch();
   const queryClient = useQueryClient();
 
@@ -4420,5 +4420,22 @@ export default function ChatPage() {
         }
       `}</style>
     </>
+  );
+}
+
+export default function ChatPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="d-flex align-items-center justify-content-center vh-100" style={{ backgroundColor: "#f8fafc" }}>
+          <div className="text-center">
+            <Spinner animation="border" variant="primary" style={{ width: "2.5rem", height: "2.5rem" }} />
+            <p className="mt-3 text-muted fw-semibold small">Loading Workspace Chat...</p>
+          </div>
+        </div>
+      }
+    >
+      <ChatPageContent />
+    </Suspense>
   );
 }

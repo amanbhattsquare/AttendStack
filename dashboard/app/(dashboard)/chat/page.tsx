@@ -1803,12 +1803,36 @@ function ChatPageContent() {
     });
   }, [userSearchResults]);
 
-  // Render text with highlighted @mentions & search highlights
-  const renderTextWithMentionsAndHighlights = (content: string) => {
+  // Render text with clickable links, highlighted @mentions & search highlights
+  const renderTextWithMentionsAndHighlights = (content: string, isMe: boolean = false) => {
     if (!content) return null;
 
-    const parts = content.split(/(@[A-Za-z0-9._-]+(?:\s+[A-Za-z0-9._-]+)?)/g);
+    // Match URLs and @mentions
+    const tokenRegex = /(https?:\/\/[^\s]+|@[A-Za-z0-9._-]+(?:\s+[A-Za-z0-9._-]+)?)/g;
+    const parts = content.split(tokenRegex);
+
     return parts.map((part, idx) => {
+      if (part.match(/^https?:\/\/[^\s]+$/i)) {
+        return (
+          <a
+            key={idx}
+            href={part}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="chat-clickable-link"
+            style={{
+              color: isMe ? "#e0e7ff" : "#2563eb",
+              textDecoration: "underline",
+              wordBreak: "break-all",
+              fontWeight: 600,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {part}
+          </a>
+        );
+      }
+
       if (part.startsWith("@")) {
         return (
           <span
@@ -1842,6 +1866,122 @@ function ChatPageContent() {
 
       return part;
     });
+  };
+
+  // Render WhatsApp-style Rich Link Preview Card (Favicons & YouTube thumbnails)
+  const renderLinkPreviewCard = (content: string, isMe: boolean = false) => {
+    if (!content) return null;
+    const match = content.match(/https?:\/\/[^\s]+/i);
+    if (!match) return null;
+
+    const url = match[0];
+    let domain = "";
+    try {
+      domain = new URL(url).hostname.replace(/^www\./, "");
+    } catch {
+      return null;
+    }
+
+    // Check YouTube video link
+    const ytMatch = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|v\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/i);
+
+    if (ytMatch && ytMatch[1]) {
+      const videoId = ytMatch[1];
+      const thumbUrl = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+
+      return (
+        <div
+          className="whatsapp-link-preview-card mt-2 rounded-3 overflow-hidden border cursor-pointer shadow-sm"
+          style={{
+            background: isMe ? "rgba(0, 0, 0, 0.18)" : "#ffffff",
+            borderColor: isMe ? "rgba(255, 255, 255, 0.2)" : "#e2e8f0",
+            maxWidth: "340px",
+          }}
+          onClick={(e) => {
+            e.stopPropagation();
+            window.open(url, "_blank", "noopener,noreferrer");
+          }}
+        >
+          <div className="position-relative bg-black text-center" style={{ maxHeight: "180px", overflow: "hidden" }}>
+            <img
+              src={thumbUrl}
+              alt="YouTube Video Thumbnail"
+              className="w-100"
+              style={{ objectFit: "cover", maxHeight: "180px", opacity: 0.9 }}
+            />
+            <div className="position-absolute top-50 start-50 translate-middle d-flex align-items-center justify-content-center">
+              <div className="bg-danger text-white rounded-circle p-2 shadow-lg d-flex align-items-center justify-content-center" style={{ width: "42px", height: "42px" }}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M8 5v14l11-7z" />
+                </svg>
+              </div>
+            </div>
+          </div>
+          <div className="p-2 px-3 d-flex align-items-center justify-content-between gap-2">
+            <div className="d-flex align-items-center gap-2 overflow-hidden">
+              <img
+                src="https://www.google.com/s2/favicons?domain=youtube.com&sz=32"
+                alt="youtube"
+                style={{ width: "16px", height: "16px", borderRadius: "3px" }}
+              />
+              <span className="fw-bold text-truncate" style={{ fontSize: "12px", color: isMe ? "#ffffff" : "#0f172a" }}>
+                YouTube Video • {domain}
+              </span>
+            </div>
+            <ExternalLink size={13} className="flex-shrink-0 opacity-75" style={{ color: isMe ? "#ffffff" : "#64748b" }} />
+          </div>
+        </div>
+      );
+    }
+
+    // Standard Link Card with Favicon
+    const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
+
+    return (
+      <div
+        className="whatsapp-link-preview-card mt-2 rounded-3 overflow-hidden border p-2.5 d-flex align-items-center justify-content-between gap-2.5 cursor-pointer shadow-sm"
+        style={{
+          background: isMe ? "rgba(0, 0, 0, 0.18)" : "#ffffff",
+          borderColor: isMe ? "rgba(255, 255, 255, 0.2)" : "#e2e8f0",
+          maxWidth: "340px",
+        }}
+        onClick={(e) => {
+          e.stopPropagation();
+          window.open(url, "_blank", "noopener,noreferrer");
+        }}
+      >
+        <div className="d-flex align-items-center gap-2.5 overflow-hidden">
+          <div
+            className="rounded-2 p-1.5 d-flex align-items-center justify-content-center flex-shrink-0 shadow-xs"
+            style={{ background: isMe ? "rgba(255, 255, 255, 0.15)" : "#f1f5f9", width: "36px", height: "36px" }}
+          >
+            <img
+              src={faviconUrl}
+              alt={domain}
+              style={{ width: "20px", height: "20px", objectFit: "contain" }}
+              onError={(e) => {
+                (e.target as HTMLElement).style.display = "none";
+              }}
+            />
+          </div>
+          <div className="d-flex flex-column overflow-hidden text-start">
+            <span
+              className="fw-bold text-truncate"
+              style={{ fontSize: "12.5px", color: isMe ? "#ffffff" : "#0f172a" }}
+            >
+              {domain}
+            </span>
+            <span
+              className="text-truncate small"
+              style={{ fontSize: "11px", color: isMe ? "rgba(255, 255, 255, 0.85)" : "#64748b" }}
+            >
+              {url}
+            </span>
+          </div>
+        </div>
+        <ExternalLink size={14} className="flex-shrink-0 opacity-75" style={{ color: isMe ? "#ffffff" : "#64748b" }} />
+      </div>
+    );
   };
 
   // Input change handler supporting @mentions
@@ -2113,8 +2253,9 @@ function ChatPageContent() {
                   )}
                 </div>
                 <p className="mb-2 text-dark fw-medium" style={{ fontSize: "14px", lineHeight: "1.5" }}>
-                  {renderTextWithMentionsAndHighlights(msg.content || "")}
+                  {renderTextWithMentionsAndHighlights(msg.content || "", isMe)}
                 </p>
+                {renderLinkPreviewCard(msg.content || "", isMe)}
                 {msg.requires_acknowledgement && (
                   <div
                     className="d-flex align-items-center justify-content-between pt-2 border-top mt-1"
@@ -2144,7 +2285,10 @@ function ChatPageContent() {
               </div>
             ) : (
               msg.content && !msg.is_deleted && (
-                <p className="chat-text">{renderTextWithMentionsAndHighlights(msg.content)}</p>
+                <>
+                  <p className="chat-text">{renderTextWithMentionsAndHighlights(msg.content, isMe)}</p>
+                  {renderLinkPreviewCard(msg.content, isMe)}
+                </>
               )
             )}
 

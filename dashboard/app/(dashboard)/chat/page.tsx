@@ -2667,30 +2667,6 @@ function ChatPageContent() {
                       >
                         {activeConversation.display_name}
                       </h3>
-                      {activeConversation.type === "DIRECT" && (() => {
-                        const badge = getDesignationBadgeInfo(
-                          activeConversation.designation || activeConversation.other_user?.designation,
-                          activeConversation.other_user?.role
-                        );
-                        return (
-                          <div
-                            className="chat-designation-badge"
-                            style={{
-                              backgroundColor: badge.bg,
-                              color: badge.color,
-                              borderColor: badge.border,
-                            }}
-                          >
-                            <span
-                              className="chat-designation-dot"
-                              style={{ backgroundColor: badge.dot }}
-                            />
-                            <span className="chat-designation-text">
-                              {badge.title}
-                            </span>
-                          </div>
-                        );
-                      })()}
                     </div>
                     <div className="chat-header-meta d-flex align-items-center gap-2 mt-0.5">
                       {activeConversation.type === "GROUP" ? (

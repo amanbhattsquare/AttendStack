@@ -63,6 +63,9 @@ import {
   requestNotificationPermission,
   sendBrowserChatNotification,
   registerChatServiceWorker,
+  closeConversationNotifications,
+  markMessageAsNotified,
+  hasMessageBeenNotified,
 } from "../../../helper/browserNotification";
 import {
   playMessageChime,
@@ -92,9 +95,10 @@ import {
   reactToMessage,
 } from "../../../helper/chatApi";
 
-// Redux for sidebar control
+// Redux for sidebar control & Branding context
 import { useAppDispatch } from "store/store";
 import { setCollapsed } from "store/slices/appSlice";
+import { useBranding } from "context/BrandingContext";
 
 // Avatar colors – solid, professional palette
 const getAvatarColor = (name: string) => {
@@ -269,18 +273,144 @@ const WORKPLACE_INPUT_EMOJIS = [
   "⭐", "🙏", "👌", "💪", "⚡", "☕", "📊", "📁"
 ];
 
+// Helper to format user roles cleanly
+const formatUserRole = (role?: string): string => {
+  if (!role) return "Team Member";
+  const r = role.toUpperCase();
+  if (r === "SUPER_ADMIN") return "Super Admin";
+  if (r === "ADMIN") return "Admin";
+  if (r === "HR") return "HR Manager";
+  if (r === "EMPLOYEE") return "Employee";
+  if (r === "MANAGER") return "Manager";
+  return role.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+};
+
+// Helper for professional designation badge aesthetics
+const getDesignationBadgeInfo = (designation?: string | null, role?: string | null) => {
+  const d = (designation || "").trim();
+  const r = (role || "").toUpperCase();
+
+  const title =
+    d ||
+    (r === "SUPER_ADMIN" || r === "ADMIN"
+      ? "Company Admin"
+      : r === "HR"
+        ? "HR Manager"
+        : r === "EMPLOYEE"
+          ? "Employee"
+          : "Team Member");
+
+  const low = title.toLowerCase();
+
+  if (
+    low.includes("admin") ||
+    r === "ADMIN" ||
+    r === "SUPER_ADMIN" ||
+    low.includes("owner") ||
+    low.includes("director") ||
+    low.includes("founder")
+  ) {
+    return {
+      title,
+      bg: "#fef3c7",
+      color: "#92400e",
+      border: "#fde68a",
+      dot: "#d97706",
+    };
+  }
+  if (low.includes("hr") || r === "HR" || low.includes("talent") || low.includes("people")) {
+    return {
+      title,
+      bg: "#ede9fe",
+      color: "#5b21b6",
+      border: "#ddd6fe",
+      dot: "#7c3aed",
+    };
+  }
+  if (
+    low.includes("engineer") ||
+    low.includes("developer") ||
+    low.includes("tech") ||
+    low.includes("software") ||
+    low.includes("frontend") ||
+    low.includes("backend") ||
+    low.includes("fullstack")
+  ) {
+    return {
+      title,
+      bg: "#e0e7ff",
+      color: "#3730a3",
+      border: "#c7d2fe",
+      dot: "#4f46e5",
+    };
+  }
+  if (
+    low.includes("lead") ||
+    low.includes("manager") ||
+    low.includes("head") ||
+    low.includes("vp")
+  ) {
+    return {
+      title,
+      bg: "#dbeafe",
+      color: "#1e40af",
+      border: "#bfdbfe",
+      dot: "#2563eb",
+    };
+  }
+  if (
+    low.includes("marketing") ||
+    low.includes("design") ||
+    low.includes("ui") ||
+    low.includes("ux") ||
+    low.includes("creative")
+  ) {
+    return {
+      title,
+      bg: "#fce7f3",
+      color: "#9d174d",
+      border: "#fbcfe8",
+      dot: "#db2777",
+    };
+  }
+  return {
+    title,
+    bg: "#f1f5f9",
+    color: "#334155",
+    border: "#cbd5e1",
+    dot: "#64748b",
+  };
+};
+
 function ChatPageContent() {
   const dispatch = useAppDispatch();
   const queryClient = useQueryClient();
+  const { companyLogo, companyName } = useBranding();
 
   const [organization, setOrganization] = useState<any>(null);
+
+  const getConversationAvatar = (conv: Conversation | null | undefined) => {
+    if (!conv) return null;
+    if (conv.avatar) return conv.avatar;
+    const isCompanyOrAdmin =
+      conv.other_user?.role === "SUPER_ADMIN" ||
+      conv.other_user?.role === "ADMIN" ||
+      conv.display_name === companyName ||
+      (companyName && conv.display_name?.toLowerCase().includes(companyName.toLowerCase())) ||
+      conv.display_name?.toLowerCase().includes("bhatt square") ||
+      conv.display_name?.toLowerCase().includes("admin");
+    if (isCompanyOrAdmin && (companyLogo || conv.other_user?.company_logo)) {
+      return companyLogo || conv.other_user?.company_logo || null;
+    }
+    return null;
+  };
 
   useEffect(() => {
     const orgData = localStorage.getItem("organization");
     if (orgData) {
       try {
         setOrganization(JSON.parse(orgData));
-      } catch {}
+      } catch { }
     }
   }, []);
 
@@ -751,9 +881,16 @@ function ChatPageContent() {
           // Play sound and trigger browser notification if message is from another user
           const isFromMe = String(newMsg.sender?.id) === String(currentUserId);
           if (!isFromMe) {
-            playMessageChime();
-            const isDocHidden = typeof document !== "undefined" && document.hidden;
-            if (isDocHidden) {
+            const isDocVisible = typeof document !== "undefined" && !document.hidden;
+            // If the user is actively viewing this exact conversation right now, mark as read immediately & do not notify
+            if (isDocVisible) {
+              markMessageAsNotified(newMsg.id);
+              markConversationAsRead(activeConversationId);
+              closeConversationNotifications(activeConversationId);
+              playMessageChime();
+            } else {
+              // Tab is hidden/minimized: play chime and show background notification with messageId
+              playMessageChime();
               const senderName = newMsg.sender?.name || newMsg.sender?.email || "New Message";
               const bodyText =
                 newMsg.content ||
@@ -761,6 +898,7 @@ function ChatPageContent() {
                   ? `[${newMsg.attachments.length} attachment(s)]`
                   : "Sent a message");
               sendBrowserChatNotification({
+                messageId: newMsg.id,
                 title: senderName,
                 body: bodyText,
                 conversationId: activeConversationId,
@@ -816,6 +954,26 @@ function ChatPageContent() {
     };
   }, [activeConversationId, currentUserId, queryClient]);
 
+  // When window gains focus or tab becomes visible, mark active conversation as read & close notification
+  useEffect(() => {
+    const handleWindowFocusOrVisible = () => {
+      if (typeof document !== "undefined" && !document.hidden && activeConversationId) {
+        markConversationAsRead(activeConversationId);
+        closeConversationNotifications(activeConversationId);
+        queryClient.setQueryData<Conversation[]>(["conversations"], (old = []) =>
+          old.map((c) => (c.id === activeConversationId ? { ...c, unread_count: 0 } : c))
+        );
+      }
+    };
+
+    window.addEventListener("focus", handleWindowFocusOrVisible);
+    document.addEventListener("visibilitychange", handleWindowFocusOrVisible);
+    return () => {
+      window.removeEventListener("focus", handleWindowFocusOrVisible);
+      document.removeEventListener("visibilitychange", handleWindowFocusOrVisible);
+    };
+  }, [activeConversationId, queryClient]);
+
   // Select conversation
   const selectConversation = (conv: Conversation) => {
     if (!conv || !conv.id) return;
@@ -827,6 +985,7 @@ function ChatPageContent() {
     setInChatMessageQuery("");
     setReplyingTo(null);
     markConversationAsRead(conv.id);
+    closeConversationNotifications(conv.id);
     queryClient.setQueryData<Conversation[]>(["conversations"], (old = []) =>
       old.map((c) => (c.id === conv.id ? { ...c, unread_count: 0 } : c))
     );
@@ -914,9 +1073,9 @@ function ChatPageContent() {
 
         const currentReactions: ReactionSummary[] = m.reactions
           ? m.reactions.map((r) => ({
-              ...r,
-              users: [...r.users],
-            }))
+            ...r,
+            users: [...r.users],
+          }))
           : [];
 
         const previousReactionIdx = currentReactions.findIndex(
@@ -1116,7 +1275,7 @@ function ChatPageContent() {
       if (typeof navigator !== "undefined" && navigator.vibrate) {
         try {
           navigator.vibrate(25);
-        } catch {}
+        } catch { }
       }
     }
     setSwipingMsgId(null);
@@ -1612,7 +1771,7 @@ function ChatPageContent() {
             is_typing: val.trim().length > 0,
           })
         );
-      } catch {}
+      } catch { }
     }
   };
 
@@ -1901,7 +2060,7 @@ function ChatPageContent() {
                   const isVid = att.file_type?.startsWith("video/") || (att.file && /\.(mp4|webm|mov|ogg|mkv)$/i.test(att.file));
                   const fileName = att.file ? att.file.split("/").pop()?.split("?")[0] || "Attachment" : "Attachment";
                   const fileSizeStr = att.file_size ? (
-                    att.file_size < 1024 * 1024 
+                    att.file_size < 1024 * 1024
                       ? `${Math.round(att.file_size / 1024)} kB`
                       : `${(att.file_size / (1024 * 1024)).toFixed(1)} MB`
                   ) : "";
@@ -2130,7 +2289,7 @@ function ChatPageContent() {
                   className="shadow-xs border border-2 border-white flex-shrink-0"
                 />
                 <div className="text-truncate">
-                  <h2 className="mb-0 text-dark fw-bold" style={{ fontSize: "16px", whiteSpace: "nowrap" }}>Team Chat</h2>
+                  <h2 className="mb-0 text-dark fw-bold" style={{ fontSize: "16px", whiteSpace: "nowrap" }}>AttendStack Chat</h2>
                   <span className="chat-count text-muted small">{conversations.length} conversations</span>
                 </div>
               </div>
@@ -2291,18 +2450,18 @@ function ChatPageContent() {
                     className={`chat-conv-item ${isActive ? "active" : ""}`}
                   >
                     <SafeAvatar
-                      src={conv.avatar}
+                      src={getConversationAvatar(conv)}
                       name={conv.display_name || "Chat"}
                       size={42}
                       fontSize={15}
                       isGroup={conv.type === "GROUP"}
-                      showOnlineDot={conv.type === "DIRECT"}
+                      showOnlineDot={false}
                       className="flex-shrink-0"
                     />
 
                     <div className="chat-conv-info">
                       <div className="chat-conv-top">
-                        <span className="chat-conv-name">{conv.display_name}</span>
+                        <span className="chat-conv-name text-truncate">{conv.display_name}</span>
                         <span className="chat-conv-time">
                           {conv.last_message ? formatSidebarTime(conv.last_message.created_at) : ""}
                         </span>
@@ -2312,7 +2471,7 @@ function ChatPageContent() {
                           {conv.last_message ? (
                             conv.last_message.content || `[${conv.last_message.message_type}]`
                           ) : (
-                            <em>No messages yet</em>
+                            <em>{conv.designation ? conv.designation : "No messages yet"}</em>
                           )}
                         </span>
                         {conv.unread_count > 0 && (
@@ -2364,9 +2523,9 @@ function ChatPageContent() {
             <>
               {/* Chat Header */}
               <div className="chat-header">
-                <div className="chat-header-left">
+                <div className="chat-header-left d-flex align-items-center min-w-0">
                   <button
-                    className="chat-back-btn"
+                    className="chat-back-btn flex-shrink-0"
                     onClick={() => setMobileView("list")}
                     title="Back to conversation list"
                   >
@@ -2374,21 +2533,67 @@ function ChatPageContent() {
                   </button>
 
                   <SafeAvatar
-                    src={activeConversation.avatar}
+                    src={getConversationAvatar(activeConversation)}
                     name={activeConversation.display_name || "Chat"}
-                    size={40}
+                    size={42}
                     fontSize={15}
                     isGroup={activeConversation.type === "GROUP"}
+                    showOnlineDot={false}
                     className="flex-shrink-0 shadow-xs"
                   />
 
-                  <div className="chat-header-info">
-                    <h3>{activeConversation.display_name}</h3>
-                    <span className="chat-header-meta">
-                      {activeConversation.type === "GROUP"
-                        ? `${activeConversation.members?.length || 0} members`
-                        : "Active Now"}
-                    </span>
+                  <div className="chat-header-info min-w-0 ms-2.5">
+                    <div className="d-flex align-items-center gap-2 flex-wrap">
+                      <h3
+                        className="mb-0 text-dark fw-bold text-truncate chat-header-title"
+                        title={activeConversation.display_name}
+                      >
+                        {activeConversation.display_name}
+                      </h3>
+                      {activeConversation.type === "DIRECT" && (() => {
+                        const badge = getDesignationBadgeInfo(
+                          activeConversation.designation || activeConversation.other_user?.designation,
+                          activeConversation.other_user?.role
+                        );
+                        return (
+                          <div
+                            className="chat-designation-badge"
+                            style={{
+                              backgroundColor: badge.bg,
+                              color: badge.color,
+                              borderColor: badge.border,
+                            }}
+                          >
+                            <span
+                              className="chat-designation-dot"
+                              style={{ backgroundColor: badge.dot }}
+                            />
+                            <span className="chat-designation-text">
+                              {badge.title}
+                            </span>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                    <div className="chat-header-meta d-flex align-items-center gap-2 mt-0.5">
+                      {activeConversation.type === "GROUP" ? (
+                        <span className="text-muted" style={{ fontSize: "12px" }}>
+                          {activeConversation.members?.length || 0} members • Team Channel
+                        </span>
+                      ) : (
+                        <div className="d-flex align-items-center gap-2">
+                          <span className="chat-online-status-text">Active Now</span>
+                          {activeConversation.other_user?.department && (
+                            <>
+                              <span className="chat-meta-separator">•</span>
+                              <span className="chat-meta-dept">
+                                {activeConversation.other_user.department}
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -2954,9 +3159,8 @@ function ChatPageContent() {
                 return (
                   <div
                     key={user.id}
-                    className={`list-group-item list-group-item-action d-flex align-items-center justify-content-between p-3 border-0 rounded-3 mb-1 cursor-pointer ${
-                      isSelected ? "bg-primary-subtle" : ""
-                    }`}
+                    className={`list-group-item list-group-item-action d-flex align-items-center justify-content-between p-3 border-0 rounded-3 mb-1 cursor-pointer ${isSelected ? "bg-primary-subtle" : ""
+                      }`}
                     onClick={() => {
                       if (isSelected) {
                         setSelectedGroupMembers((prev) => prev.filter((m) => m.id !== user.id));
@@ -3535,21 +3739,72 @@ function ChatPageContent() {
           min-width: 0;
         }
 
+        .chat-header-title,
         .chat-header-info h3 {
           margin: 0;
-          font-size: 15px;
+          font-size: 15.5px;
           font-weight: 700;
           color: #0f172a;
+          line-height: 1.25;
+          letter-spacing: -0.01em;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .chat-designation-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          padding: 2px 8.5px;
+          border-radius: 9999px;
+          border-width: 1px;
+          border-style: solid;
+          font-size: 11px;
+          font-weight: 600;
           line-height: 1.2;
+          letter-spacing: 0.01em;
+          box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+          max-width: 260px;
+          transition: all 0.15s ease;
+        }
+
+        .chat-designation-dot {
+          width: 5px;
+          height: 5px;
+          border-radius: 50%;
+          flex-shrink: 0;
+        }
+
+        .chat-designation-text {
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
         }
 
         .chat-header-meta {
+          font-size: 12px;
+          color: #64748b;
+          font-weight: 500;
+          line-height: 1.3;
+        }
+
+        .chat-meta-separator {
+          color: #cbd5e1;
+          font-size: 10px;
+        }
+
+        .chat-meta-dept {
           font-size: 11.5px;
-          color: #10b981;
+          color: #64748b;
+          font-weight: 500;
+        }
+
+        .chat-online-status-text {
+          font-size: 12px;
           font-weight: 600;
+          color: #059669;
+          letter-spacing: 0.01em;
         }
 
         .chat-header-right {

@@ -273,6 +273,115 @@ const WORKPLACE_INPUT_EMOJIS = [
   "⭐", "🙏", "👌", "💪", "⚡", "☕", "📊", "📁"
 ];
 
+// Helper to format user roles cleanly
+const formatUserRole = (role?: string): string => {
+  if (!role) return "Team Member";
+  const r = role.toUpperCase();
+  if (r === "SUPER_ADMIN") return "Super Admin";
+  if (r === "ADMIN") return "Admin";
+  if (r === "HR") return "HR Manager";
+  if (r === "EMPLOYEE") return "Employee";
+  if (r === "MANAGER") return "Manager";
+  return role.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+};
+
+// Helper for professional designation badge aesthetics
+const getDesignationBadgeInfo = (designation?: string | null, role?: string | null) => {
+  const d = (designation || "").trim();
+  const r = (role || "").toUpperCase();
+
+  const title =
+    d ||
+    (r === "SUPER_ADMIN" || r === "ADMIN"
+      ? "Company Admin"
+      : r === "HR"
+        ? "HR Manager"
+        : r === "EMPLOYEE"
+          ? "Employee"
+          : "Team Member");
+
+  const low = title.toLowerCase();
+
+  if (
+    low.includes("admin") ||
+    r === "ADMIN" ||
+    r === "SUPER_ADMIN" ||
+    low.includes("owner") ||
+    low.includes("director") ||
+    low.includes("founder")
+  ) {
+    return {
+      title,
+      bg: "#fef3c7",
+      color: "#92400e",
+      border: "#fde68a",
+      dot: "#d97706",
+    };
+  }
+  if (low.includes("hr") || r === "HR" || low.includes("talent") || low.includes("people")) {
+    return {
+      title,
+      bg: "#ede9fe",
+      color: "#5b21b6",
+      border: "#ddd6fe",
+      dot: "#7c3aed",
+    };
+  }
+  if (
+    low.includes("engineer") ||
+    low.includes("developer") ||
+    low.includes("tech") ||
+    low.includes("software") ||
+    low.includes("frontend") ||
+    low.includes("backend") ||
+    low.includes("fullstack")
+  ) {
+    return {
+      title,
+      bg: "#e0e7ff",
+      color: "#3730a3",
+      border: "#c7d2fe",
+      dot: "#4f46e5",
+    };
+  }
+  if (
+    low.includes("lead") ||
+    low.includes("manager") ||
+    low.includes("head") ||
+    low.includes("vp")
+  ) {
+    return {
+      title,
+      bg: "#dbeafe",
+      color: "#1e40af",
+      border: "#bfdbfe",
+      dot: "#2563eb",
+    };
+  }
+  if (
+    low.includes("marketing") ||
+    low.includes("design") ||
+    low.includes("ui") ||
+    low.includes("ux") ||
+    low.includes("creative")
+  ) {
+    return {
+      title,
+      bg: "#fce7f3",
+      color: "#9d174d",
+      border: "#fbcfe8",
+      dot: "#db2777",
+    };
+  }
+  return {
+    title,
+    bg: "#f1f5f9",
+    color: "#334155",
+    border: "#cbd5e1",
+    dot: "#64748b",
+  };
+};
+
 function ChatPageContent() {
   const dispatch = useAppDispatch();
   const queryClient = useQueryClient();
@@ -2180,7 +2289,7 @@ function ChatPageContent() {
                   className="shadow-xs border border-2 border-white flex-shrink-0"
                 />
                 <div className="text-truncate">
-                  <h2 className="mb-0 text-dark fw-bold" style={{ fontSize: "16px", whiteSpace: "nowrap" }}>Team Chat</h2>
+                  <h2 className="mb-0 text-dark fw-bold" style={{ fontSize: "16px", whiteSpace: "nowrap" }}>AttendStack Chat</h2>
                   <span className="chat-count text-muted small">{conversations.length} conversations</span>
                 </div>
               </div>
@@ -2436,68 +2545,53 @@ function ChatPageContent() {
                   <div className="chat-header-info min-w-0 ms-2.5">
                     <div className="d-flex align-items-center gap-2 flex-wrap">
                       <h3
-                        className="mb-0 text-dark fw-bold text-truncate"
-                        style={{ fontSize: "15px", lineHeight: "1.25", letterSpacing: "-0.01em" }}
+                        className="mb-0 text-dark fw-bold text-truncate chat-header-title"
                         title={activeConversation.display_name}
                       >
                         {activeConversation.display_name}
                       </h3>
-                      {activeConversation.type === "DIRECT" && (
-                        <span
-                          className="badge rounded-pill fw-semibold text-truncate"
-                          style={{
-                            fontSize: "11px",
-                            padding: "2px 8.5px",
-                            letterSpacing: "0.01em",
-                            backgroundColor:
-                              activeConversation.designation?.toLowerCase().includes("admin") ||
-                              activeConversation.other_user?.role === "ADMIN" ||
-                              activeConversation.other_user?.role === "SUPER_ADMIN"
-                                ? "#fef3c7"
-                                : activeConversation.designation?.toLowerCase().includes("hr") ||
-                                  activeConversation.other_user?.role === "HR"
-                                ? "#ede9fe"
-                                : activeConversation.designation?.toLowerCase().includes("lead") ||
-                                  activeConversation.designation?.toLowerCase().includes("manager")
-                                ? "#dbeafe"
-                                : "#f1f5f9",
-                            color:
-                              activeConversation.designation?.toLowerCase().includes("admin") ||
-                              activeConversation.other_user?.role === "ADMIN" ||
-                              activeConversation.other_user?.role === "SUPER_ADMIN"
-                                ? "#92400e"
-                                : activeConversation.designation?.toLowerCase().includes("hr") ||
-                                  activeConversation.other_user?.role === "HR"
-                                ? "#5b21b6"
-                                : activeConversation.designation?.toLowerCase().includes("lead") ||
-                                  activeConversation.designation?.toLowerCase().includes("manager")
-                                ? "#1e40af"
-                                : "#334155",
-                            border:
-                              activeConversation.designation?.toLowerCase().includes("admin") ||
-                              activeConversation.other_user?.role === "ADMIN" ||
-                              activeConversation.other_user?.role === "SUPER_ADMIN"
-                                ? "1px solid #fde68a"
-                                : activeConversation.designation?.toLowerCase().includes("hr") ||
-                                  activeConversation.other_user?.role === "HR"
-                                ? "1px solid #ddd6fe"
-                                : "1px solid #e2e8f0",
-                          }}
-                        >
-                          {activeConversation.designation ||
-                            (activeConversation.other_user?.role
-                              ? formatUserRole(activeConversation.other_user.role)
-                              : "Team Member")}
-                        </span>
-                      )}
+                      {activeConversation.type === "DIRECT" && (() => {
+                        const badge = getDesignationBadgeInfo(
+                          activeConversation.designation || activeConversation.other_user?.designation,
+                          activeConversation.other_user?.role
+                        );
+                        return (
+                          <div
+                            className="chat-designation-badge"
+                            style={{
+                              backgroundColor: badge.bg,
+                              color: badge.color,
+                              borderColor: badge.border,
+                            }}
+                          >
+                            <span
+                              className="chat-designation-dot"
+                              style={{ backgroundColor: badge.dot }}
+                            />
+                            <span className="chat-designation-text">
+                              {badge.title}
+                            </span>
+                          </div>
+                        );
+                      })()}
                     </div>
-                    <div className="chat-header-meta d-flex align-items-center gap-1.5 mt-0.5">
+                    <div className="chat-header-meta d-flex align-items-center gap-2 mt-0.5">
                       {activeConversation.type === "GROUP" ? (
                         <span className="text-muted" style={{ fontSize: "12px" }}>
                           {activeConversation.members?.length || 0} members • Team Channel
                         </span>
                       ) : (
-                        <span className="chat-online-status-text">Active Now</span>
+                        <div className="d-flex align-items-center gap-2">
+                          <span className="chat-online-status-text">Active Now</span>
+                          {activeConversation.other_user?.department && (
+                            <>
+                              <span className="chat-meta-separator">•</span>
+                              <span className="chat-meta-dept">
+                                {activeConversation.other_user.department}
+                              </span>
+                            </>
+                          )}
+                        </div>
                       )}
                     </div>
                   </div>
@@ -3645,12 +3739,44 @@ function ChatPageContent() {
           min-width: 0;
         }
 
+        .chat-header-title,
         .chat-header-info h3 {
           margin: 0;
-          font-size: 15px;
+          font-size: 15.5px;
           font-weight: 700;
           color: #0f172a;
           line-height: 1.25;
+          letter-spacing: -0.01em;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .chat-designation-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          padding: 2px 8.5px;
+          border-radius: 9999px;
+          border-width: 1px;
+          border-style: solid;
+          font-size: 11px;
+          font-weight: 600;
+          line-height: 1.2;
+          letter-spacing: 0.01em;
+          box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+          max-width: 260px;
+          transition: all 0.15s ease;
+        }
+
+        .chat-designation-dot {
+          width: 5px;
+          height: 5px;
+          border-radius: 50%;
+          flex-shrink: 0;
+        }
+
+        .chat-designation-text {
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
@@ -3663,26 +3789,15 @@ function ChatPageContent() {
           line-height: 1.3;
         }
 
-        .chat-online-pulse-dot {
-          width: 7.5px;
-          height: 7.5px;
-          border-radius: 50%;
-          background-color: #10b981;
-          display: inline-block;
-          flex-shrink: 0;
-          box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
-          animation: statusPulse 2s infinite ease-in-out;
+        .chat-meta-separator {
+          color: #cbd5e1;
+          font-size: 10px;
         }
 
-        @keyframes statusPulse {
-          0%, 100% {
-            box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.3);
-            transform: scale(1);
-          }
-          50% {
-            box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.05);
-            transform: scale(1.05);
-          }
+        .chat-meta-dept {
+          font-size: 11.5px;
+          color: #64748b;
+          font-weight: 500;
         }
 
         .chat-online-status-text {

@@ -41,14 +41,19 @@ class UserMinimalSerializer(serializers.ModelSerializer):
         try:
             from employees.models import Employee
             emp = Employee.objects.filter(email=obj.email).first()
-            if emp and emp.designation:
-                return emp.designation
+            if emp and emp.designation and emp.designation.strip():
+                return emp.designation.strip()
+            if emp and emp.department and emp.department.strip():
+                return f"{emp.department.strip()} Staff"
         except Exception:
             pass
-        if getattr(obj, 'role', '') in ['SUPER_ADMIN', 'ADMIN']:
+        role = getattr(obj, 'role', '')
+        if role in ['SUPER_ADMIN', 'ADMIN']:
             return "Company Admin"
-        if getattr(obj, 'role', '') == 'HR':
+        if role == 'HR':
             return "HR Manager"
+        if role == 'EMPLOYEE':
+            return "Employee"
         return "Team Member"
 
     def get_department(self, obj):
@@ -250,14 +255,19 @@ class ConversationSerializer(serializers.ModelSerializer):
                 try:
                     from employees.models import Employee
                     emp = Employee.objects.filter(email=other_member.user.email).first()
-                    if emp and emp.designation:
-                        return emp.designation
+                    if emp and emp.designation and emp.designation.strip():
+                        return emp.designation.strip()
+                    if emp and emp.department and emp.department.strip():
+                        return f"{emp.department.strip()} Staff"
                 except Exception:
                     pass
-                if getattr(other_member.user, 'role', '') in ['SUPER_ADMIN', 'ADMIN']:
+                role = getattr(other_member.user, 'role', '')
+                if role in ['SUPER_ADMIN', 'ADMIN']:
                     return "Company Admin"
-                if getattr(other_member.user, 'role', '') == 'HR':
+                if role == 'HR':
                     return "HR Manager"
+                if role == 'EMPLOYEE':
+                    return "Employee"
                 return "Team Member"
         return ""
 

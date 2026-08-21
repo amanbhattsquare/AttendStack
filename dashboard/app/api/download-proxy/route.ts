@@ -10,10 +10,18 @@ export async function GET(request: Request) {
   }
 
   let targetUrl: string = rawUrl;
+  const backendRoot = (process.env.NEXT_PUBLIC_API_ENDPOINT || "http://127.0.0.1:8001")
+    .replace(/\/api\/?$/, "")
+    .replace(/\/+$/, "");
+
+  // If in production and rawUrl has localhost/127.0.0.1, rewrite to backendRoot
+  if (backendRoot && !backendRoot.includes("localhost") && !backendRoot.includes("127.0.0.1")) {
+    targetUrl = targetUrl
+      .replace(/^https?:\/\/localhost(:\d+)?/i, backendRoot)
+      .replace(/^https?:\/\/127\.0\.0\.1(:\d+)?/i, backendRoot);
+  }
+
   if (!targetUrl.startsWith("http://") && !targetUrl.startsWith("https://")) {
-    const backendRoot = (process.env.NEXT_PUBLIC_API_ENDPOINT || "http://127.0.0.1:8001")
-      .replace(/\/api\/?$/, "")
-      .replace(/\/+$/, "");
     targetUrl = `${backendRoot}${targetUrl.startsWith("/") ? "" : "/"}${targetUrl}`;
   }
 

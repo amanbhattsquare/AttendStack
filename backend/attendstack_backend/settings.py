@@ -241,7 +241,7 @@ CORS_ALLOWED_ORIGINS = [
     origin.strip()
     for origin in config(
         "CORS_ALLOWED_ORIGINS",
-        default="http://localhost:3000,http://127.0.0.1:3000,http://localhost:8001",
+        default="http://localhost:3000, http://127.0.0.1:3000, http://localhost:8002",
     ).split(",")
     if origin.strip()
 ]

@@ -48,6 +48,9 @@ import {
   ExternalLink,
   ChevronDown,
   Check,
+  ZoomIn,
+  ZoomOut,
+  RotateCw,
   Bell,
   BellOff,
   Volume2,
@@ -477,6 +480,19 @@ function ChatPageContent() {
     name?: string;
     size?: string;
   } | null>(null);
+  const [previewZoom, setPreviewZoom] = useState<number>(1);
+  const [previewRotation, setPreviewRotation] = useState<number>(0);
+
+  const openMediaPreview = (media: {
+    url: string;
+    type: "image" | "video" | "file";
+    name?: string;
+    size?: string;
+  }) => {
+    setPreviewZoom(1);
+    setPreviewRotation(0);
+    setPreviewMedia(media);
+  };
 
   // Typing indicator state
   const [typingUser, setTypingUser] = useState<string | null>(null);
@@ -1328,7 +1344,7 @@ function ChatPageContent() {
   const dragCounter = useRef<number>(0);
 
   // Dedicated file & media download handler
-  // Dedicated one-click file & media & PDF download handler
+  // Dedicated one-click file & media & PDF download handler (Phone & PC support)
   const [downloadingFileUrl, setDownloadingFileUrl] = useState<string | null>(null);
 
   const handleDownloadFile = async (
@@ -1344,25 +1360,16 @@ function ChatPageContent() {
     const safeName =
       fileName ||
       fileUrl.split("/").pop()?.split("?")[0] ||
-      `attendstack-doc-${Date.now()}`;
+      `attendstack-file-${Date.now()}`;
 
     setDownloadingFileUrl(fileUrl);
 
     try {
-      const token = typeof window !== "undefined" ? localStorage.getItem("authToken") : null;
-      const headers: Record<string, string> = {};
-      if (token) {
-        headers["Authorization"] = `Bearer ${token}`;
-      }
-
-      // 1. Try Blob fetch
-      const response = await fetch(fileUrl, {
-        headers,
-        mode: "cors",
-      }).catch(() => fetch(fileUrl));
-
-      if (response && response.ok) {
-        const blob = await response.blob();
+      // 1. Try Next.js same-origin download proxy (guaranteed download & correct filename across PC & Phone)
+      const proxyUrl = `/api/download-proxy?url=${encodeURIComponent(fileUrl)}&filename=${encodeURIComponent(safeName)}`;
+      const proxyRes = await fetch(proxyUrl);
+      if (proxyRes.ok) {
+        const blob = await proxyRes.blob();
         const blobUrl = window.URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = blobUrl;
@@ -1373,24 +1380,44 @@ function ChatPageContent() {
         link.click();
         document.body.removeChild(link);
         setTimeout(() => window.URL.revokeObjectURL(blobUrl), 3000);
-      } else {
-        // 2. Direct anchor click fallback
+        return;
+      }
+
+      // 2. Direct fetch with Blob fallback
+      const token = typeof window !== "undefined" ? localStorage.getItem("authToken") : null;
+      const headers: Record<string, string> = {};
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      const res = await fetch(fileUrl, { headers, mode: "cors" }).catch(() => fetch(fileUrl));
+      if (res && res.ok) {
+        const blob = await res.blob();
+        const blobUrl = window.URL.createObjectURL(blob);
         const link = document.createElement("a");
-        link.href = fileUrl;
-        link.target = "_blank";
+        link.href = blobUrl;
         link.download = safeName;
         link.setAttribute("download", safeName);
-        link.rel = "noopener noreferrer";
         link.style.display = "none";
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        setTimeout(() => window.URL.revokeObjectURL(blobUrl), 3000);
+        return;
       }
+
+      // 3. Fallback direct trigger
+      const link = document.createElement("a");
+      link.href = fileUrl;
+      link.download = safeName;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
     } catch (err) {
       console.warn("Direct download fallback to window.open:", err);
       window.open(fileUrl, "_blank", "noopener,noreferrer");
     } finally {
-      setTimeout(() => setDownloadingFileUrl(null), 600);
+      setTimeout(() => setDownloadingFileUrl(null), 800);
     }
   };
 
@@ -1480,21 +1507,32 @@ function ChatPageContent() {
     setFilePreviews((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // Clipboard Paste Handler (Ctrl+V image / screenshot paste)
+  // Clipboard Paste Handler (Supports Mobile Keyboard Clipboard, Gboard, iOS & Desktop Ctrl+V)
   const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
     if (e.clipboardData) {
-      const items = Array.from(e.clipboardData.items || []);
-      const fileItems = items.filter((item) => item.kind === "file");
-      if (fileItems.length > 0) {
-        e.preventDefault();
-        const files: File[] = [];
-        fileItems.forEach((item) => {
-          const file = item.getAsFile();
+      const files: File[] = [];
+
+      // 1. Direct files from clipboardData (mobile keyboards & file managers)
+      if (e.clipboardData.files && e.clipboardData.files.length > 0) {
+        Array.from(e.clipboardData.files).forEach((file) => {
           if (file) files.push(file);
         });
-        if (files.length > 0) {
-          addFiles(files);
-        }
+      }
+
+      // 2. Clipboard Items (screenshot & image copy on web/mobile)
+      if (files.length === 0 && e.clipboardData.items) {
+        const items = Array.from(e.clipboardData.items);
+        items.forEach((item) => {
+          if (item.kind === "file" || item.type.startsWith("image/")) {
+            const file = item.getAsFile();
+            if (file) files.push(file);
+          }
+        });
+      }
+
+      if (files.length > 0) {
+        e.preventDefault();
+        addFiles(files);
       }
     }
   };
@@ -2069,10 +2107,10 @@ function ChatPageContent() {
                     return (
                       <div
                         key={att.id}
-                        className="whatsapp-media-card position-relative overflow-hidden rounded-2"
+                        className="whatsapp-media-card position-relative overflow-hidden rounded-3"
                         style={{ cursor: "pointer", maxWidth: "330px" }}
                         onClick={() =>
-                          setPreviewMedia({
+                          openMediaPreview({
                             url: att.file_url,
                             type: "image",
                             name: fileName,
@@ -2084,15 +2122,24 @@ function ChatPageContent() {
                           src={att.file_url}
                           alt={fileName}
                           className="w-100"
-                          style={{ maxHeight: "280px", objectFit: "cover", borderRadius: "6px", display: "block" }}
+                          style={{ maxHeight: "280px", objectFit: "cover", borderRadius: "8px", display: "block" }}
                         />
                         <div className="whatsapp-media-overlay position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center">
                           <button
-                            className="btn btn-dark bg-opacity-75 text-white rounded-circle p-2 border-0 shadow"
-                            title="Download Image"
-                            onClick={(e) => handleDownloadFile(e, att.file_url, fileName)}
+                            className="btn btn-dark bg-opacity-75 text-white rounded-circle border-0 shadow-lg d-flex align-items-center justify-content-center"
+                            style={{ width: "44px", height: "44px", backdropFilter: "blur(4px)" }}
+                            title="Download & Save to Device"
+                            disabled={downloadingFileUrl === att.file_url}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDownloadFile(e, att.file_url, fileName);
+                            }}
                           >
-                            <Download size={18} />
+                            {downloadingFileUrl === att.file_url ? (
+                              <Spinner animation="border" size="sm" />
+                            ) : (
+                              <Download size={20} />
+                            )}
                           </button>
                         </div>
                       </div>
@@ -2101,7 +2148,7 @@ function ChatPageContent() {
 
                   if (isVid) {
                     return (
-                      <div key={att.id} className="whatsapp-video-card rounded-2 overflow-hidden bg-black position-relative" style={{ maxWidth: "330px" }}>
+                      <div key={att.id} className="whatsapp-video-card rounded-3 overflow-hidden bg-black position-relative" style={{ maxWidth: "330px" }}>
                         <div className="d-flex align-items-center justify-content-between p-2 bg-dark bg-opacity-80 text-white small">
                           <div className="d-flex align-items-center gap-1.5 overflow-hidden text-truncate me-2">
                             <VideoIcon size={14} className="text-primary flex-shrink-0" />
@@ -2113,7 +2160,7 @@ function ChatPageContent() {
                               className="btn btn-sm btn-dark text-white p-1 rounded border-0"
                               title="Full Preview"
                               onClick={() =>
-                                setPreviewMedia({
+                                openMediaPreview({
                                   url: att.file_url,
                                   type: "video",
                                   name: fileName,
@@ -2126,9 +2173,14 @@ function ChatPageContent() {
                             <button
                               className="btn btn-sm btn-primary text-white p-1 rounded border-0 d-flex align-items-center gap-1"
                               title="Download Video"
+                              disabled={downloadingFileUrl === att.file_url}
                               onClick={(e) => handleDownloadFile(e, att.file_url, fileName)}
                             >
-                              <Download size={13} />
+                              {downloadingFileUrl === att.file_url ? (
+                                <Spinner animation="border" size="sm" style={{ width: "13px", height: "13px" }} />
+                              ) : (
+                                <Download size={13} />
+                              )}
                             </button>
                           </div>
                         </div>
@@ -2905,7 +2957,7 @@ function ChatPageContent() {
                 <div className="chat-input-wrapper">
                   <textarea
                     ref={inputRef}
-                    placeholder={replyingTo ? "Type your reply..." : "Type a message or paste images (Ctrl+V)..."}
+                    placeholder={replyingTo ? "Type your reply..." : "Type a message..."}
                     value={inputContent}
                     onPaste={handlePaste}
                     onChange={handleInputChange}
@@ -3335,40 +3387,83 @@ function ChatPageContent() {
         size="xl"
         contentClassName="bg-dark text-white border-0 rounded-4 overflow-hidden shadow-2xl"
       >
-        <Modal.Header className="border-secondary border-opacity-25 bg-black bg-opacity-50 py-2.5 px-4 d-flex align-items-center justify-content-between">
-          <div className="d-flex align-items-center gap-2 overflow-hidden me-3">
+        <Modal.Header className="border-secondary border-opacity-25 bg-black bg-opacity-75 py-2 px-3 px-md-4 d-flex align-items-center justify-content-between">
+          <div className="d-flex align-items-center gap-2 overflow-hidden me-2 min-w-0">
             {previewMedia?.type === "video" ? (
               <VideoIcon size={18} className="text-primary flex-shrink-0" />
             ) : (
               <ImageIcon size={18} className="text-info flex-shrink-0" />
             )}
-            <span className="fw-semibold text-truncate small text-white" title={previewMedia?.name}>
+            <span className="fw-semibold text-truncate small text-white" title={previewMedia?.name} style={{ maxWidth: "240px" }}>
               {previewMedia?.name || "Media Preview"}
             </span>
             {previewMedia?.size && (
-              <Badge bg="secondary" className="bg-opacity-50 text-white fw-normal py-0.5 px-2 small">
+              <Badge bg="secondary" className="bg-opacity-50 text-white fw-normal py-0.5 px-2 small d-none d-sm-inline-block">
                 {previewMedia.size}
               </Badge>
             )}
           </div>
-          <div className="d-flex align-items-center gap-2 flex-shrink-0">
+          <div className="d-flex align-items-center gap-1.5 flex-shrink-0">
+            {previewMedia?.type === "image" && (
+              <>
+                <Button
+                  variant="dark"
+                  size="sm"
+                  className="d-flex align-items-center justify-content-center p-1.5 rounded-circle border border-secondary border-opacity-50 text-white"
+                  title="Zoom In (+25%)"
+                  onClick={() => setPreviewZoom((z) => Math.min(z + 0.25, 3))}
+                >
+                  <ZoomIn size={15} />
+                </Button>
+                <Button
+                  variant="dark"
+                  size="sm"
+                  className="d-flex align-items-center justify-content-center p-1.5 rounded-circle border border-secondary border-opacity-50 text-white"
+                  title="Zoom Out (-25%)"
+                  onClick={() => setPreviewZoom((z) => Math.max(z - 0.25, 0.5))}
+                >
+                  <ZoomOut size={15} />
+                </Button>
+                <Button
+                  variant="dark"
+                  size="sm"
+                  className="d-flex align-items-center justify-content-center p-1.5 rounded-circle border border-secondary border-opacity-50 text-white"
+                  title="Rotate (90°)"
+                  onClick={() => setPreviewRotation((r) => (r + 90) % 360)}
+                >
+                  <RotateCw size={15} />
+                </Button>
+              </>
+            )}
+
             {previewMedia?.url && (
               <>
                 <Button
-                  variant="primary"
+                  variant="success"
                   size="sm"
-                  className="d-flex align-items-center gap-1.5 px-3 rounded-pill fw-semibold border-0 shadow-sm"
+                  className="d-flex align-items-center gap-1.5 px-3 py-1 rounded-pill fw-semibold border-0 shadow-sm"
+                  style={{ backgroundColor: "#10b981" }}
+                  disabled={downloadingFileUrl === previewMedia.url}
                   onClick={(e) => handleDownloadFile(e, previewMedia.url, previewMedia.name)}
                 >
-                  <Download size={14} />
-                  <span>Download</span>
+                  {downloadingFileUrl === previewMedia.url ? (
+                    <>
+                      <Spinner animation="border" size="sm" style={{ width: "14px", height: "14px" }} />
+                      <span className="d-none d-sm-inline">Saving...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Download size={14} />
+                      <span>Download</span>
+                    </>
+                  )}
                 </Button>
                 <Button
                   variant="outline-light"
                   size="sm"
-                  className="d-flex align-items-center gap-1.5 px-2.5 rounded-pill border-opacity-50"
+                  className="d-flex align-items-center gap-1.5 px-2 py-1 rounded-pill border-opacity-50 d-none d-sm-flex"
                   onClick={() => window.open(previewMedia.url, "_blank")}
-                  title="Open in new tab"
+                  title="Open original file in new tab"
                 >
                   <ExternalLink size={14} />
                 </Button>
@@ -3376,7 +3471,7 @@ function ChatPageContent() {
             )}
             <Button
               variant="link"
-              className="text-white p-1 rounded-circle border-0 shadow-none"
+              className="text-white p-1 rounded-circle border-0 shadow-none ms-1"
               onClick={() => setPreviewMedia(null)}
               title="Close Preview (Esc)"
             >
@@ -3384,7 +3479,7 @@ function ChatPageContent() {
             </Button>
           </div>
         </Modal.Header>
-        <Modal.Body className="p-0 bg-black d-flex align-items-center justify-content-center position-relative" style={{ minHeight: "360px", maxHeight: "82vh" }}>
+        <Modal.Body className="p-0 d-flex align-items-center justify-content-center position-relative overflow-hidden" style={{ minHeight: "360px", maxHeight: "82vh", background: "#09090b" }}>
           {previewMedia?.type === "video" ? (
             <video
               controls
@@ -3397,17 +3492,22 @@ function ChatPageContent() {
               Your browser does not support this video format.
             </video>
           ) : (
-            <BSImage
-              src={previewMedia?.url}
-              alt={previewMedia?.name || "Preview"}
-              className="img-fluid"
-              style={{
-                maxHeight: "80vh",
-                maxWidth: "100%",
-                objectFit: "contain",
-                userSelect: "none",
-              }}
-            />
+            <div className="w-100 h-100 d-flex align-items-center justify-content-center p-2 overflow-auto" style={{ maxHeight: "80vh" }}>
+              <img
+                src={previewMedia?.url}
+                alt={previewMedia?.name || "Preview"}
+                style={{
+                  transform: `scale(${previewZoom}) rotate(${previewRotation}deg)`,
+                  transition: "transform 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
+                  maxHeight: "76vh",
+                  maxWidth: "100%",
+                  objectFit: "contain",
+                  userSelect: "none",
+                  boxShadow: "0 20px 50px rgba(0, 0, 0, 0.6)",
+                  borderRadius: "8px",
+                }}
+              />
+            </div>
           )}
         </Modal.Body>
       </Modal>
@@ -4619,7 +4719,8 @@ function ChatPageContent() {
         /* Mobile (< 768px) */
         @media (max-width: 767.98px) {
           .chat-app-container {
-            height: calc(100vh - 60px);
+            height: 100dvh;
+            height: calc(100vh - 56px);
             width: 100vw;
           }
 
@@ -4644,29 +4745,97 @@ function ChatPageContent() {
             display: flex !important;
           }
 
-          .chat-back-btn {
-            display: flex !important;
+          .chat-header {
+            padding: 6px 10px;
+            min-height: 52px;
+            height: 52px;
           }
 
-          .chat-bubble {
-            max-width: 86%;
+          .chat-back-btn {
+            display: flex !important;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+          }
+
+          .chat-header-title {
+            font-size: 14px;
+          }
+
+          .chat-designation-badge {
+            padding: 1.5px 6.5px;
+            font-size: 10px;
+            max-width: 130px;
+          }
+
+          .chat-online-status-text {
+            font-size: 11px;
+          }
+
+          .chat-meta-dept {
+            font-size: 11px;
+          }
+
+          .chat-icon-btn {
+            width: 32px;
+            height: 32px;
           }
 
           .chat-messages-area {
-            padding: 12px 10px;
+            padding: 10px 8px;
+          }
+
+          .chat-bubble {
+            max-width: 82%;
+            padding: 7px 11px;
+            border-radius: 14px;
+          }
+
+          .whatsapp-media-card {
+            max-width: 100%;
+            border-radius: 10px;
+          }
+
+          .whatsapp-media-card img {
+            max-height: 220px;
+            border-radius: 8px;
+          }
+
+          .whatsapp-file-card {
+            min-width: 180px;
+            max-width: 100%;
           }
 
           .chat-input-area {
-            padding: 8px 10px;
+            padding: 7px 8px;
+            padding-bottom: max(8px, env(safe-area-inset-bottom, 10px));
+            gap: 5px;
+            background: #ffffff;
+            border-top: 1px solid #e2e8f0;
+            box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.04);
           }
 
-          .chat-header {
-            padding: 8px 12px;
+          .chat-input-icon-btn {
+            width: 34px;
+            height: 34px;
+          }
+
+          .chat-input-wrapper textarea {
+            padding: 7px 12px;
+            font-size: 14px;
+            min-height: 36px;
+            border-radius: 18px;
+          }
+
+          .chat-send-btn {
+            width: 36px;
+            height: 36px;
           }
 
           .chat-emoji-popover {
-            width: calc(100vw - 32px);
-            left: -8px;
+            width: calc(100vw - 20px);
+            left: -4px;
+            bottom: 44px;
           }
         }
 

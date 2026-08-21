@@ -280,7 +280,7 @@ function ChatPageContent() {
     if (orgData) {
       try {
         setOrganization(JSON.parse(orgData));
-      } catch {}
+      } catch { }
     }
   }, []);
 
@@ -914,9 +914,9 @@ function ChatPageContent() {
 
         const currentReactions: ReactionSummary[] = m.reactions
           ? m.reactions.map((r) => ({
-              ...r,
-              users: [...r.users],
-            }))
+            ...r,
+            users: [...r.users],
+          }))
           : [];
 
         const previousReactionIdx = currentReactions.findIndex(
@@ -1116,7 +1116,7 @@ function ChatPageContent() {
       if (typeof navigator !== "undefined" && navigator.vibrate) {
         try {
           navigator.vibrate(25);
-        } catch {}
+        } catch { }
       }
     }
     setSwipingMsgId(null);
@@ -1612,7 +1612,7 @@ function ChatPageContent() {
             is_typing: val.trim().length > 0,
           })
         );
-      } catch {}
+      } catch { }
     }
   };
 
@@ -1901,7 +1901,7 @@ function ChatPageContent() {
                   const isVid = att.file_type?.startsWith("video/") || (att.file && /\.(mp4|webm|mov|ogg|mkv)$/i.test(att.file));
                   const fileName = att.file ? att.file.split("/").pop()?.split("?")[0] || "Attachment" : "Attachment";
                   const fileSizeStr = att.file_size ? (
-                    att.file_size < 1024 * 1024 
+                    att.file_size < 1024 * 1024
                       ? `${Math.round(att.file_size / 1024)} kB`
                       : `${(att.file_size / (1024 * 1024)).toFixed(1)} MB`
                   ) : "";
@@ -2954,9 +2954,8 @@ function ChatPageContent() {
                 return (
                   <div
                     key={user.id}
-                    className={`list-group-item list-group-item-action d-flex align-items-center justify-content-between p-3 border-0 rounded-3 mb-1 cursor-pointer ${
-                      isSelected ? "bg-primary-subtle" : ""
-                    }`}
+                    className={`list-group-item list-group-item-action d-flex align-items-center justify-content-between p-3 border-0 rounded-3 mb-1 cursor-pointer ${isSelected ? "bg-primary-subtle" : ""
+                      }`}
                     onClick={() => {
                       if (isSelected) {
                         setSelectedGroupMembers((prev) => prev.filter((m) => m.id !== user.id));

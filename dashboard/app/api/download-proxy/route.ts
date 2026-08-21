@@ -3,26 +3,28 @@ import { NextResponse } from "next/server";
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const rawUrl = searchParams.get("url");
-  const filename = searchParams.get("filename") || "attachment";
+  const filename = searchParams.get("filename") || "download";
 
   if (!rawUrl) {
     return NextResponse.json({ message: "File URL is required." }, { status: 400 });
   }
 
-  let targetUrl: string = rawUrl;
-  const backendRoot = (process.env.NEXT_PUBLIC_API_ENDPOINT || "http://127.0.0.1:8001")
+  // Environment-driven backend endpoint
+  const envEndpoint = (
+    process.env.NEXT_PUBLIC_API_ENDPOINT ||
+    process.env.API_ENDPOINT ||
+    ""
+  )
     .replace(/\/api\/?$/, "")
     .replace(/\/+$/, "");
 
-  // If in production and rawUrl has localhost/127.0.0.1, rewrite to backendRoot
-  if (backendRoot && !backendRoot.includes("localhost") && !backendRoot.includes("127.0.0.1")) {
-    targetUrl = targetUrl
-      .replace(/^https?:\/\/localhost(:\d+)?/i, backendRoot)
-      .replace(/^https?:\/\/127\.0\.0\.1(:\d+)?/i, backendRoot);
-  }
+  let targetUrl = rawUrl;
 
+  // Resolve relative URLs (/media/...) against process.env or request origin
   if (!targetUrl.startsWith("http://") && !targetUrl.startsWith("https://")) {
-    targetUrl = `${backendRoot}${targetUrl.startsWith("/") ? "" : "/"}${targetUrl}`;
+    const requestOrigin = new URL(request.url).origin;
+    const base = envEndpoint || requestOrigin;
+    targetUrl = `${base}${targetUrl.startsWith("/") ? "" : "/"}${targetUrl}`;
   }
 
   try {
@@ -32,7 +34,7 @@ export async function GET(request: Request) {
 
     if (!response.ok) {
       return NextResponse.json(
-        { message: `Failed to fetch remote file (${response.status})` },
+        { message: `Failed to fetch file (${response.status})` },
         { status: response.status }
       );
     }
@@ -40,14 +42,17 @@ export async function GET(request: Request) {
     const contentType = response.headers.get("content-type") || "application/octet-stream";
     const fileBytes = await response.arrayBuffer();
 
-    const sanitizedFilename = filename.replace(/["\r\n]/g, "");
+    const cleanFilename = filename
+      .replace(/[^a-zA-Z0-9_.-]/g, "_")
+      .replace(/_+/g, "_")
+      .substring(0, 150) || "download";
 
     return new NextResponse(fileBytes, {
       status: 200,
       headers: {
         "Content-Type": contentType,
-        "Content-Disposition": `attachment; filename="${encodeURIComponent(sanitizedFilename)}"; filename*=UTF-8''${encodeURIComponent(sanitizedFilename)}`,
-        "Cache-Control": "public, max-age=86400",
+        "Content-Disposition": `attachment; filename="${cleanFilename}"`,
+        "Cache-Control": "no-cache, no-store, must-revalidate",
       },
     });
   } catch (error) {

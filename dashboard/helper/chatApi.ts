@@ -11,6 +11,9 @@ export interface UserMinimal {
   employment_status?: string;
   profile_photo_url?: string;
   avatar?: string;
+  designation?: string;
+  department?: string;
+  company_logo?: string;
 }
 
 export interface Attachment {
@@ -77,6 +80,7 @@ export interface Conversation {
   members: ConversationMember[];
   last_message: Message | null;
   unread_count: number;
+  designation?: string;
   other_user?: UserMinimal;
 }
 

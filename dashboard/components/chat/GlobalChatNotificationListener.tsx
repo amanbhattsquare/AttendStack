@@ -9,6 +9,8 @@ import {
   sendBrowserChatNotification,
   updateTabTitleBadge,
   clearTabTitleBadge,
+  initNotifiedMessages,
+  hasMessageBeenNotified,
 } from '../../helper/browserNotification';
 import { preloadNotificationSound } from '../../helper/notificationSound';
 
@@ -16,6 +18,19 @@ export const GlobalChatNotificationListener: React.FC = () => {
   const pathname = usePathname();
   const prevConversationsRef = useRef<Record<string, { lastMsgId?: string; unread: number }>>({});
   const isFirstLoadRef = useRef(true);
+
+  // Current logged in user ID
+  const getCurrentUserId = () => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const stored = localStorage.getItem('user');
+      if (stored) {
+        const u = JSON.parse(stored);
+        return u?.id ? String(u.id) : null;
+      }
+    } catch (_) {}
+    return null;
+  };
 
   // Initialize service worker & preload audio on mount
   useEffect(() => {
@@ -36,9 +51,37 @@ export const GlobalChatNotificationListener: React.FC = () => {
   useEffect(() => {
     if (!conversations || !Array.isArray(conversations)) return;
 
+    const currentUserId = getCurrentUserId();
     let totalUnread = 0;
     const currentMap: Record<string, { lastMsgId?: string; unread: number }> = {};
 
+    // 1. On FIRST load / login, seed all existing messages into notified registry so old messages NEVER trigger notifications
+    if (isFirstLoadRef.current) {
+      const existingMsgIds = conversations
+        .map((c) => c.last_message?.id)
+        .filter(Boolean) as string[];
+      initNotifiedMessages(existingMsgIds);
+
+      conversations.forEach((conv) => {
+        totalUnread += conv.unread_count || 0;
+        currentMap[conv.id] = {
+          lastMsgId: conv.last_message?.id,
+          unread: conv.unread_count || 0,
+        };
+      });
+
+      if (totalUnread > 0) {
+        updateTabTitleBadge(totalUnread);
+      } else {
+        clearTabTitleBadge();
+      }
+
+      prevConversationsRef.current = currentMap;
+      isFirstLoadRef.current = false;
+      return;
+    }
+
+    // 2. Subsequent polls: only trigger for brand-new incoming messages not yet notified
     conversations.forEach((conv) => {
       totalUnread += conv.unread_count || 0;
       currentMap[conv.id] = {
@@ -46,45 +89,44 @@ export const GlobalChatNotificationListener: React.FC = () => {
         unread: conv.unread_count || 0,
       };
 
-      // Check if there is a newly arrived message on an existing conversation
-      if (!isFirstLoadRef.current) {
-        const prev = prevConversationsRef.current[conv.id];
-        const hasNewMessage =
-          conv.last_message &&
-          conv.last_message.id &&
-          (!prev || prev.lastMsgId !== conv.last_message.id);
+      const lastMsg = conv.last_message;
+      if (!lastMsg || !lastMsg.id) return;
 
-        // Check if message is from someone else (not myself)
-        const isFromOther =
-          conv.last_message &&
-          conv.last_message.sender &&
-          conv.other_user &&
-          conv.last_message.sender.id === conv.other_user.id;
+      const prev = prevConversationsRef.current[conv.id];
+      const isNewMessageArrival = !prev || prev.lastMsgId !== lastMsg.id;
 
-        // If user is on another page OR document is hidden (background tab)
-        const isDocumentHidden = typeof document !== 'undefined' && document.hidden;
-        const isAwayFromChat = pathname !== '/chat';
+      // Skip if this message has already triggered a notification
+      if (hasMessageBeenNotified(lastMsg.id)) return;
 
-        if (hasNewMessage && (isAwayFromChat || isDocumentHidden)) {
-          const senderName =
-            conv.last_message?.sender?.name ||
-            conv.last_message?.sender?.email ||
-            conv.display_name ||
-            'Team Member';
-          const bodyText =
-            conv.last_message?.content ||
-            (conv.last_message?.attachments?.length
-              ? `[${conv.last_message.attachments.length} attachment(s)]`
-              : 'Sent a message');
+      // Skip if the message was sent by the current user
+      const isFromMe = currentUserId && lastMsg.sender && String(lastMsg.sender.id) === currentUserId;
+      if (isFromMe) return;
 
-          sendBrowserChatNotification({
-            title: `${senderName} (${conv.display_name})`,
-            body: bodyText,
-            conversationId: conv.id,
-            avatar: conv.avatar || conv.other_user?.avatar,
-            playSound: true,
-          });
-        }
+      // Check if user is away from chat OR tab is in background
+      const isDocumentHidden = typeof document !== 'undefined' && document.hidden;
+      const isAwayFromChat = pathname !== '/chat';
+
+      if (isNewMessageArrival && (isAwayFromChat || isDocumentHidden)) {
+        const senderName =
+          lastMsg.sender?.name ||
+          lastMsg.sender?.email ||
+          conv.display_name ||
+          'Team Member';
+
+        const bodyText =
+          lastMsg.content ||
+          (lastMsg.attachments?.length
+            ? `[${lastMsg.attachments.length} attachment(s)]`
+            : 'Sent a message');
+
+        sendBrowserChatNotification({
+          messageId: lastMsg.id,
+          title: `${senderName} (${conv.display_name})`,
+          body: bodyText,
+          conversationId: conv.id,
+          avatar: conv.avatar || conv.other_user?.avatar || lastMsg.sender?.avatar || lastMsg.sender?.profile_photo_url,
+          playSound: true,
+        });
       }
     });
 
@@ -96,7 +138,6 @@ export const GlobalChatNotificationListener: React.FC = () => {
     }
 
     prevConversationsRef.current = currentMap;
-    isFirstLoadRef.current = false;
   }, [conversations, pathname]);
 
   return null; // Headless component

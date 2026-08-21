@@ -63,6 +63,9 @@ import {
   requestNotificationPermission,
   sendBrowserChatNotification,
   registerChatServiceWorker,
+  closeConversationNotifications,
+  markMessageAsNotified,
+  hasMessageBeenNotified,
 } from "../../../helper/browserNotification";
 import {
   playMessageChime,
@@ -92,9 +95,10 @@ import {
   reactToMessage,
 } from "../../../helper/chatApi";
 
-// Redux for sidebar control
+// Redux for sidebar control & Branding context
 import { useAppDispatch } from "store/store";
 import { setCollapsed } from "store/slices/appSlice";
+import { useBranding } from "context/BrandingContext";
 
 // Avatar colors – solid, professional palette
 const getAvatarColor = (name: string) => {
@@ -272,8 +276,25 @@ const WORKPLACE_INPUT_EMOJIS = [
 function ChatPageContent() {
   const dispatch = useAppDispatch();
   const queryClient = useQueryClient();
+  const { companyLogo, companyName } = useBranding();
 
   const [organization, setOrganization] = useState<any>(null);
+
+  const getConversationAvatar = (conv: Conversation | null | undefined) => {
+    if (!conv) return null;
+    if (conv.avatar) return conv.avatar;
+    const isCompanyOrAdmin =
+      conv.other_user?.role === "SUPER_ADMIN" ||
+      conv.other_user?.role === "ADMIN" ||
+      conv.display_name === companyName ||
+      (companyName && conv.display_name?.toLowerCase().includes(companyName.toLowerCase())) ||
+      conv.display_name?.toLowerCase().includes("bhatt square") ||
+      conv.display_name?.toLowerCase().includes("admin");
+    if (isCompanyOrAdmin && (companyLogo || conv.other_user?.company_logo)) {
+      return companyLogo || conv.other_user?.company_logo || null;
+    }
+    return null;
+  };
 
   useEffect(() => {
     const orgData = localStorage.getItem("organization");
@@ -751,9 +772,16 @@ function ChatPageContent() {
           // Play sound and trigger browser notification if message is from another user
           const isFromMe = String(newMsg.sender?.id) === String(currentUserId);
           if (!isFromMe) {
-            playMessageChime();
-            const isDocHidden = typeof document !== "undefined" && document.hidden;
-            if (isDocHidden) {
+            const isDocVisible = typeof document !== "undefined" && !document.hidden;
+            // If the user is actively viewing this exact conversation right now, mark as read immediately & do not notify
+            if (isDocVisible) {
+              markMessageAsNotified(newMsg.id);
+              markConversationAsRead(activeConversationId);
+              closeConversationNotifications(activeConversationId);
+              playMessageChime();
+            } else {
+              // Tab is hidden/minimized: play chime and show background notification with messageId
+              playMessageChime();
               const senderName = newMsg.sender?.name || newMsg.sender?.email || "New Message";
               const bodyText =
                 newMsg.content ||
@@ -761,6 +789,7 @@ function ChatPageContent() {
                   ? `[${newMsg.attachments.length} attachment(s)]`
                   : "Sent a message");
               sendBrowserChatNotification({
+                messageId: newMsg.id,
                 title: senderName,
                 body: bodyText,
                 conversationId: activeConversationId,
@@ -816,6 +845,26 @@ function ChatPageContent() {
     };
   }, [activeConversationId, currentUserId, queryClient]);
 
+  // When window gains focus or tab becomes visible, mark active conversation as read & close notification
+  useEffect(() => {
+    const handleWindowFocusOrVisible = () => {
+      if (typeof document !== "undefined" && !document.hidden && activeConversationId) {
+        markConversationAsRead(activeConversationId);
+        closeConversationNotifications(activeConversationId);
+        queryClient.setQueryData<Conversation[]>(["conversations"], (old = []) =>
+          old.map((c) => (c.id === activeConversationId ? { ...c, unread_count: 0 } : c))
+        );
+      }
+    };
+
+    window.addEventListener("focus", handleWindowFocusOrVisible);
+    document.addEventListener("visibilitychange", handleWindowFocusOrVisible);
+    return () => {
+      window.removeEventListener("focus", handleWindowFocusOrVisible);
+      document.removeEventListener("visibilitychange", handleWindowFocusOrVisible);
+    };
+  }, [activeConversationId, queryClient]);
+
   // Select conversation
   const selectConversation = (conv: Conversation) => {
     if (!conv || !conv.id) return;
@@ -827,6 +876,7 @@ function ChatPageContent() {
     setInChatMessageQuery("");
     setReplyingTo(null);
     markConversationAsRead(conv.id);
+    closeConversationNotifications(conv.id);
     queryClient.setQueryData<Conversation[]>(["conversations"], (old = []) =>
       old.map((c) => (c.id === conv.id ? { ...c, unread_count: 0 } : c))
     );
@@ -2291,18 +2341,18 @@ function ChatPageContent() {
                     className={`chat-conv-item ${isActive ? "active" : ""}`}
                   >
                     <SafeAvatar
-                      src={conv.avatar}
+                      src={getConversationAvatar(conv)}
                       name={conv.display_name || "Chat"}
                       size={42}
                       fontSize={15}
                       isGroup={conv.type === "GROUP"}
-                      showOnlineDot={conv.type === "DIRECT"}
+                      showOnlineDot={false}
                       className="flex-shrink-0"
                     />
 
                     <div className="chat-conv-info">
                       <div className="chat-conv-top">
-                        <span className="chat-conv-name">{conv.display_name}</span>
+                        <span className="chat-conv-name text-truncate">{conv.display_name}</span>
                         <span className="chat-conv-time">
                           {conv.last_message ? formatSidebarTime(conv.last_message.created_at) : ""}
                         </span>
@@ -2312,7 +2362,7 @@ function ChatPageContent() {
                           {conv.last_message ? (
                             conv.last_message.content || `[${conv.last_message.message_type}]`
                           ) : (
-                            <em>No messages yet</em>
+                            <em>{conv.designation ? conv.designation : "No messages yet"}</em>
                           )}
                         </span>
                         {conv.unread_count > 0 && (
@@ -2364,9 +2414,9 @@ function ChatPageContent() {
             <>
               {/* Chat Header */}
               <div className="chat-header">
-                <div className="chat-header-left">
+                <div className="chat-header-left d-flex align-items-center min-w-0">
                   <button
-                    className="chat-back-btn"
+                    className="chat-back-btn flex-shrink-0"
                     onClick={() => setMobileView("list")}
                     title="Back to conversation list"
                   >
@@ -2374,21 +2424,82 @@ function ChatPageContent() {
                   </button>
 
                   <SafeAvatar
-                    src={activeConversation.avatar}
+                    src={getConversationAvatar(activeConversation)}
                     name={activeConversation.display_name || "Chat"}
-                    size={40}
+                    size={42}
                     fontSize={15}
                     isGroup={activeConversation.type === "GROUP"}
+                    showOnlineDot={false}
                     className="flex-shrink-0 shadow-xs"
                   />
 
-                  <div className="chat-header-info">
-                    <h3>{activeConversation.display_name}</h3>
-                    <span className="chat-header-meta">
-                      {activeConversation.type === "GROUP"
-                        ? `${activeConversation.members?.length || 0} members`
-                        : "Active Now"}
-                    </span>
+                  <div className="chat-header-info min-w-0 ms-2.5">
+                    <div className="d-flex align-items-center gap-2 flex-wrap">
+                      <h3
+                        className="mb-0 text-dark fw-bold text-truncate"
+                        style={{ fontSize: "15px", lineHeight: "1.25", letterSpacing: "-0.01em" }}
+                        title={activeConversation.display_name}
+                      >
+                        {activeConversation.display_name}
+                      </h3>
+                      {activeConversation.type === "DIRECT" && (
+                        <span
+                          className="badge rounded-pill fw-semibold text-truncate"
+                          style={{
+                            fontSize: "11px",
+                            padding: "2px 8.5px",
+                            letterSpacing: "0.01em",
+                            backgroundColor:
+                              activeConversation.designation?.toLowerCase().includes("admin") ||
+                              activeConversation.other_user?.role === "ADMIN" ||
+                              activeConversation.other_user?.role === "SUPER_ADMIN"
+                                ? "#fef3c7"
+                                : activeConversation.designation?.toLowerCase().includes("hr") ||
+                                  activeConversation.other_user?.role === "HR"
+                                ? "#ede9fe"
+                                : activeConversation.designation?.toLowerCase().includes("lead") ||
+                                  activeConversation.designation?.toLowerCase().includes("manager")
+                                ? "#dbeafe"
+                                : "#f1f5f9",
+                            color:
+                              activeConversation.designation?.toLowerCase().includes("admin") ||
+                              activeConversation.other_user?.role === "ADMIN" ||
+                              activeConversation.other_user?.role === "SUPER_ADMIN"
+                                ? "#92400e"
+                                : activeConversation.designation?.toLowerCase().includes("hr") ||
+                                  activeConversation.other_user?.role === "HR"
+                                ? "#5b21b6"
+                                : activeConversation.designation?.toLowerCase().includes("lead") ||
+                                  activeConversation.designation?.toLowerCase().includes("manager")
+                                ? "#1e40af"
+                                : "#334155",
+                            border:
+                              activeConversation.designation?.toLowerCase().includes("admin") ||
+                              activeConversation.other_user?.role === "ADMIN" ||
+                              activeConversation.other_user?.role === "SUPER_ADMIN"
+                                ? "1px solid #fde68a"
+                                : activeConversation.designation?.toLowerCase().includes("hr") ||
+                                  activeConversation.other_user?.role === "HR"
+                                ? "1px solid #ddd6fe"
+                                : "1px solid #e2e8f0",
+                          }}
+                        >
+                          {activeConversation.designation ||
+                            (activeConversation.other_user?.role
+                              ? formatUserRole(activeConversation.other_user.role)
+                              : "Team Member")}
+                        </span>
+                      )}
+                    </div>
+                    <div className="chat-header-meta d-flex align-items-center gap-1.5 mt-0.5">
+                      {activeConversation.type === "GROUP" ? (
+                        <span className="text-muted" style={{ fontSize: "12px" }}>
+                          {activeConversation.members?.length || 0} members • Team Channel
+                        </span>
+                      ) : (
+                        <span className="chat-online-status-text">Active Now</span>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -3539,16 +3650,46 @@ function ChatPageContent() {
           font-size: 15px;
           font-weight: 700;
           color: #0f172a;
-          line-height: 1.2;
+          line-height: 1.25;
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
         }
 
         .chat-header-meta {
-          font-size: 11.5px;
-          color: #10b981;
+          font-size: 12px;
+          color: #64748b;
+          font-weight: 500;
+          line-height: 1.3;
+        }
+
+        .chat-online-pulse-dot {
+          width: 7.5px;
+          height: 7.5px;
+          border-radius: 50%;
+          background-color: #10b981;
+          display: inline-block;
+          flex-shrink: 0;
+          box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+          animation: statusPulse 2s infinite ease-in-out;
+        }
+
+        @keyframes statusPulse {
+          0%, 100% {
+            box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.3);
+            transform: scale(1);
+          }
+          50% {
+            box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.05);
+            transform: scale(1.05);
+          }
+        }
+
+        .chat-online-status-text {
+          font-size: 12px;
           font-weight: 600;
+          color: #059669;
+          letter-spacing: 0.01em;
         }
 
         .chat-header-right {

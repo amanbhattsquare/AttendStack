@@ -2551,7 +2551,9 @@ function ChatPageContent() {
                 />
                 <div className="text-truncate">
                   <h2 className="mb-0 text-dark fw-bold" style={{ fontSize: "16px", whiteSpace: "nowrap" }}>AttendStack Chat</h2>
-                  <span className="chat-count text-muted small">{conversations.length} conversations</span>
+                  <span className="chat-count text-muted small">
+                    {filteredConversations.length} conversation{filteredConversations.length === 1 ? "" : "s"}
+                  </span>
                 </div>
               </div>
               <div className="chat-sidebar-actions d-flex align-items-center gap-1.5 flex-shrink-0">

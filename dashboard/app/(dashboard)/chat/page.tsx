@@ -17,6 +17,7 @@ import {
   Tooltip,
   OverlayTrigger,
 } from "react-bootstrap";
+import { useSearchParams } from "next/navigation";
 import {
   Send,
   Paperclip,
@@ -47,12 +48,28 @@ import {
   ExternalLink,
   ChevronDown,
   Check,
+  Bell,
+  BellOff,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
 import {
   useQuery,
   useMutation,
   useQueryClient,
 } from "@tanstack/react-query";
+import {
+  getNotificationPermission,
+  requestNotificationPermission,
+  sendBrowserChatNotification,
+  registerChatServiceWorker,
+} from "../../../helper/browserNotification";
+import {
+  playMessageChime,
+  preloadNotificationSound,
+  isChatSoundMuted,
+  setChatSoundMuted,
+} from "../../../helper/notificationSound";
 
 import {
   Conversation,
@@ -518,6 +535,87 @@ export default function ChatPage() {
     loadUserData();
   }, []);
 
+  const searchParams = useSearchParams();
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>("default");
+  const [isSoundMuted, setIsSoundMuted] = useState<boolean>(false);
+
+  useEffect(() => {
+    setNotificationPermission(getNotificationPermission());
+    setIsSoundMuted(isChatSoundMuted());
+    registerChatServiceWorker();
+    preloadNotificationSound();
+  }, []);
+
+  const handleToggleSound = () => {
+    const next = !isSoundMuted;
+    setIsSoundMuted(next);
+    setChatSoundMuted(next);
+    if (!next) {
+      playMessageChime();
+    }
+  };
+
+  const handleEnableNotifications = async () => {
+    if (typeof window === "undefined" || !("Notification" in window)) {
+      Swal.fire({
+        icon: "info",
+        title: "Not Supported",
+        text: "Your browser does not support Web Notifications.",
+        confirmButtonColor: "#4f46e5",
+      });
+      return;
+    }
+
+    const currentPerm = Notification.permission;
+    if (currentPerm === "denied") {
+      Swal.fire({
+        icon: "warning",
+        title: "Notifications Blocked",
+        html: `<div class="text-start small">
+          <p>Browser notifications are currently <strong>Blocked</strong> for this site in your browser settings.</p>
+          <p class="mb-1"><strong>To enable them:</strong></p>
+          <ol class="ps-3 mb-2">
+            <li>Click the <strong>Tune / Padlock</strong> icon in your browser's address bar.</li>
+            <li>Change <strong>Notifications</strong> from Block to <strong>Allow</strong>.</li>
+            <li>Refresh this page.</li>
+          </ol>
+        </div>`,
+        confirmButtonColor: "#4f46e5",
+        confirmButtonText: "Got it",
+      });
+      return;
+    }
+
+    try {
+      const res = await requestNotificationPermission();
+      setNotificationPermission(res);
+      if (res === "granted") {
+        playMessageChime();
+        await sendBrowserChatNotification({
+          title: "AttendStack Notifications Active! 🎉",
+          body: "You will now receive instant desktop and background chat alerts.",
+          playSound: false,
+        });
+        Swal.fire({
+          icon: "success",
+          title: "Notifications Enabled!",
+          text: "You will now receive instant alerts whenever teammates message you.",
+          timer: 2500,
+          showConfirmButton: false,
+        });
+      } else if (res === "denied") {
+        Swal.fire({
+          icon: "warning",
+          title: "Permission Denied",
+          text: "Notifications were blocked. You can enable them anytime from your browser address bar settings.",
+          confirmButtonColor: "#4f46e5",
+        });
+      }
+    } catch (err) {
+      console.error("Error enabling notifications:", err);
+    }
+  };
+
   // TanStack Query: Fetch Conversations
   const {
     data: conversations = [],
@@ -528,12 +626,22 @@ export default function ChatPage() {
     queryFn: fetchConversations,
   });
 
-  // Auto-select first conversation if none active
+  // Deep linking: Open specific conversation from URL query parameter (?convId=...)
   useEffect(() => {
-    if (conversations.length > 0 && !activeConversationId) {
+    const targetConvId = searchParams.get("convId");
+    if (targetConvId) {
+      setActiveConversationId(targetConvId);
+      setMobileView("chat");
+    }
+  }, [searchParams]);
+
+  // Auto-select first conversation if none active and no deep link
+  useEffect(() => {
+    const targetConvId = searchParams.get("convId");
+    if (!targetConvId && conversations.length > 0 && !activeConversationId) {
       setActiveConversationId(conversations[0].id);
     }
-  }, [conversations, activeConversationId]);
+  }, [conversations, activeConversationId, searchParams]);
 
   const activeConversation = useMemo(
     () => conversations.find((c) => c.id === activeConversationId) || null,
@@ -639,6 +747,28 @@ export default function ChatPage() {
                 : c
             )
           );
+
+          // Play sound and trigger browser notification if message is from another user
+          const isFromMe = String(newMsg.sender?.id) === String(currentUserId);
+          if (!isFromMe) {
+            playMessageChime();
+            const isDocHidden = typeof document !== "undefined" && document.hidden;
+            if (isDocHidden) {
+              const senderName = newMsg.sender?.name || newMsg.sender?.email || "New Message";
+              const bodyText =
+                newMsg.content ||
+                (newMsg.attachments?.length
+                  ? `[${newMsg.attachments.length} attachment(s)]`
+                  : "Sent a message");
+              sendBrowserChatNotification({
+                title: senderName,
+                body: bodyText,
+                conversationId: activeConversationId,
+                avatar: newMsg.sender?.avatar || newMsg.sender?.profile_photo_url,
+                playSound: false, // Already played above
+              });
+            }
+          }
         } else if (data.type === "message_deleted") {
           queryClient.setQueryData<Message[]>(["messages", activeConversationId], (old = []) =>
             old.filter((m) => m.id !== data.message_id)
@@ -1039,6 +1169,9 @@ export default function ChatPage() {
   const dragCounter = useRef<number>(0);
 
   // Dedicated file & media download handler
+  // Dedicated one-click file & media & PDF download handler
+  const [downloadingFileUrl, setDownloadingFileUrl] = useState<string | null>(null);
+
   const handleDownloadFile = async (
     e: React.MouseEvent,
     fileUrl: string,
@@ -1046,32 +1179,59 @@ export default function ChatPage() {
   ) => {
     e.stopPropagation();
     e.preventDefault();
+
+    if (!fileUrl) return;
+
     const safeName =
       fileName ||
       fileUrl.split("/").pop()?.split("?")[0] ||
-      `attendstack-chat-media-${Date.now()}`;
+      `attendstack-doc-${Date.now()}`;
+
+    setDownloadingFileUrl(fileUrl);
 
     try {
-      const response = await fetch(fileUrl);
-      if (!response.ok) throw new Error("Direct fetch failed");
-      const blob = await response.blob();
-      const blobUrl = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = blobUrl;
-      link.download = safeName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      setTimeout(() => window.URL.revokeObjectURL(blobUrl), 100);
-    } catch {
-      const link = document.createElement("a");
-      link.href = fileUrl;
-      link.target = "_blank";
-      link.download = safeName;
-      link.rel = "noreferrer";
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      const token = typeof window !== "undefined" ? localStorage.getItem("authToken") : null;
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+
+      // 1. Try Blob fetch
+      const response = await fetch(fileUrl, {
+        headers,
+        mode: "cors",
+      }).catch(() => fetch(fileUrl));
+
+      if (response && response.ok) {
+        const blob = await response.blob();
+        const blobUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = blobUrl;
+        link.download = safeName;
+        link.setAttribute("download", safeName);
+        link.style.display = "none";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => window.URL.revokeObjectURL(blobUrl), 3000);
+      } else {
+        // 2. Direct anchor click fallback
+        const link = document.createElement("a");
+        link.href = fileUrl;
+        link.target = "_blank";
+        link.download = safeName;
+        link.setAttribute("download", safeName);
+        link.rel = "noopener noreferrer";
+        link.style.display = "none";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+    } catch (err) {
+      console.warn("Direct download fallback to window.open:", err);
+      window.open(fileUrl, "_blank", "noopener,noreferrer");
+    } finally {
+      setTimeout(() => setDownloadingFileUrl(null), 600);
     }
   };
 
@@ -1877,9 +2037,14 @@ export default function ChatPage() {
                       <button
                         className="whatsapp-download-btn btn p-1.5 rounded-circle border-0 d-flex align-items-center justify-content-center flex-shrink-0"
                         title={`Download ${fileName}`}
+                        disabled={downloadingFileUrl === att.file_url}
                         onClick={(e) => handleDownloadFile(e, att.file_url, fileName)}
                       >
-                        <Download size={19} strokeWidth={2} />
+                        {downloadingFileUrl === att.file_url ? (
+                          <Spinner animation="border" size="sm" style={{ width: "16px", height: "16px" }} />
+                        ) : (
+                          <Download size={19} strokeWidth={2} />
+                        )}
                       </button>
                     </div>
                   );
@@ -1956,7 +2121,7 @@ export default function ChatPage() {
           {/* Sidebar Header */}
           <div className="chat-sidebar-header">
             <div className="chat-sidebar-title-row">
-              <div className="chat-sidebar-title d-flex align-items-center gap-2">
+              <div className="chat-sidebar-title d-flex align-items-center gap-2.5 min-w-0">
                 <SafeAvatar
                   src={myProfilePhoto}
                   name={myUserName || "User"}
@@ -1964,35 +2129,94 @@ export default function ChatPage() {
                   fontSize={14}
                   className="shadow-xs border border-2 border-white flex-shrink-0"
                 />
-                <div>
-                  <h2 className="mb-0 fs-5 fw-bold text-dark">Team Chat</h2>
+                <div className="text-truncate">
+                  <h2 className="mb-0 text-dark fw-bold" style={{ fontSize: "16px", whiteSpace: "nowrap" }}>Team Chat</h2>
                   <span className="chat-count text-muted small">{conversations.length} conversations</span>
                 </div>
               </div>
-              <div className="chat-sidebar-actions">
-                <button className="chat-icon-btn" title="New Direct Message" onClick={openDirectModal}>
-                  <PlusCircle size={18} />
+              <div className="chat-sidebar-actions d-flex align-items-center gap-1.5 flex-shrink-0">
+                {/* Audio Chime Mute/Unmute */}
+                <button
+                  className={`chat-icon-btn ${isSoundMuted ? "text-muted opacity-60" : "text-success"}`}
+                  title={isSoundMuted ? "Audio Chime Muted (Click to Unmute)" : "Audio Chime Active (Click to Mute)"}
+                  onClick={handleToggleSound}
+                >
+                  {isSoundMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
                 </button>
-                {userRole !== "EMPLOYEE" && (
-                  <button className="chat-icon-btn text-warning" title="Send Company Announcement" onClick={() => setShowAnnouncementModal(true)}>
-                    <Megaphone size={17} />
-                  </button>
-                )}
-                {userRole !== "EMPLOYEE" ? (
-                  <button className="chat-icon-btn accent" title="Create Group Chat" onClick={openGroupModal}>
-                    <Users size={18} />
-                  </button>
-                ) : (
-                  <button
-                    className="chat-icon-btn opacity-50"
-                    title="Only Admins can create group chats"
-                    onClick={() => alert("Only Administrators and HR Managers are authorized to create group chats.")}
+
+                {/* Notification Enable / Test Button */}
+                <button
+                  className={`chat-icon-btn ${notificationPermission === "granted" ? "text-primary" : "text-warning border-warning-subtle"}`}
+                  title={
+                    notificationPermission === "granted"
+                      ? "Browser Notifications Active (Click to Test)"
+                      : "Click to Enable Browser Notifications"
+                  }
+                  onClick={handleEnableNotifications}
+                >
+                  {notificationPermission === "granted" ? <Bell size={16} /> : <BellOff size={16} />}
+                </button>
+
+                {/* New Chat Actions Dropdown */}
+                <Dropdown align="end" className="d-inline-block">
+                  <Dropdown.Toggle
+                    as="button"
+                    className="chat-icon-btn accent no-caret border-0 d-flex align-items-center justify-content-center"
+                    title="New Chat Actions"
                   >
-                    <Users size={18} />
-                  </button>
-                )}
+                    <PlusCircle size={18} />
+                  </Dropdown.Toggle>
+                  <Dropdown.Menu className="shadow-lg border rounded-3 py-1 dropdown-menu-end" style={{ minWidth: "190px", zIndex: 1060 }}>
+                    <Dropdown.Item
+                      className="d-flex align-items-center gap-2 text-dark px-3 py-2 small fw-semibold"
+                      onClick={openDirectModal}
+                    >
+                      <User size={15} className="text-primary" />
+                      <span>Direct Message</span>
+                    </Dropdown.Item>
+
+                    {userRole !== "EMPLOYEE" && (
+                      <Dropdown.Item
+                        className="d-flex align-items-center gap-2 text-dark px-3 py-2 small fw-semibold"
+                        onClick={openGroupModal}
+                      >
+                        <Users size={15} className="text-primary" />
+                        <span>Create Group Chat</span>
+                      </Dropdown.Item>
+                    )}
+
+                    {userRole !== "EMPLOYEE" && (
+                      <Dropdown.Item
+                        className="d-flex align-items-center gap-2 text-dark px-3 py-2 small fw-semibold"
+                        onClick={() => setShowAnnouncementModal(true)}
+                      >
+                        <Megaphone size={15} className="text-warning" />
+                        <span>Broadcast Announcement</span>
+                      </Dropdown.Item>
+                    )}
+                  </Dropdown.Menu>
+                </Dropdown>
               </div>
             </div>
+
+            {/* Notification Permission Banner */}
+            {notificationPermission !== "granted" && (
+              <div className="d-flex align-items-center justify-content-between p-2 mb-2.5 bg-primary-subtle border border-primary-subtle rounded-3">
+                <div className="d-flex align-items-center gap-2 overflow-hidden">
+                  <Bell size={15} className="text-primary flex-shrink-0" />
+                  <span className="small text-primary fw-semibold text-truncate" style={{ fontSize: "11.5px" }}>
+                    Enable background alerts
+                  </span>
+                </div>
+                <button
+                  className="btn btn-primary btn-sm rounded-pill px-2.5 py-0.5 fw-semibold shadow-xs"
+                  style={{ fontSize: "11px" }}
+                  onClick={handleEnableNotifications}
+                >
+                  Turn On
+                </button>
+              </div>
+            )}
 
             {/* Conversation Filter Tabs */}
             <div className="d-flex gap-1 mb-2 bg-light p-1 rounded-3">

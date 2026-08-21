@@ -1461,18 +1461,26 @@ function ChatPageContent() {
         return;
       }
 
-      // 4. Fallback direct anchor trigger
-      const link = document.createElement("a");
-      link.href = targetFileUrl;
-      link.download = safeName;
-      link.target = "_blank";
-      link.rel = "noopener noreferrer";
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      // 4. Force same-origin proxy download trigger (Never open new tab)
+      const forceLink = document.createElement("a");
+      forceLink.href = proxyUrl;
+      forceLink.download = safeName;
+      forceLink.setAttribute("download", safeName);
+      forceLink.style.display = "none";
+      document.body.appendChild(forceLink);
+      forceLink.click();
+      document.body.removeChild(forceLink);
     } catch (err) {
-      console.warn("Direct download fallback to window.open:", err);
-      window.open(targetFileUrl, "_blank", "noopener,noreferrer");
+      console.warn("Proxy download trigger fallback:", err);
+      const proxyUrl = `/api/download-proxy?url=${encodeURIComponent(targetFileUrl)}&filename=${encodeURIComponent(safeName)}`;
+      const forceLink = document.createElement("a");
+      forceLink.href = proxyUrl;
+      forceLink.download = safeName;
+      forceLink.setAttribute("download", safeName);
+      forceLink.style.display = "none";
+      document.body.appendChild(forceLink);
+      forceLink.click();
+      document.body.removeChild(forceLink);
     } finally {
       setTimeout(() => setDownloadingFileUrl(null), 800);
     }

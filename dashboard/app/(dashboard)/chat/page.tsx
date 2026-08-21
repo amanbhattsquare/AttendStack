@@ -1891,7 +1891,7 @@ function ChatPageContent() {
 
       return (
         <div
-          className="whatsapp-link-preview-card mt-2 rounded-3 overflow-hidden border cursor-pointer shadow-sm"
+          className="whatsapp-link-preview-card mb-2 rounded-3 overflow-hidden border cursor-pointer shadow-sm"
           style={{
             background: isMe ? "rgba(0, 0, 0, 0.18)" : "#ffffff",
             borderColor: isMe ? "rgba(255, 255, 255, 0.2)" : "#e2e8f0",
@@ -1939,7 +1939,7 @@ function ChatPageContent() {
 
     return (
       <div
-        className="whatsapp-link-preview-card mt-2 rounded-3 overflow-hidden border p-2.5 d-flex align-items-center justify-content-between gap-2.5 cursor-pointer shadow-sm"
+        className="whatsapp-link-preview-card mb-2 rounded-3 overflow-hidden border p-2.5 d-flex align-items-center justify-content-between gap-2.5 cursor-pointer shadow-sm"
         style={{
           background: isMe ? "rgba(0, 0, 0, 0.18)" : "#ffffff",
           borderColor: isMe ? "rgba(255, 255, 255, 0.2)" : "#e2e8f0",
@@ -2252,10 +2252,10 @@ function ChatPageContent() {
                     </span>
                   )}
                 </div>
+                {renderLinkPreviewCard(msg.content || "", isMe)}
                 <p className="mb-2 text-dark fw-medium" style={{ fontSize: "14px", lineHeight: "1.5" }}>
                   {renderTextWithMentionsAndHighlights(msg.content || "", isMe)}
                 </p>
-                {renderLinkPreviewCard(msg.content || "", isMe)}
                 {msg.requires_acknowledgement && (
                   <div
                     className="d-flex align-items-center justify-content-between pt-2 border-top mt-1"
@@ -2286,8 +2286,8 @@ function ChatPageContent() {
             ) : (
               msg.content && !msg.is_deleted && (
                 <>
-                  <p className="chat-text">{renderTextWithMentionsAndHighlights(msg.content, isMe)}</p>
                   {renderLinkPreviewCard(msg.content, isMe)}
+                  <p className="chat-text">{renderTextWithMentionsAndHighlights(msg.content, isMe)}</p>
                 </>
               )
             )}

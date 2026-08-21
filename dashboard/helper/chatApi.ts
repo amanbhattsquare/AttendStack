@@ -36,7 +36,7 @@ export interface QuotedMessage {
   id: string;
   sender?: UserMinimal;
   content: string | null;
-  message_type: 'TEXT' | 'IMAGE' | 'VIDEO' | 'FILE' | 'SYSTEM';
+  message_type: 'TEXT' | 'IMAGE' | 'VIDEO' | 'FILE' | 'STICKER' | 'SYSTEM';
   is_deleted?: boolean;
   created_at?: string;
 }
@@ -47,7 +47,7 @@ export interface Message {
   sender: UserMinimal;
   reply_to?: QuotedMessage | null;
   content: string | null;
-  message_type: 'TEXT' | 'IMAGE' | 'VIDEO' | 'FILE' | 'SYSTEM';
+  message_type: 'TEXT' | 'IMAGE' | 'VIDEO' | 'FILE' | 'STICKER' | 'SYSTEM';
   is_edited: boolean;
   is_deleted: boolean;
   is_announcement?: boolean;
@@ -101,7 +101,8 @@ export const sendMessageWithAttachments = async (
   conversationId: string,
   content: string,
   files: File[] = [],
-  replyToId?: string | null
+  replyToId?: string | null,
+  messageType?: string
 ): Promise<Message> => {
   const formData = new FormData();
   if (content) {
@@ -109,6 +110,9 @@ export const sendMessageWithAttachments = async (
   }
   if (replyToId) {
     formData.append('reply_to', replyToId);
+  }
+  if (messageType) {
+    formData.append('message_type', messageType);
   }
   files.forEach((file) => {
     formData.append('files', file);

@@ -69,6 +69,7 @@ class Message(models.Model):
         IMAGE = 'IMAGE', 'Image'
         VIDEO = 'VIDEO', 'Video'
         FILE = 'FILE', 'File'
+        STICKER = 'STICKER', 'Sticker'
         SYSTEM = 'SYSTEM', 'System'
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

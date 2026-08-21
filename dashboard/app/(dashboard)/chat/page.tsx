@@ -66,6 +66,8 @@ import {
   BellOff,
   Volume2,
   VolumeX,
+  Sticker as StickerIcon,
+  Film as GifIcon,
 } from "lucide-react";
 import {
   useQuery,
@@ -515,9 +517,136 @@ function ChatPageContent() {
   const [forwardedConvIds, setForwardedConvIds] = useState<string[]>([]);
   const [copiedMsgId, setCopiedMsgId] = useState<string | null>(null);
 
-  // Input bar emoji picker state
+  // Input bar emoji, GIPHY Sticker & GIPHY GIF picker state
   const [showEmojiPicker, setShowEmojiPicker] = useState<boolean>(false);
+  const [pickerTab, setPickerTab] = useState<"emoji" | "sticker" | "gif">("emoji");
+  const [giphySearchQuery, setGiphySearchQuery] = useState<string>("");
+  const [giphyGifs, setGiphyGifs] = useState<{ id: string; url: string; previewUrl: string; title: string }[]>([]);
+  const [giphyLoading, setGiphyLoading] = useState<boolean>(false);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
+
+  // Fetch GIPHY GIFs dynamically (Trending or Search query)
+  useEffect(() => {
+    if (!showEmojiPicker || pickerTab !== "gif") return;
+
+    let isMounted = true;
+    const apiKey = process.env.NEXT_PUBLIC_GIPHY_API_KEY || "pL8T9A2HcsLRWPGtWP8BB9tOaR4y1l10";
+    const q = giphySearchQuery.trim();
+
+    const fetchGifs = async () => {
+      setGiphyLoading(true);
+      try {
+        const endpoint = q
+          ? `https://api.giphy.com/v1/gifs/search?api_key=${apiKey}&q=${encodeURIComponent(q)}&limit=24&rating=g`
+          : `https://api.giphy.com/v1/gifs/trending?api_key=${apiKey}&limit=24&rating=g`;
+
+        const res = await fetch(endpoint);
+        const json = await res.json();
+        if (isMounted && json.data) {
+          const formatted = json.data.map((item: any) => ({
+            id: item.id,
+            url: item.images?.fixed_height?.url || item.images?.original?.url,
+            previewUrl: item.images?.fixed_height_small?.url || item.images?.fixed_height?.url,
+            title: item.title || "GIPHY GIF",
+          }));
+          setGiphyGifs(formatted);
+        }
+      } catch (err) {
+        console.error("GIPHY API Error:", err);
+      } finally {
+        if (isMounted) setGiphyLoading(false);
+      }
+    };
+
+    const timer = setTimeout(fetchGifs, q ? 350 : 0);
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
+  }, [showEmojiPicker, pickerTab, giphySearchQuery]);
+
+  // GIPHY Stickers integration state & fetcher
+  const [giphyStickerQuery, setGiphyStickerQuery] = useState<string>("");
+  const [giphyStickers, setGiphyStickers] = useState<{ id: string; url: string; previewUrl: string; title: string }[]>([]);
+  const [giphyStickerLoading, setGiphyStickerLoading] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (!showEmojiPicker || pickerTab !== "sticker") return;
+
+    let isMounted = true;
+    const apiKey = process.env.NEXT_PUBLIC_GIPHY_API_KEY || "pL8T9A2HcsLRWPGtWP8BB9tOaR4y1l10";
+    const q = giphyStickerQuery.trim();
+
+    const fetchStickers = async () => {
+      setGiphyStickerLoading(true);
+      try {
+        const endpoint = q
+          ? `https://api.giphy.com/v1/stickers/search?api_key=${apiKey}&q=${encodeURIComponent(q)}&limit=24&rating=g`
+          : `https://api.giphy.com/v1/stickers/trending?api_key=${apiKey}&limit=24&rating=g`;
+
+        const res = await fetch(endpoint);
+        const json = await res.json();
+        if (isMounted && json.data) {
+          const formatted = json.data.map((item: any) => ({
+            id: item.id,
+            url: item.images?.fixed_height?.url || item.images?.original?.url,
+            previewUrl: item.images?.fixed_height_small?.url || item.images?.fixed_height?.url,
+            title: item.title || "GIPHY Sticker",
+          }));
+          setGiphyStickers(formatted);
+        }
+      } catch (err) {
+        console.error("GIPHY Stickers API Error:", err);
+      } finally {
+        if (isMounted) setGiphyStickerLoading(false);
+      }
+    };
+
+    const timer = setTimeout(fetchStickers, q ? 350 : 0);
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
+  }, [showEmojiPicker, pickerTab, giphyStickerQuery]);
+
+  // Send Telegram sticker mutation
+  const sendStickerMutation = useMutation({
+    mutationFn: async (stickerUrl: string) => {
+      if (!activeConversationId) return;
+      return await sendMessageWithAttachments(
+        activeConversationId,
+        stickerUrl,
+        [],
+        replyingTo?.id || null,
+        "STICKER"
+      );
+    },
+    onSuccess: (newMsg) => {
+      if (!newMsg || !activeConversationId) return;
+
+      setShowEmojiPicker(false);
+      setReplyingTo(null);
+
+      queryClient.setQueryData<Message[]>(["messages", activeConversationId], (old = []) => {
+        if (old.some((m) => m.id === newMsg.id)) return old;
+        return [...old, newMsg];
+      });
+
+      queryClient.setQueryData<Conversation[]>(["conversations"], (old = []) =>
+        old.map((c) =>
+          c.id === activeConversationId
+            ? { ...c, last_message: newMsg, updated_at: new Date().toISOString() }
+            : c
+        )
+      );
+
+      scrollToBottom(true);
+    },
+  });
+
+  const handleSendSticker = (stickerUrl: string) => {
+    sendStickerMutation.mutate(stickerUrl);
+  };
 
   // Clear Chat modal & state
   const [showClearModal, setShowClearModal] = useState<boolean>(false);
@@ -2298,10 +2427,21 @@ function ChatPageContent() {
               </div>
             ) : (
               msg.content && !msg.is_deleted && (
-                <>
-                  {renderLinkPreviewCard(msg.content, isMe)}
-                  <p className="chat-text">{renderTextWithMentionsAndHighlights(msg.content, isMe)}</p>
-                </>
+                msg.message_type === "STICKER" ? (
+                  <div className="telegram-sticker-wrapper position-relative my-1">
+                    <BSImage
+                      src={msg.content}
+                      alt="Telegram Sticker"
+                      className="telegram-sticker-img cursor-pointer"
+                      onClick={() => openMediaPreview({ url: msg.content!, type: "image", name: "Telegram Sticker" })}
+                    />
+                  </div>
+                ) : (
+                  <>
+                    {renderLinkPreviewCard(msg.content, isMe)}
+                    <p className="chat-text">{renderTextWithMentionsAndHighlights(msg.content, isMe)}</p>
+                  </>
+                )
               )
             )}
 
@@ -3120,32 +3260,225 @@ function ChatPageContent() {
                   <Paperclip size={18} />
                 </button>
 
-                {/* Workplace Emoji picker button & popover */}
+                {/* Expressions picker button & popover (Emojis, Stickers, GIFs) */}
                 <div className="chat-emoji-wrapper" ref={emojiPickerRef}>
                   <button
+                    type="button"
                     className={`chat-input-icon-btn ${showEmojiPicker ? "active" : ""}`}
                     onClick={() => setShowEmojiPicker((prev) => !prev)}
-                    title="Insert emoji"
+                    title="Emojis, Stickers & GIFs"
                   >
                     <Smile size={18} />
                   </button>
 
                   {showEmojiPicker && (
                     <div className="chat-emoji-popover shadow-2xl rounded-4 border bg-white overflow-hidden">
-                      <div className="d-flex align-items-center justify-content-between px-3 py-1.5 bg-light border-bottom">
-                        <span className="fw-bold text-dark small" style={{ fontSize: "12px" }}>Choose Emoji</span>
-                        <button className="btn btn-sm btn-link text-muted p-0 border-0" onClick={() => setShowEmojiPicker(false)}>
-                          <X size={15} />
+                      {/* Header with Emojis / Stickers / GIFs Tabs */}
+                      <div className="d-flex align-items-center justify-content-between p-2 bg-light-subtle border-bottom">
+                        <div className="d-flex align-items-center bg-body-tertiary p-1 rounded-pill border flex-grow-1 me-2 shadow-xs">
+                          <button
+                            type="button"
+                            className={`btn btn-xs rounded-pill flex-fill py-1 fw-bold transition-all text-nowrap d-flex align-items-center justify-content-center ${pickerTab === "emoji" ? "bg-primary text-white shadow-xs" : "text-secondary hover-bg-light"}`}
+                            style={{ fontSize: "11px", minWidth: "0" }}
+                            onClick={() => setPickerTab("emoji")}
+                          >
+                            <Smile size={12} className="me-1 flex-shrink-0" /> <span>Emojis</span>
+                          </button>
+                          <button
+                            type="button"
+                            className={`btn btn-xs rounded-pill flex-fill py-1 fw-bold transition-all text-nowrap d-flex align-items-center justify-content-center ${pickerTab === "sticker" ? "bg-primary text-white shadow-xs" : "text-secondary hover-bg-light"}`}
+                            style={{ fontSize: "11px", minWidth: "0" }}
+                            onClick={() => setPickerTab("sticker")}
+                          >
+                            <StickerIcon size={12} className="me-1 flex-shrink-0" /> <span>Stickers</span>
+                          </button>
+                          <button
+                            type="button"
+                            className={`btn btn-xs rounded-pill flex-fill py-1 fw-bold transition-all text-nowrap d-flex align-items-center justify-content-center ${pickerTab === "gif" ? "bg-primary text-white shadow-xs" : "text-secondary hover-bg-light"}`}
+                            style={{ fontSize: "11px", minWidth: "0" }}
+                            onClick={() => setPickerTab("gif")}
+                          >
+                            <GifIcon size={12} className="me-1 flex-shrink-0" /> <span>GIFs</span>
+                          </button>
+                        </div>
+                        <button className="btn btn-sm btn-light rounded-circle p-1 d-flex align-items-center justify-content-center border-0 flex-shrink-0" onClick={() => setShowEmojiPicker(false)} title="Close" style={{ width: "26px", height: "26px" }}>
+                          <X size={14} className="text-secondary" />
                         </button>
                       </div>
-                      <EmojiPicker
-                        onEmojiClick={handleSelectEmoji}
-                        width="100%"
-                        height={360}
-                        searchDisabled={false}
-                        skinTonesDisabled={false}
-                        previewConfig={{ showPreview: false }}
-                      />
+
+                      {pickerTab === "emoji" ? (
+                        <EmojiPicker
+                          onEmojiClick={handleSelectEmoji}
+                          width="100%"
+                          height={360}
+                          searchDisabled={false}
+                          skinTonesDisabled={false}
+                          previewConfig={{ showPreview: false }}
+                        />
+                      ) : pickerTab === "sticker" ? (
+                        <div className="giphy-container p-2.5 d-flex flex-column" style={{ height: "360px" }}>
+                          {/* Search bar */}
+                          <div className="giphy-search-box">
+                            <Search size={14} className="giphy-search-icon" />
+                            <input
+                              type="text"
+                              className="giphy-search-input"
+                              placeholder="Search GIPHY Stickers..."
+                              value={giphyStickerQuery}
+                              onChange={(e) => setGiphyStickerQuery(e.target.value)}
+                            />
+                            {giphyStickerQuery && (
+                              <button
+                                type="button"
+                                className="giphy-search-clear"
+                                onClick={() => setGiphyStickerQuery("")}
+                                title="Clear search"
+                              >
+                                <X size={13} />
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Quick Tag Chips */}
+                          <div className="d-flex align-items-center gap-1 mb-2 overflow-x-auto pb-1 flex-shrink-0">
+                            {[
+                              { label: "Trending", tag: "" },
+                              { label: "❤️ Love", tag: "Love" },
+                              { label: "😂 Funny", tag: "Funny" },
+                              { label: "🎉 Party", tag: "Party" },
+                              { label: "👋 Hello", tag: "Hello" },
+                              { label: "🔥 Fire", tag: "Fire" },
+                              { label: "👍 Thanks", tag: "Thanks" },
+                            ].map((chip) => (
+                              <button
+                                key={chip.label}
+                                type="button"
+                                className={`btn btn-xs rounded-pill px-2.5 py-0.5 text-nowrap transition-all border ${
+                                  giphyStickerQuery === chip.tag
+                                    ? "bg-primary text-white border-primary shadow-xs"
+                                    : "bg-light text-secondary border-transparent"
+                                }`}
+                                style={{ fontSize: "10.5px" }}
+                                onClick={() => setGiphyStickerQuery(chip.tag)}
+                              >
+                                {chip.label}
+                              </button>
+                            ))}
+                          </div>
+
+                          {/* Grid of GIPHY Stickers */}
+                          <div className="giphy-sticker-grid flex-grow-1 overflow-y-auto pr-1">
+                            {giphyStickerLoading ? (
+                              <div className="d-flex align-items-center justify-content-center h-100 py-4 text-muted small">
+                                <Spinner animation="border" size="sm" className="me-2" />
+                                <span>Searching GIPHY Stickers...</span>
+                              </div>
+                            ) : giphyStickers.length === 0 ? (
+                              <div className="text-center text-muted small py-4">No GIPHY Stickers found</div>
+                            ) : (
+                              <div className="telegram-sticker-grid">
+                                {giphyStickers.map((st) => (
+                                  <div
+                                    key={st.id}
+                                    className="telegram-sticker-picker-item"
+                                    title={st.title}
+                                    onClick={() => handleSendSticker(st.url)}
+                                  >
+                                    <img src={st.previewUrl} alt={st.title} className="telegram-sticker-picker-img" />
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* GIPHY Footer Attribution */}
+                          <div className="d-flex align-items-center justify-content-center pt-1.5 mt-1 border-top flex-shrink-0" style={{ borderColor: "#f1f5f9" }}>
+                            <span className="text-muted" style={{ fontSize: "10px", letterSpacing: "0.03em" }}>Powered by <strong className="text-dark">GIPHY</strong></span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="giphy-container p-2.5 d-flex flex-column" style={{ height: "360px" }}>
+                          {/* Search bar */}
+                          <div className="giphy-search-box">
+                            <Search size={14} className="giphy-search-icon" />
+                            <input
+                              type="text"
+                              className="giphy-search-input"
+                              placeholder="Search GIPHY GIFs..."
+                              value={giphySearchQuery}
+                              onChange={(e) => setGiphySearchQuery(e.target.value)}
+                            />
+                            {giphySearchQuery && (
+                              <button
+                                type="button"
+                                className="giphy-search-clear"
+                                onClick={() => setGiphySearchQuery("")}
+                                title="Clear search"
+                              >
+                                <X size={13} />
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Quick Tag Chips */}
+                          <div className="d-flex align-items-center gap-1 mb-2 overflow-x-auto pb-1 flex-shrink-0">
+                            {[
+                              { label: "Trending", tag: "" },
+                              { label: "👏 Applause", tag: "Applause" },
+                              { label: "🤯 Mindblown", tag: "Mindblown" },
+                              { label: "🥳 Celebrate", tag: "Celebrate" },
+                              { label: "😭 Sad", tag: "Sad" },
+                              { label: "😴 Sleep", tag: "Sleep" },
+                              { label: "🔥 Hype", tag: "Hype" },
+                            ].map((chip) => (
+                              <button
+                                key={chip.label}
+                                type="button"
+                                className={`btn btn-xs rounded-pill px-2.5 py-0.5 text-nowrap transition-all border ${
+                                  giphySearchQuery === chip.tag
+                                    ? "bg-primary text-white border-primary shadow-xs"
+                                    : "bg-light text-secondary border-transparent"
+                                }`}
+                                style={{ fontSize: "10.5px" }}
+                                onClick={() => setGiphySearchQuery(chip.tag)}
+                              >
+                                {chip.label}
+                              </button>
+                            ))}
+                          </div>
+
+                          {/* Grid of GIPHY GIFs */}
+                          <div className="giphy-gif-grid flex-grow-1 overflow-y-auto pr-1">
+                            {giphyLoading ? (
+                              <div className="d-flex align-items-center justify-content-center h-100 py-4 text-muted small">
+                                <Spinner animation="border" size="sm" className="me-2" />
+                                <span>Searching GIPHY...</span>
+                              </div>
+                            ) : giphyGifs.length === 0 ? (
+                              <div className="text-center text-muted small py-4">No GIFs found</div>
+                            ) : (
+                              <div className="row g-2">
+                                {giphyGifs.map((gif) => (
+                                  <div key={gif.id} className="col-6">
+                                    <div
+                                      className="giphy-gif-card rounded-3 overflow-hidden border cursor-pointer position-relative shadow-xs"
+                                      title={gif.title}
+                                      onClick={() => handleSendSticker(gif.url)}
+                                    >
+                                      <img src={gif.previewUrl} alt={gif.title} className="w-100" style={{ height: "92px", objectFit: "cover" }} />
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* GIPHY Footer Attribution */}
+                          <div className="d-flex align-items-center justify-content-center pt-1.5 mt-1 border-top flex-shrink-0" style={{ borderColor: "#f1f5f9" }}>
+                            <span className="text-muted" style={{ fontSize: "10px", letterSpacing: "0.03em" }}>Powered by <strong className="text-dark">GIPHY</strong></span>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -4505,6 +4838,75 @@ function ChatPageContent() {
           transition: background-color 0.15s ease;
         }
 
+        .giphy-gif-card {
+          transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s;
+        }
+
+        .giphy-gif-card:hover {
+          transform: scale(1.04);
+          border-color: #6366f1 !important;
+          box-shadow: 0 4px 14px rgba(99, 102, 241, 0.25);
+        }
+
+        /* Modern GIPHY Search Bar */
+        .giphy-search-box {
+          position: relative;
+          width: 100%;
+          margin-bottom: 8px;
+        }
+
+        .giphy-search-input {
+          width: 100%;
+          height: 36px;
+          padding-left: 36px !important;
+          padding-right: 30px !important;
+          font-size: 12px;
+          font-weight: 500;
+          border-radius: 20px;
+          background: #f1f5f9;
+          border: 1px solid #e2e8f0;
+          color: #0f172a;
+          outline: none;
+          transition: all 0.2s ease;
+        }
+
+        .giphy-search-input:focus {
+          background: #ffffff;
+          border-color: #6366f1;
+          box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.14);
+        }
+
+        .giphy-search-icon {
+          position: absolute;
+          left: 12px;
+          top: 50%;
+          transform: translateY(-50%);
+          color: #94a3b8;
+          pointer-events: none;
+        }
+
+        .giphy-search-clear {
+          position: absolute;
+          right: 10px;
+          top: 50%;
+          transform: translateY(-50%);
+          color: #94a3b8;
+          background: transparent;
+          border: none;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 2px;
+          border-radius: 50%;
+          transition: all 0.15s ease;
+        }
+
+        .giphy-search-clear:hover {
+          color: #475569;
+          background: #e2e8f0;
+        }
+
         .bubble-sent .whatsapp-file-card {
           background: rgba(0, 0, 0, 0.18);
         }
@@ -4570,6 +4972,72 @@ function ChatPageContent() {
         @keyframes typingBounce {
           0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
           40% { transform: scale(1); opacity: 1; }
+        }
+
+        /* Telegram Sticker Styles */
+        .telegram-sticker-grid {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 10px;
+          padding: 4px 0;
+        }
+
+        .telegram-sticker-picker-item {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 6px;
+          border-radius: 14px;
+          background: transparent;
+          cursor: pointer;
+          transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+          border: 1px solid transparent;
+        }
+
+        .telegram-sticker-picker-item:hover {
+          background: rgba(99, 102, 241, 0.08);
+          border-color: rgba(99, 102, 241, 0.2);
+          transform: scale(1.18);
+        }
+
+        .telegram-sticker-picker-img {
+          width: 76px;
+          height: 76px;
+          object-fit: contain;
+          filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.1));
+        }
+
+        .telegram-sticker-wrapper {
+          padding: 2px;
+        }
+
+        .telegram-sticker-img {
+          max-width: 155px;
+          max-height: 155px;
+          object-fit: contain;
+          filter: drop-shadow(0 6px 16px rgba(0, 0, 0, 0.12));
+          transition: transform 0.2s ease-in-out;
+        }
+
+        .telegram-sticker-img:hover {
+          transform: scale(1.08);
+        }
+
+        /* GIPHY Custom Scrollbars */
+        .giphy-sticker-grid::-webkit-scrollbar,
+        .giphy-gif-grid::-webkit-scrollbar {
+          width: 4px;
+        }
+
+        .giphy-sticker-grid::-webkit-scrollbar-thumb,
+        .giphy-gif-grid::-webkit-scrollbar-thumb {
+          background: #cbd5e1;
+          border-radius: 4px;
+        }
+
+        .giphy-sticker-grid::-webkit-scrollbar-track,
+        .giphy-gif-grid::-webkit-scrollbar-track {
+          background: transparent;
         }
 
         /* File previews bar */
@@ -4687,22 +5155,33 @@ function ChatPageContent() {
 
         .chat-emoji-popover {
           position: absolute;
-          bottom: 48px;
+          bottom: 50px;
           left: 0;
           background: #ffffff;
-          width: 330px;
+          width: 355px;
           max-width: calc(100vw - 24px);
           padding: 0;
           z-index: 1000;
-          border-radius: 16px;
-          box-shadow: 0 16px 40px rgba(0, 0, 0, 0.18);
+          border-radius: 18px;
+          box-shadow: 0 20px 40px -10px rgba(15, 23, 42, 0.22), 0 0 0 1px rgba(15, 23, 42, 0.08);
           animation: popoverFadeIn 0.15s ease-out;
           overflow: hidden;
         }
 
+        @media (max-width: 576px) {
+          .chat-emoji-popover {
+            position: fixed;
+            bottom: 70px;
+            left: 12px;
+            right: 12px;
+            width: calc(100vw - 24px) !important;
+            max-width: 100vw;
+          }
+        }
+
         .chat-emoji-popover .epr-main {
           border: none !important;
-          border-radius: 0 0 16px 16px !important;
+          border-radius: 0 0 18px 18px !important;
           box-shadow: none !important;
         }
           align-items: center;

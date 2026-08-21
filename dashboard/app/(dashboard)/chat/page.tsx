@@ -1357,16 +1357,73 @@ function ChatPageContent() {
 
     if (!fileUrl) return;
 
+    // Normalize localhost / relative URLs for production
+    let targetFileUrl = fileUrl;
+    if (typeof window !== "undefined") {
+      const apiEndpoint = process.env.NEXT_PUBLIC_API_ENDPOINT || "";
+      const currentOrigin = window.location.origin;
+      const effectiveHost = (apiEndpoint && !apiEndpoint.includes("localhost") && !apiEndpoint.includes("127.0.0.1"))
+        ? apiEndpoint.replace(/\/api\/?$/, "")
+        : currentOrigin;
+
+      targetFileUrl = targetFileUrl
+        .replace(/^https?:\/\/localhost(:\d+)?/i, effectiveHost)
+        .replace(/^https?:\/\/127\.0\.0\.1(:\d+)?/i, effectiveHost);
+
+      if (!targetFileUrl.startsWith("http://") && !targetFileUrl.startsWith("https://")) {
+        targetFileUrl = `${effectiveHost}${targetFileUrl.startsWith("/") ? "" : "/"}${targetFileUrl}`;
+      }
+    }
+
     const safeName =
       fileName ||
-      fileUrl.split("/").pop()?.split("?")[0] ||
+      targetFileUrl.split("/").pop()?.split("?")[0] ||
       `attendstack-file-${Date.now()}`;
 
     setDownloadingFileUrl(fileUrl);
 
     try {
-      // 1. Try Next.js same-origin download proxy (guaranteed download & correct filename across PC & Phone)
-      const proxyUrl = `/api/download-proxy?url=${encodeURIComponent(fileUrl)}&filename=${encodeURIComponent(safeName)}`;
+      // 1. Direct Image Canvas Blob extraction (instant 100% offline & client-side download)
+      const isImg = /\.(png|jpe?g|gif|webp|bmp|svg)($|\?)/i.test(targetFileUrl) || /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(safeName);
+      if (isImg) {
+        const canvasDownloaded = await new Promise<boolean>((resolve) => {
+          const img = new Image();
+          img.crossOrigin = "anonymous";
+          img.onload = () => {
+            try {
+              const canvas = document.createElement("canvas");
+              canvas.width = img.naturalWidth || img.width;
+              canvas.height = img.naturalHeight || img.height;
+              const ctx = canvas.getContext("2d");
+              if (!ctx) return resolve(false);
+              ctx.drawImage(img, 0, 0);
+              canvas.toBlob((blob) => {
+                if (!blob) return resolve(false);
+                const blobUrl = URL.createObjectURL(blob);
+                const link = document.createElement("a");
+                link.href = blobUrl;
+                link.download = safeName;
+                link.setAttribute("download", safeName);
+                link.style.display = "none";
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                setTimeout(() => URL.revokeObjectURL(blobUrl), 3000);
+                resolve(true);
+              }, "image/png");
+            } catch {
+              resolve(false);
+            }
+          };
+          img.onerror = () => resolve(false);
+          img.src = targetFileUrl;
+        });
+
+        if (canvasDownloaded) return;
+      }
+
+      // 2. Try Next.js same-origin download proxy (guaranteed download & correct headers across PC & Phone)
+      const proxyUrl = `/api/download-proxy?url=${encodeURIComponent(targetFileUrl)}&filename=${encodeURIComponent(safeName)}`;
       const proxyRes = await fetch(proxyUrl);
       if (proxyRes.ok) {
         const blob = await proxyRes.blob();
@@ -1383,12 +1440,12 @@ function ChatPageContent() {
         return;
       }
 
-      // 2. Direct fetch with Blob fallback
+      // 3. Direct fetch with Blob fallback
       const token = typeof window !== "undefined" ? localStorage.getItem("authToken") : null;
       const headers: Record<string, string> = {};
       if (token) headers["Authorization"] = `Bearer ${token}`;
 
-      const res = await fetch(fileUrl, { headers, mode: "cors" }).catch(() => fetch(fileUrl));
+      const res = await fetch(targetFileUrl, { headers, mode: "cors" }).catch(() => fetch(targetFileUrl));
       if (res && res.ok) {
         const blob = await res.blob();
         const blobUrl = window.URL.createObjectURL(blob);
@@ -1404,9 +1461,9 @@ function ChatPageContent() {
         return;
       }
 
-      // 3. Fallback direct trigger
+      // 4. Fallback direct anchor trigger
       const link = document.createElement("a");
-      link.href = fileUrl;
+      link.href = targetFileUrl;
       link.download = safeName;
       link.target = "_blank";
       link.rel = "noopener noreferrer";
@@ -1415,7 +1472,7 @@ function ChatPageContent() {
       document.body.removeChild(link);
     } catch (err) {
       console.warn("Direct download fallback to window.open:", err);
-      window.open(fileUrl, "_blank", "noopener,noreferrer");
+      window.open(targetFileUrl, "_blank", "noopener,noreferrer");
     } finally {
       setTimeout(() => setDownloadingFileUrl(null), 800);
     }

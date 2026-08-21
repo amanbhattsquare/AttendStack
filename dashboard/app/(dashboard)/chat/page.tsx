@@ -5168,14 +5168,29 @@ function ChatPageContent() {
           overflow: hidden;
         }
 
-        @media (max-width: 576px) {
+        @media (max-width: 768px) {
           .chat-emoji-popover {
-            position: fixed;
-            bottom: 70px;
-            left: 12px;
-            right: 12px;
-            width: calc(100vw - 24px) !important;
-            max-width: 100vw;
+            position: fixed !important;
+            bottom: 72px !important;
+            left: 10px !important;
+            right: 10px !important;
+            width: calc(100vw - 20px) !important;
+            max-width: none !important;
+            z-index: 9999 !important;
+            border-radius: 20px !important;
+            box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.22) !important;
+            animation: mobileSlideUp 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+          }
+        }
+
+        @keyframes mobileSlideUp {
+          from {
+            transform: translateY(20px);
+            opacity: 0;
+          }
+          to {
+            transform: translateY(0);
+            opacity: 1;
           }
         }
 

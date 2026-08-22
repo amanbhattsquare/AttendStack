@@ -20,7 +20,7 @@ const loadNotifiedIdsFromStorage = () => {
         arr.forEach((id) => notifiedMessageIds.add(String(id)));
       }
     }
-  } catch (_) {}
+  } catch (_) { }
 };
 
 const saveNotifiedIdsToStorage = () => {
@@ -29,7 +29,7 @@ const saveNotifiedIdsToStorage = () => {
     // Keep max 500 recent IDs to avoid storage bloating
     const arr = Array.from(notifiedMessageIds).slice(-500);
     sessionStorage.setItem('attendstack_notified_msg_ids', JSON.stringify(arr));
-  } catch (_) {}
+  } catch (_) { }
 };
 
 loadNotifiedIdsFromStorage();
@@ -81,6 +81,29 @@ export const registerChatServiceWorker = async (): Promise<ServiceWorkerRegistra
 };
 
 /**
+ * Check if the user has manually disabled / muted browser notifications in chat settings
+ */
+export const isChatNotificationDisabled = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  try {
+    return localStorage.getItem('attendstack_chat_notifications_disabled') === 'true';
+  } catch (_) {
+    return false;
+  }
+};
+
+/**
+ * Enable or disable / mute browser notifications
+ */
+export const setChatNotificationDisabled = (disabled: boolean): void => {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem('attendstack_chat_notifications_disabled', disabled ? 'true' : 'false');
+    window.dispatchEvent(new CustomEvent('attendstack_chat_notification_toggle', { detail: { disabled } }));
+  } catch (_) { }
+};
+
+/**
  * Check current notification permission
  */
 export const getNotificationPermission = (): NotificationPermission => {
@@ -110,17 +133,77 @@ export const requestNotificationPermission = async (): Promise<NotificationPermi
   }
 };
 
+let originalFaviconHref = '/favicon.png';
+let badgeFaviconDataUrl: string | null = null;
+
+const createGreenDotFavicon = (): Promise<string> => {
+  return new Promise((resolve) => {
+    if (typeof window === 'undefined') return resolve('/favicon.png');
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.src = originalFaviconHref;
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = 32;
+        canvas.height = 32;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return resolve(originalFaviconHref);
+
+        // Draw original favicon
+        ctx.drawImage(img, 0, 0, 32, 32);
+
+        // Draw outer white circle for crisp separation
+        ctx.beginPath();
+        ctx.arc(23, 9, 7.5, 0, 2 * Math.PI);
+        ctx.fillStyle = '#ffffff';
+        ctx.fill();
+
+        // Draw vibrant Green Dot indicator
+        ctx.beginPath();
+        ctx.arc(23, 9, 5.5, 0, 2 * Math.PI);
+        ctx.fillStyle = '#10b981';
+        ctx.fill();
+
+        resolve(canvas.toDataURL('image/png'));
+      } catch (_) {
+        resolve(originalFaviconHref);
+      }
+    };
+    img.onerror = () => resolve(originalFaviconHref);
+  });
+};
+
 /**
- * Update the browser tab title with unread badge count
+ * Update the browser tab title and favicon with green dot indicator
  */
-export const updateTabTitleBadge = (count: number) => {
+export const updateTabTitleBadge = async (count: number) => {
   if (typeof document === 'undefined') return;
   unreadTitleCount = count;
+
+  let faviconLink = document.querySelector("link[rel*='icon']") as HTMLLinkElement | null;
+  if (!faviconLink) {
+    faviconLink = document.createElement('link');
+    faviconLink.rel = 'shortcut icon';
+    document.getElementsByTagName('head')[0]?.appendChild(faviconLink);
+  }
+
+  const cleanBaseTitle = originalDocumentTitle.replace(/^[🟢\(\d+\)\s•]+/, '').trim() || 'AttendStack';
+
   if (count > 0) {
-    const base = originalDocumentTitle.replace(/^\(\d+\)\s*/, '');
-    document.title = `(${count}) ${base}`;
+    document.title = `🟢 (${count}) ${cleanBaseTitle}`;
+
+    if (!badgeFaviconDataUrl) {
+      badgeFaviconDataUrl = await createGreenDotFavicon();
+    }
+    if (faviconLink && badgeFaviconDataUrl) {
+      faviconLink.href = badgeFaviconDataUrl;
+    }
   } else {
-    document.title = originalDocumentTitle.replace(/^\(\d+\)\s*/, '');
+    document.title = cleanBaseTitle;
+    if (faviconLink) {
+      faviconLink.href = originalFaviconHref;
+    }
   }
 };
 
@@ -141,7 +224,7 @@ export const closeConversationNotifications = async (conversationId?: string | n
   if (activeWinNotif) {
     try {
       activeWinNotif.close();
-    } catch (_) {}
+    } catch (_) { }
     activeWindowNotifications.delete(notificationTag);
   }
 
@@ -154,7 +237,7 @@ export const closeConversationNotifications = async (conversationId?: string | n
         notifs.forEach((n) => n.close());
       }
     }
-  } catch (_) {}
+  } catch (_) { }
 };
 
 export interface ChatNotificationPayload {
@@ -193,12 +276,12 @@ export const sendBrowserChatNotification = async ({
     if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
       try {
         navigator.vibrate([200, 100, 200]);
-      } catch (_) {}
+      } catch (_) { }
     }
   }
 
-  // 2. If Notification API is not supported or permission not granted, return early
-  if (!('Notification' in window) || Notification.permission !== 'granted') {
+  // 2. If Notification API is not supported, permission not granted, or notifications disabled by user, return early
+  if (!('Notification' in window) || Notification.permission !== 'granted' || isChatNotificationDisabled()) {
     return;
   }
 

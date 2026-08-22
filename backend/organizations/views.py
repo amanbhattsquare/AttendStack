@@ -151,6 +151,108 @@ class OrganizationVerifyApiKeyView(APIView):
         }, status=status.HTTP_200_OK)
 
 
+class OrganizationEmployeesSyncStatusView(APIView):
+    """
+    Endpoint used by SimplyJob to query real-time onboarding and login status of employees.
+    Supports matching by email, external_application_id, or whole organization.
+    """
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        return self._get_status(request)
+
+    def post(self, request):
+        return self._get_status(request)
+
+    def _get_status(self, request):
+        raw_key = (
+            request.query_params.get("api_key")
+            or request.data.get("api_key")
+            or request.headers.get("X-API-Key")
+            or request.headers.get("Authorization", "").replace("Bearer ", "")
+            or ""
+        ).strip()
+        code = str(request.query_params.get("code") or request.data.get("code") or "").strip().upper()
+        external_company_id = str(request.query_params.get("external_company_id") or request.data.get("external_company_id") or "").strip()
+
+        org = None
+        if raw_key:
+            org = Organization.objects.filter(api_key=raw_key, is_active=True).first()
+        if not org and code:
+            org = Organization.objects.filter(invite_code__iexact=code, is_active=True).first()
+        if not org and external_company_id:
+            org = Organization.objects.filter(external_company_id=external_company_id, is_active=True).first()
+
+        if not org:
+            return Response(
+                {"ok": False, "error": "Organization not found or API key/code is invalid."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        employees = Employee.objects.filter(organization=org)
+        employee_emails = [e.email.lower() for e in employees if e.email]
+        users = {u.email.lower(): u for u in User.objects.filter(email__in=employee_emails)}
+
+        emp_list = []
+        by_email = {}
+        by_app_id = {}
+
+        for emp in employees:
+            email_lower = emp.email.lower() if emp.email else ""
+            user = users.get(email_lower)
+
+            is_account_created = bool(user)
+            has_logged_in = bool(user and user.last_login)
+            last_login = user.last_login.isoformat() if user and user.last_login else None
+
+            # Determine high-level sync status
+            if has_logged_in or emp.status == EmployeeStatus.ACTIVE:
+                sync_status = "ACTIVE_ONBOARDED"
+                status_display = "Active in AttendStack"
+            elif is_account_created or emp.status == EmployeeStatus.PROVISION:
+                sync_status = "ONBOARDED"
+                status_display = "Onboarded (Account Created)"
+            else:
+                sync_status = "INVITED"
+                status_display = "Invited"
+
+            emp_data = {
+                "id": str(emp.id),
+                "employee_id": emp.employee_id,
+                "full_name": emp.full_name,
+                "email": emp.email,
+                "status": emp.status,
+                "department": emp.department,
+                "designation": emp.designation,
+                "joining_date": str(emp.joining_date) if emp.joining_date else None,
+                "external_application_id": emp.external_application_id,
+                "is_account_created": is_account_created,
+                "has_logged_in": has_logged_in,
+                "last_login": last_login,
+                "sync_status": sync_status,
+                "status_display": status_display,
+            }
+            emp_list.append(emp_data)
+            if email_lower:
+                by_email[email_lower] = emp_data
+            if emp.external_application_id:
+                by_app_id[str(emp.external_application_id)] = emp_data
+
+        return Response({
+            "ok": True,
+            "organization_id": org.id,
+            "organization_name": org.name,
+            "invite_code": org.invite_code,
+            "total_employees": len(emp_list),
+            "active_employees": sum(1 for e in emp_list if e["sync_status"] == "ACTIVE_ONBOARDED"),
+            "employees": emp_list,
+            "by_email": by_email,
+            "by_app_id": by_app_id,
+        }, status=status.HTTP_200_OK)
+
+
+
 
 class OrganizationViewSet(viewsets.ModelViewSet):
     queryset = Organization.objects.all().order_by("-created_at")

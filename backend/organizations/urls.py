@@ -6,6 +6,7 @@ from .views import (
     PlanViewSet,
     OrganizationVerifyCodeView,
     OrganizationVerifyApiKeyView,
+    OrganizationEmployeesSyncStatusView,
 )
 
 router = DefaultRouter()
@@ -19,5 +20,6 @@ urlpatterns = [
     path("organizations/me/regenerate-invite-code/", OrganizationViewSet.as_view({"post": "regenerate_invite_code"}), name="organization-me-regenerate-invite-code"),
     path("organizations/verify-code/", OrganizationVerifyCodeView.as_view(), name="organization-verify-code"),
     path("organizations/verify-api-key/", OrganizationVerifyApiKeyView.as_view(), name="organization-verify-api-key"),
+    path("organizations/employee-sync-status/", OrganizationEmployeesSyncStatusView.as_view(), name="organization-employees-sync-status"),
     path("", include(router.urls)),
 ]

@@ -205,6 +205,21 @@ class OrganizationCodeLookupView(APIView):
             is_active=True,
         ).first()
         if organization is None:
+            organization = Organization.objects.filter(
+                api_key__iexact=code,
+                is_active=True,
+            ).first()
+        if organization is None:
+            organization = Organization.objects.filter(
+                external_company_id__iexact=code,
+                is_active=True,
+            ).first()
+        if organization is None:
+            organization = Organization.objects.filter(
+                invite_code__iexact=code,
+            ).first()
+
+        if organization is None:
             return Response(
                 {
                     "valid": False,

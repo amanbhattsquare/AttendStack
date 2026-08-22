@@ -45,14 +45,31 @@ function EmployeeJoinContent() {
 
     const verifyCode = async () => {
       try {
-        const apiBase = process.env.NEXT_PUBLIC_API_ENDPOINT || "http://localhost:8000";
-        const res = await axios.get(`${apiBase}/api/v1/accounts/organization-code/?code=${code}`);
-        if (res.data && res.data.organization_name) {
-          setOrgName(res.data.organization_name);
+        const apiBase = (process.env.NEXT_PUBLIC_API_ENDPOINT || "http://localhost:8001").replace(":8000", ":8001");
+        let orgTitle = "";
+        try {
+          const res = await axios.get(`${apiBase}/api/v1/accounts/organization-code/?code=${encodeURIComponent(code)}`);
+          if (res.data && res.data.organization_name) {
+            orgTitle = res.data.organization_name;
+          }
+        } catch {
+          // Fallback to organizations verify-code endpoint
+          const res2 = await axios.get(`${apiBase}/api/v1/organizations/verify-code/?code=${encodeURIComponent(code)}`);
+          if (res2.data && res2.data.organization_name) {
+            orgTitle = res2.data.organization_name;
+          }
+        }
+        if (orgTitle) {
+          setOrgName(orgTitle);
+          setError(null);
+        } else {
+          setError("Enter a valid active organization code.");
         }
       } catch (err: unknown) {
         if (axios.isAxiosError(err) && err.response?.data?.detail) {
           setError(err.response.data.detail);
+        } else {
+          setError("Enter a valid active organization code.");
         }
       } finally {
         setVerifyingCode(false);
@@ -68,7 +85,7 @@ function EmployeeJoinContent() {
     setLoading(true);
 
     try {
-      const apiBase = process.env.NEXT_PUBLIC_API_ENDPOINT || "http://localhost:8001";
+      const apiBase = (process.env.NEXT_PUBLIC_API_ENDPOINT || "http://localhost:8001").replace(":8000", ":8001");
       const response = await axios.post(`${apiBase}/api/v1/accounts/login/`, {
         email,
         password,

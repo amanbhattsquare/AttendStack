@@ -513,9 +513,9 @@ function ChatPageContent() {
 
     if (msg.message_type === "STICKER") {
       if (msg.content?.includes("giphy.com") || msg.content?.match(/\.(gif|webp)(\?.*)?$/i)) {
-        return "👾 GIF";
+        return " GIF";
       }
-      return "👾 Sticker";
+      return " Sticker";
     }
 
     if (msg.message_type === "IMAGE") {
@@ -532,10 +532,10 @@ function ChatPageContent() {
 
     if (msg.content) {
       if (msg.content.includes("giphy.com") || msg.content.match(/\.gif(\?.*)?$/i)) {
-        return "👾 GIF";
+        return " GIF";
       }
       if (msg.content.match(/\.(png|jpg|jpeg|webp)(\?.*)?$/i)) {
-        return "👾 Sticker";
+        return " Sticker";
       }
       return msg.content;
     }
@@ -3389,11 +3389,10 @@ function ChatPageContent() {
                               <button
                                 key={chip.label}
                                 type="button"
-                                className={`btn btn-xs rounded-pill px-2.5 py-0.5 text-nowrap transition-all border ${
-                                  giphyStickerQuery === chip.tag
+                                className={`btn btn-xs rounded-pill px-2.5 py-0.5 text-nowrap transition-all border ${giphyStickerQuery === chip.tag
                                     ? "bg-primary text-white border-primary shadow-xs"
                                     : "bg-light text-secondary border-transparent"
-                                }`}
+                                  }`}
                                 style={{ fontSize: "10.5px" }}
                                 onClick={() => setGiphyStickerQuery(chip.tag)}
                               >
@@ -3470,11 +3469,10 @@ function ChatPageContent() {
                               <button
                                 key={chip.label}
                                 type="button"
-                                className={`btn btn-xs rounded-pill px-2.5 py-0.5 text-nowrap transition-all border ${
-                                  giphySearchQuery === chip.tag
+                                className={`btn btn-xs rounded-pill px-2.5 py-0.5 text-nowrap transition-all border ${giphySearchQuery === chip.tag
                                     ? "bg-primary text-white border-primary shadow-xs"
                                     : "bg-light text-secondary border-transparent"
-                                }`}
+                                  }`}
                                 style={{ fontSize: "10.5px" }}
                                 onClick={() => setGiphySearchQuery(chip.tag)}
                               >

@@ -450,6 +450,12 @@
   color: #78dbb0;
 }
 
+.footerCopyright {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .footerTrust {
   display: flex;
   align-items: center;

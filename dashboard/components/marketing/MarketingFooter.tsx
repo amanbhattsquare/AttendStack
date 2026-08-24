@@ -75,19 +75,21 @@ export default function MarketingFooter() {
               <IconBuilding size={17} />
               Company login
             </Link>
-            <Link href="/super-admin/login" className={styles.footerCompanyLogin} style={{ color: "#f59e0b", marginTop: "10px" }}>
+            {/* <Link href="/super-admin/login" className={styles.footerCompanyLogin} style={{ color: "#f59e0b", marginTop: "10px" }}>
               <IconShieldCheck size={17} />
               Super Admin login
-            </Link>
+            </Link> */}
+
           </div>
         </div>
 
         <div className={styles.footerBottom}>
-          <span>&copy; {new Date().getFullYear()} AttendStack. All rights reserved.</span>
-          <Link href="/super-admin/login" className={styles.footerTrust} style={{ textDecoration: "none", color: "inherit" }} title="Super Admin Access">
-            <IconShieldCheck size={15} />
-            Role-based workforce access
-          </Link>
+          <div className={styles.footerCopyright}>
+            <span>&copy; {new Date().getFullYear()} AttendStack. All rights reserved.</span>
+            <Link href="/super-admin/login" className={styles.footerTrust} style={{ textDecoration: "none", color: "inherit" }} title="Super Admin Access">
+              <IconShieldCheck size={15} />
+            </Link>
+          </div>
           <span className={styles.footerCredits}>
             <span>
               Built by{" "}

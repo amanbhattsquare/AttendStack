@@ -209,47 +209,62 @@ export default function SuperAdminDashboardPage() {
 
   return (
     <Container fluid className="py-4 super-admin-dashboard-page">
-      {/* Top Banner Control Hub */}
-      <Card className="border-0 shadow-sm mb-4 bg-dark text-white rounded-4 overflow-hidden" style={{ background: "linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%)" }}>
-        <Card.Body className="p-4 p-lg-5 d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-4">
-          <div>
-            <div className="d-flex align-items-center gap-2 mb-2">
-              <Badge bg="warning" text="dark" className="fw-bold font-monospace px-3 py-1.5 rounded-pill" style={{ letterSpacing: "0.05em" }}>
-                SUPER ADMIN SYSTEM
+      {/* Top Banner Control Hub (Compact & Sleek) */}
+      <Card
+        className="border-0 shadow-sm mb-3.5 bg-dark text-white rounded-3 overflow-hidden"
+        style={{ background: "linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%)" }}
+      >
+        <Card.Body className="py-3 px-4 d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
+          <div className="min-w-0">
+            <div className="d-flex align-items-center gap-2 mb-1">
+              <Badge
+                bg="warning"
+                text="dark"
+                className="fw-bold font-monospace px-2 py-0.5 rounded-pill"
+                style={{ letterSpacing: "0.04em", fontSize: "10px" }}
+              >
+                SUPER ADMIN
               </Badge>
-              <span className="text-white-50 small d-flex align-items-center gap-1">
-                <IconActivity size={14} className="text-success" /> Live Multi-Tenant Control Engine
+              <span className="text-white-50 small d-flex align-items-center gap-1" style={{ fontSize: "11.5px" }}>
+                <IconActivity size={13} className="text-success" /> Live Multi-Tenant Engine
               </span>
             </div>
-            <h2 className="display-6 fw-bold text-white mb-2">Platform Master Overview</h2>
-            <p className="text-white-50 mb-0 max-w-2xl">
-              Welcome to your dedicated Super Admin Command Center. Manage all company accounts, onboard HR owners, monitor global workforce metrics, and control tenant permissions.
-            </p>
+            <div className="d-flex flex-wrap align-items-baseline gap-2">
+              <h4 className="fw-bold text-white mb-0" style={{ fontSize: "18px" }}>
+                Platform Master Overview
+              </h4>
+              <span className="text-white-50 small d-none d-lg-inline" style={{ fontSize: "12.5px" }}>
+                • Manage company accounts, onboard HR owners, and monitor tenant metrics
+              </span>
+            </div>
           </div>
-          <div className="d-flex flex-wrap align-items-center gap-2.5">
+
+          <div className="d-flex align-items-center gap-2 flex-shrink-0">
             <Button
               variant="warning"
-              size="lg"
-              className="fw-bold px-4 py-2.5 shadow-sm d-flex align-items-center gap-2 text-dark rounded-3"
+              size="sm"
+              className="fw-bold px-3 py-1.5 shadow-xs d-flex align-items-center gap-1.5 text-dark rounded-2"
+              style={{ fontSize: "13px" }}
               onClick={() => {
                 setOnboardSuccessMsg("");
                 setShowOnboardModal(true);
               }}
             >
-              <IconPlus size={20} />
-              Onboard Company
+              <IconPlus size={16} />
+              <span>Onboard Company</span>
             </Button>
             <Button
               variant="outline-light"
-              size="lg"
-              className="fw-semibold px-4 py-2.5 d-flex align-items-center gap-2 rounded-3"
+              size="sm"
+              className="fw-semibold px-3 py-1.5 d-flex align-items-center gap-1.5 rounded-2"
+              style={{ fontSize: "13px" }}
               onClick={() => {
                 setAdminSuccessMsg("");
                 setShowAdminModal(true);
               }}
             >
-              <IconShieldCheck size={20} />
-              Add HR Administrator
+              <IconShieldCheck size={16} />
+              <span>Add HR Administrator</span>
             </Button>
           </div>
         </Card.Body>

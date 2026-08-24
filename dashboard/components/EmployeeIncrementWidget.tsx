@@ -1,8 +1,19 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Card, Row, Col, Badge, Table, Spinner, Alert, ProgressBar } from "react-bootstrap";
-import { IconTrendingUp, IconCalendarTime, IconCurrencyRupee, IconAward, IconCircleCheck } from "@tabler/icons-react";
+import { Card, Row, Col, Badge, Table, Spinner, ProgressBar } from "react-bootstrap";
+import {
+  IconTrendingUp,
+  IconCalendarTime,
+  IconCurrencyRupee,
+  IconAward,
+  IconCircleCheck,
+  IconClock,
+  IconArrowUpRight,
+  IconSparkles,
+  IconHistory,
+  IconShieldCheck,
+} from "@tabler/icons-react";
 
 const BASE_URL = `${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1`;
 
@@ -81,10 +92,10 @@ const EmployeeIncrementWidget: React.FC = () => {
 
   if (loading) {
     return (
-      <Card className="border-0 shadow-sm my-4">
-        <Card.Body className="text-center py-4">
+      <Card className="border-0 shadow-sm my-4 rounded-4 overflow-hidden">
+        <Card.Body className="text-center py-5">
           <Spinner animation="border" variant="primary" size="sm" />
-          <span className="ms-2 text-muted small">Loading career growth & increment details...</span>
+          <span className="ms-2 text-muted small fw-medium">Loading career growth & increment details...</span>
         </Card.Body>
       </Card>
     );
@@ -95,153 +106,423 @@ const EmployeeIncrementWidget: React.FC = () => {
   }
 
   const currentSalNum = Number(data.annual_salary || 0);
+  const monthlySalary = currentSalNum > 0 ? Math.round(currentSalNum / 12) : 0;
   const pendingInc = data.pending_increment;
 
-  // Calculate days remaining until next increment
-  let daysRemaining: number | null = null;
+  // New salary & net hike calculation
+  const newSalaryNum = pendingInc ? Number(pendingInc.new_salary || 0) : 0;
+  const netHikeAmount = pendingInc
+    ? Number(pendingInc.calculated_increment_amount || (newSalaryNum - currentSalNum))
+    : 0;
+
+  // Calculate timeline metrics
   const targetDateStr = pendingInc?.due_date || data.next_increment_date;
+  const startDateStr = data.last_increment_date || data.joining_date || null;
+
+  let daysRemaining: number | null = null;
+  let progressPercent = 0;
+
   if (targetDateStr) {
     const target = new Date(targetDateStr);
     const today = new Date();
     const diffTime = target.getTime() - today.getTime();
     daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (startDateStr) {
+      const start = new Date(startDateStr);
+      const totalDuration = target.getTime() - start.getTime();
+      const elapsed = today.getTime() - start.getTime();
+      if (totalDuration > 0) {
+        progressPercent = Math.max(0, Math.min(100, Math.round((elapsed / totalDuration) * 100)));
+      }
+    } else {
+      const totalDays = (data.increment_cycle_months || 12) * 30;
+      progressPercent = Math.max(0, Math.min(100, Math.round(100 - (daysRemaining / totalDays) * 100)));
+    }
   }
+
+  const formatDate = (dStr?: string | null) => {
+    if (!dStr) return "N/A";
+    try {
+      return new Date(dStr).toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      });
+    } catch {
+      return dStr;
+    }
+  };
 
   return (
     <div className="employee-increment-section my-4">
-      <Card className="border-0 shadow-sm overflow-hidden">
-        <Card.Header className="bg-primary text-white py-3">
-          <div className="d-flex align-items-center justify-content-between">
-            <div className="d-flex align-items-center gap-2">
-              <IconTrendingUp size={22} />
-              <h5 className="mb-0 text-white fw-bold">Salary Increment & Growth Timeline</h5>
+      <Card className="border-0 shadow-sm rounded-4 overflow-hidden bg-white">
+        {/* === Header Bar === */}
+        <div className="p-4 bg-white border-bottom d-flex flex-wrap align-items-center justify-content-between gap-3">
+          <div className="d-flex align-items-center gap-3">
+            <div
+              className="d-flex align-items-center justify-content-center rounded-3 text-white shadow-xs flex-shrink-0"
+              style={{
+                width: "44px",
+                height: "44px",
+                background: "linear-gradient(135deg, #059669 0%, #10b981 100%)",
+              }}
+            >
+              <IconTrendingUp size={24} />
             </div>
-            <Badge bg="light" text="primary" className="fw-semibold">
-              {data.increment_cycle_months}-Month Review Cycle
-            </Badge>
+            <div>
+              <h5 className="mb-1 fw-bold text-dark" style={{ fontSize: "17px" }}>
+                Salary Increment & Growth Timeline
+              </h5>
+              <p className="mb-0 text-muted small" style={{ fontSize: "12.5px" }}>
+                Career appraisal trajectory and automated performance cycle
+              </p>
+            </div>
           </div>
-        </Card.Header>
 
-        <Card.Body className="p-4">
-          <Row className="g-4 align-items-center">
-            {/* Left Column: Key Stats */}
-            <Col md={7}>
-              <div className="d-flex flex-wrap gap-4 mb-3">
-                <div>
-                  <small className="text-muted text-uppercase d-block fw-semibold">Current Salary (Annual)</small>
-                  <span className="fs-3 fw-bold text-dark">
-                    ₹{currentSalNum.toLocaleString("en-IN")}
+          <div className="d-flex align-items-center gap-2">
+            <span
+              className="badge px-3 py-2 rounded-pill fw-semibold border d-flex align-items-center gap-1.5"
+              style={{
+                backgroundColor: "#f0fdf4",
+                color: "#059669",
+                borderColor: "#bbf7d0",
+                fontSize: "12px",
+              }}
+            >
+              <IconSparkles size={14} />
+              {data.increment_cycle_months}-Month Appraisal Cycle
+            </span>
+          </div>
+        </div>
+
+        {/* === Body Content === */}
+        <div className="p-4">
+          {/* 1. Metric Stat Cards Grid */}
+          <Row className="g-3 mb-4">
+            {/* Current Salary Card */}
+            <Col xs={12} sm={6} lg={4}>
+              <div
+                className="p-4 rounded-3 border h-100 d-flex flex-column justify-content-between shadow-xs"
+                style={{ backgroundColor: "#f8fafc", borderColor: "#e2e8f0" }}
+              >
+                <div className="d-flex align-items-center justify-content-between mb-3">
+                  <span className="text-uppercase text-secondary fw-bold" style={{ fontSize: "11px", letterSpacing: "0.5px" }}>
+                    Current Annual CTC
+                  </span>
+                  <span className="badge bg-secondary-subtle text-secondary rounded-pill px-2.5 py-1" style={{ fontSize: "10.5px" }}>
+                    Base
                   </span>
                 </div>
-
-                {pendingInc && (
-                  <div>
-                    <small className="text-muted text-uppercase d-block fw-semibold">Estimated New Salary</small>
-                    <span className="fs-3 fw-bold text-success">
-                      ₹{Number(pendingInc.new_salary).toLocaleString("en-IN")}
-                    </span>
-                    <small className="text-success fw-semibold ms-1">
-                      (+{pendingInc.increment_type === "PERCENTAGE" ? `${pendingInc.increment_value}%` : `₹${pendingInc.increment_value}`})
-                    </small>
-                  </div>
-                )}
-              </div>
-
-              <div className="p-3 bg-light rounded border">
-                <div className="d-flex align-items-center justify-content-between mb-2">
-                  <span className="small text-muted fw-semibold">Next Increment Review Date</span>
-                  <span className="fw-bold text-primary">{targetDateStr || "To be scheduled"}</span>
+                <div>
+                  <h3 className="mb-1 fw-bold text-dark d-flex align-items-baseline">
+                    <span style={{ fontSize: "20px", marginRight: "2px" }}>₹</span>
+                    <span style={{ fontSize: "24px" }}>{currentSalNum.toLocaleString("en-IN")}</span>
+                  </h3>
+                  <span className="text-muted small" style={{ fontSize: "12px" }}>
+                    ≈ ₹{monthlySalary.toLocaleString("en-IN")}/month
+                  </span>
                 </div>
-
-                {daysRemaining !== null && (
-                  <>
-                    <ProgressBar
-                      now={Math.max(0, Math.min(100, Math.round(100 - (daysRemaining / (data.increment_cycle_months * 30)) * 100)))}
-                      variant={daysRemaining <= 30 ? "warning" : "primary"}
-                      style={{ height: "8px" }}
-                      className="mb-2"
-                    />
-                    <div className="small text-muted d-flex justify-content-between">
-                      <span>Last Increment: {data.last_increment_date || data.joining_date || "Joining Date"}</span>
-                      <span>
-                        {daysRemaining <= 0
-                          ? "Due for Review (Under Management Approval)"
-                          : `${daysRemaining} days remaining`}
-                      </span>
-                    </div>
-                  </>
-                )}
               </div>
             </Col>
 
-            {/* Right Column: Status Banner */}
-            <Col md={5}>
-              {pendingInc ? (
-                <div className="p-3 border border-primary-subtle rounded bg-primary-subtle">
-                  <div className="d-flex align-items-center gap-2 mb-2">
-                    <IconAward size={24} className="text-primary" />
-                    <h6 className="fw-bold mb-0 text-primary">Upcoming Raise Evaluation</h6>
+            {/* Next Projected Salary Card */}
+            {pendingInc ? (
+              <Col xs={12} sm={6} lg={4}>
+                <div
+                  className="p-4 rounded-3 border h-100 d-flex flex-column justify-content-between shadow-xs"
+                  style={{
+                    backgroundColor: "#f0fdf4",
+                    borderColor: "#bbf7d0",
+                  }}
+                >
+                  <div className="d-flex align-items-center justify-content-between mb-3">
+                    <span className="text-uppercase fw-bold text-success" style={{ fontSize: "11px", letterSpacing: "0.5px" }}>
+                      Projected New CTC
+                    </span>
+                    <span
+                      className="badge text-white rounded-pill px-2.5 py-1 fw-bold d-inline-flex align-items-center gap-1"
+                      style={{ backgroundColor: "#10b981", fontSize: "11px" }}
+                    >
+                      <IconArrowUpRight size={13} />
+                      {pendingInc.increment_type === "PERCENTAGE"
+                        ? `+${pendingInc.increment_value}%`
+                        : `+₹${Number(pendingInc.increment_value).toLocaleString("en-IN")}`}
+                    </span>
                   </div>
-                  <p className="small text-secondary mb-2">
-                    You are eligible for a <strong>{pendingInc.increment_type === "PERCENTAGE" ? `${pendingInc.increment_value}%` : `₹${pendingInc.increment_value}`}</strong> increment on <strong>{pendingInc.due_date}</strong>.
-                  </p>
-                  <div className="d-flex align-items-center gap-2">
-                    <span className="badge bg-primary">
-                      Status: {pendingInc.status_display}
+                  <div>
+                    <h3 className="mb-1 fw-bold text-success d-flex align-items-baseline">
+                      <span style={{ fontSize: "20px", marginRight: "2px" }}>₹</span>
+                      <span style={{ fontSize: "24px" }}>{newSalaryNum.toLocaleString("en-IN")}</span>
+                    </h3>
+                    <span className="text-success-emphasis small fw-medium" style={{ fontSize: "12px" }}>
+                      ≈ ₹{Math.round(newSalaryNum / 12).toLocaleString("en-IN")}/month
+                    </span>
+                  </div>
+                </div>
+              </Col>
+            ) : (
+              <Col xs={12} sm={6} lg={4}>
+                <div
+                  className="p-4 rounded-3 border h-100 d-flex flex-column justify-content-between shadow-xs"
+                  style={{ backgroundColor: "#f8fafc", borderColor: "#e2e8f0" }}
+                >
+                  <div className="d-flex align-items-center justify-content-between mb-3">
+                    <span className="text-uppercase text-secondary fw-bold" style={{ fontSize: "11px", letterSpacing: "0.5px" }}>
+                      Estimated Raise Rate
+                    </span>
+                    <span className="badge bg-light text-muted border rounded-pill px-2.5 py-1" style={{ fontSize: "10.5px" }}>
+                      Standard
+                    </span>
+                  </div>
+                  <div>
+                    <h3 className="mb-1 fw-bold text-dark" style={{ fontSize: "24px" }}>
+                      {data.increment_type === "PERCENTAGE" ? `${data.increment_value}%` : `₹${Number(data.increment_value).toLocaleString("en-IN")}`}
+                    </h3>
+                    <span className="text-muted small" style={{ fontSize: "12px" }}>
+                      Next review evaluation hike
+                    </span>
+                  </div>
+                </div>
+              </Col>
+            )}
+
+            {/* Net Hike Value Card */}
+            <Col xs={12} sm={12} lg={4}>
+              <div
+                className="p-4 rounded-3 border h-100 d-flex flex-column justify-content-between shadow-xs"
+                style={{ backgroundColor: "#fbfcfe", borderColor: "#e2e8f0" }}
+              >
+                <div className="d-flex align-items-center justify-content-between mb-3">
+                  <span className="text-uppercase text-secondary fw-bold" style={{ fontSize: "11px", letterSpacing: "0.5px" }}>
+                    Net Growth Amount
+                  </span>
+                  <span className="badge bg-primary-subtle text-primary rounded-pill px-2.5 py-1" style={{ fontSize: "10.5px" }}>
+                    Annual Hike
+                  </span>
+                </div>
+                <div>
+                  <h3 className="mb-1 fw-bold text-primary d-flex align-items-baseline">
+                    <span style={{ fontSize: "20px", marginRight: "2px" }}>+₹</span>
+                    <span style={{ fontSize: "24px" }}>{netHikeAmount.toLocaleString("en-IN")}</span>
+                  </h3>
+                  <span className="text-muted small" style={{ fontSize: "12px" }}>
+                    +₹{Math.round(netHikeAmount / 12).toLocaleString("en-IN")}/month additional
+                  </span>
+                </div>
+              </div>
+            </Col>
+          </Row>
+
+          {/* 2. Timeline Progress Tracker & Evaluation Status */}
+          <Row className="g-3">
+            {/* Timeline Progress Bar */}
+            <Col lg={7}>
+              <div
+                className="p-4 rounded-3 border bg-white h-100 d-flex flex-column justify-content-between shadow-xs"
+                style={{ borderColor: "#e2e8f0" }}
+              >
+                <div>
+                  <div className="d-flex align-items-center justify-content-between mb-3">
+                    <div className="d-flex align-items-center gap-2">
+                      <IconCalendarTime size={20} className="text-primary" />
+                      <span className="fw-bold text-dark" style={{ fontSize: "13.5px" }}>
+                        Evaluation Timeline & Countdown
+                      </span>
+                    </div>
+                    <span className="badge bg-primary text-white fw-semibold rounded-pill px-3 py-1" style={{ fontSize: "11.5px" }}>
+                      Target: {formatDate(targetDateStr)}
+                    </span>
+                  </div>
+
+                  {/* Progress bar with modern gradient */}
+                  <div className="my-3">
+                    <div
+                      className="progress"
+                      style={{
+                        height: "10px",
+                        backgroundColor: "#f1f5f9",
+                        borderRadius: "8px",
+                        overflow: "hidden",
+                      }}
+                    >
+                      <div
+                        className="progress-bar progress-bar-striped progress-bar-animated"
+                        role="progressbar"
+                        style={{
+                          width: `${progressPercent}%`,
+                          background: "linear-gradient(90deg, #10b981 0%, #059669 100%)",
+                          borderRadius: "8px",
+                        }}
+                        aria-valuenow={progressPercent}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="d-flex align-items-center justify-content-between pt-3 border-top mt-2 text-muted small" style={{ fontSize: "12px" }}>
+                  <span className="d-flex align-items-center gap-1.5">
+                    <IconClock size={15} className="text-secondary" />
+                    Last Increment: <strong>{formatDate(startDateStr)}</strong>
+                  </span>
+                  <span className="fw-bold" style={{ color: daysRemaining !== null && daysRemaining <= 30 ? "#ea580c" : "#059669" }}>
+                    {daysRemaining !== null ? (
+                      daysRemaining <= 0 ? (
+                        "Eligible for Review Now"
+                      ) : (
+                        `${daysRemaining} days remaining`
+                      )
+                    ) : (
+                      "Review in progress"
+                    )}
+                  </span>
+                </div>
+              </div>
+            </Col>
+
+            {/* Evaluation Status Card */}
+            <Col lg={5}>
+              {pendingInc ? (
+                <div
+                  className="p-4 rounded-3 border h-100 d-flex flex-column justify-content-between shadow-xs"
+                  style={{
+                    backgroundColor: "#f8fafc",
+                    borderColor: "#e2e8f0",
+                  }}
+                >
+                  <div>
+                    <div className="d-flex align-items-center justify-content-between mb-3">
+                      <div className="d-flex align-items-center gap-2">
+                        <IconAward size={22} className="text-success" />
+                        <span className="fw-bold text-dark" style={{ fontSize: "13.5px" }}>
+                          Appraisal Status
+                        </span>
+                      </div>
+                      <span
+                        className={`badge rounded-pill px-3 py-1 fw-bold ${
+                          pendingInc.status === "APPROVED"
+                            ? "bg-success text-white"
+                            : pendingInc.status === "REJECTED"
+                            ? "bg-danger text-white"
+                            : "bg-warning text-dark"
+                        }`}
+                        style={{ fontSize: "11.5px" }}
+                      >
+                        {pendingInc.status_display || pendingInc.status}
+                      </span>
+                    </div>
+
+                    <p className="text-secondary small mb-3" style={{ fontSize: "12.5px", lineHeight: "1.6" }}>
+                      You are queued for a{" "}
+                      <strong className="text-dark">
+                        {pendingInc.increment_type === "PERCENTAGE" ? `${pendingInc.increment_value}%` : `₹${pendingInc.increment_value}`}
+                      </strong>{" "}
+                      raise on <strong className="text-dark">{formatDate(pendingInc.due_date)}</strong>.
+                    </p>
+                  </div>
+
+                  <div className="pt-3 border-top d-flex align-items-center justify-content-between text-muted small" style={{ fontSize: "11.5px" }}>
+                    <span className="d-flex align-items-center gap-1.5">
+                      <IconShieldCheck size={16} className="text-success" /> Company Policy Assured
                     </span>
                     {pendingInc.rescheduled_date && (
-                      <span className="badge bg-warning text-dark">
-                        Rescheduled to {pendingInc.rescheduled_date}
+                      <span className="text-warning fw-semibold">
+                        Rescheduled: {formatDate(pendingInc.rescheduled_date)}
                       </span>
                     )}
                   </div>
                 </div>
               ) : (
-                <div className="p-3 border rounded bg-light">
-                  <div className="d-flex align-items-center gap-2 mb-2">
-                    <IconCircleCheck size={24} className="text-success" />
-                    <h6 className="fw-bold mb-0 text-dark">Company Increment Policy Active</h6>
+                <div
+                  className="p-4 rounded-3 border h-100 d-flex flex-column justify-content-between shadow-xs"
+                  style={{ backgroundColor: "#f8fafc", borderColor: "#e2e8f0" }}
+                >
+                  <div>
+                    <div className="d-flex align-items-center justify-content-between mb-3">
+                      <div className="d-flex align-items-center gap-2">
+                        <IconCircleCheck size={22} className="text-success" />
+                        <span className="fw-bold text-dark" style={{ fontSize: "13.5px" }}>
+                          HR Policy Active
+                        </span>
+                      </div>
+                      <span className="badge bg-success-subtle text-success rounded-pill px-3 py-1 fw-semibold" style={{ fontSize: "11.5px" }}>
+                        Active Policy
+                      </span>
+                    </div>
+
+                    <p className="text-secondary small mb-0" style={{ fontSize: "12.5px", lineHeight: "1.6" }}>
+                      Your salary review is scheduled automatically every{" "}
+                      <strong>{data.increment_cycle_months} months</strong> based on organizational appraisal guidelines.
+                    </p>
                   </div>
-                  <p className="small text-muted mb-0">
-                    Your salary performance raise is scheduled automatically every {data.increment_cycle_months} months based on standard company HR guidelines.
-                  </p>
+
+                  <div className="pt-3 border-top text-muted small d-flex align-items-center gap-1.5" style={{ fontSize: "11.5px" }}>
+                    <IconShieldCheck size={16} className="text-success" />
+                    Automated timeline tracking enabled
+                  </div>
                 </div>
               )}
             </Col>
           </Row>
 
-          {/* Past Increment History Table */}
+          {/* 3. Past Increment History Table */}
           {data.history && data.history.length > 0 && (
             <div className="mt-4 pt-3 border-top">
-              <h6 className="fw-bold mb-3">Increment History</h6>
-              <div className="table-responsive">
-                <Table hover size="sm" className="mb-0">
-                  <thead className="table-light small text-uppercase text-secondary">
-                    <tr>
-                      <th>Effective Date</th>
-                      <th>Previous Salary</th>
-                      <th>Raise</th>
-                      <th>Revised Salary</th>
-                      <th>Status</th>
+              <div className="d-flex align-items-center gap-2 mb-3">
+                <IconHistory size={18} className="text-secondary" />
+                <h6 className="fw-bold mb-0 text-dark" style={{ fontSize: "14px" }}>
+                  Increment & Revision History
+                </h6>
+              </div>
+
+              <div className="table-responsive rounded-3 border overflow-hidden">
+                <Table hover size="sm" className="mb-0 align-middle">
+                  <thead style={{ backgroundColor: "#f8fafc" }}>
+                    <tr style={{ fontSize: "11.5px", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                      <th className="py-3 px-3.5">Effective Date</th>
+                      <th className="py-3 px-3.5">Previous Salary</th>
+                      <th className="py-3 px-3.5">Raise</th>
+                      <th className="py-3 px-3.5">Revised Salary</th>
+                      <th className="py-3 px-3.5 text-end">Status</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody style={{ fontSize: "12.5px" }}>
                     {data.history.map((item) => (
                       <tr key={item.id}>
-                        <td className="fw-semibold">{item.due_date}</td>
-                        <td>₹{Number(item.current_salary).toLocaleString("en-IN")}</td>
-                        <td>
-                          <Badge bg="success" className="p-1 px-2">
-                            {item.increment_type === "PERCENTAGE" ? `+${item.increment_value}%` : `+₹${item.increment_value}`}
-                          </Badge>
+                        <td className="py-3 px-3.5 fw-semibold text-dark">{formatDate(item.due_date)}</td>
+                        <td className="py-3 px-3.5 text-secondary">₹{Number(item.current_salary).toLocaleString("en-IN")}</td>
+                        <td className="py-3 px-3.5">
+                          <span
+                            className="badge rounded-pill px-2.5 py-1 fw-bold"
+                            style={{
+                              backgroundColor: "#f0fdf4",
+                              color: "#059669",
+                              border: "1px solid #bbf7d0",
+                            }}
+                          >
+                            {item.increment_type === "PERCENTAGE"
+                              ? `+${item.increment_value}%`
+                              : `+₹${Number(item.increment_value).toLocaleString("en-IN")}`}
+                          </span>
                         </td>
-                        <td className="fw-bold text-success">
+                        <td className="py-3 px-3.5 fw-bold text-success">
                           ₹{Number(item.new_salary).toLocaleString("en-IN")}
                         </td>
-                        <td>
-                          <Badge bg={item.status === "APPROVED" ? "success" : item.status === "REJECTED" ? "danger" : "secondary"}>
-                            {item.status_display}
-                          </Badge>
+                        <td className="py-3 px-3.5 text-end">
+                          <span
+                            className={`badge rounded-pill px-3 py-1 fw-semibold ${
+                              item.status === "APPROVED"
+                                ? "bg-success text-white"
+                                : item.status === "REJECTED"
+                                ? "bg-danger text-white"
+                                : "bg-secondary text-white"
+                            }`}
+                            style={{ fontSize: "11px" }}
+                          >
+                            {item.status_display || item.status}
+                          </span>
                         </td>
                       </tr>
                     ))}
@@ -250,7 +531,7 @@ const EmployeeIncrementWidget: React.FC = () => {
               </div>
             </div>
           )}
-        </Card.Body>
+        </div>
       </Card>
     </div>
   );

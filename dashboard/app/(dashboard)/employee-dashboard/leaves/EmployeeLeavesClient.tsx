@@ -413,6 +413,7 @@ const EmployeeLeavesClient = () => {
   const totalRequested = leaves.length;
   const approvedLeaves = leaves.filter(l => l.status === "APPROVED").length;
   const pendingLeaves = leaves.filter(l => l.status === "PENDING").length;
+  const rejectedLeaves = leaves.filter(l => l.status === "REJECTED").length;
   const leaveRequestsDisabled = employee?.status === "INACTIVE" || employee?.status === "TERMINATED";
   const authoritativeBalance = (type: string) => balanceSummary?.balances.find((item) => item.leave_type === type);
 
@@ -450,74 +451,225 @@ const EmployeeLeavesClient = () => {
       {/* Leave Balance Overview */}
       {leaveSettings && (
         <Card className="border-0 shadow-sm mb-4 rounded-4">
-          <Card.Header className="bg-white border-0 py-3 px-4">
-            <h5 className="fw-bold text-dark mb-0">Your Leave Balance</h5>
+          <Card.Header className="bg-white border-0 pt-4 px-4 pb-0">
+            <h5 className="fw-bold text-dark mb-1">Your Leave Balance</h5>
+            <p className="text-muted small mb-0">Track your accrued leave balance, monthly limits, and active company leave entitlements.</p>
           </Card.Header>
-          <Card.Body className="px-4 pb-4">
-            <Row className="g-4">
+          <Card.Body className="px-4 py-4">
+            <Row className="g-3">
               <Col xs={12}>
                 <h6 className="text-uppercase text-secondary small fw-bold mb-0">Regular Leave</h6>
               </Col>
-              <Col xs={12} sm={6} lg={3}>
-                <div className="d-flex align-items-center justify-content-between p-3 bg-danger-subtle rounded-3">
-                  <div>
-                    <p className="text-danger small fw-semibold mb-1">Sick Leave</p>
-                    <p className="text-danger mb-0"><strong>{authoritativeBalance("SICK")?.remaining ?? leaveBalance("SICK", leaveSettings.sick_leave_days)}</strong> / {authoritativeBalance("SICK")?.entitlement ?? leaveSettings.sick_leave_days} earned days left</p>
-                    <small className="text-secondary d-block mt-1">{currentMonthUsage("SICK")} / {leaveSettings.sick_leave_monthly_limit ?? 7} requested this month</small>
-                  </div>
-                  <IconHeart size={24} className="text-danger" />
-                </div>
-              </Col>
-              <Col xs={12} sm={6} lg={3}>
-                <div className="d-flex align-items-center justify-content-between p-3 bg-info-subtle rounded-3">
-                  <div>
-                    <p className="text-info small fw-semibold mb-1">Casual Leave</p>
-                    <p className="text-info mb-0"><strong>{authoritativeBalance("CASUAL")?.remaining ?? leaveBalance("CASUAL", leaveSettings.casual_leave_days)}</strong> / {authoritativeBalance("CASUAL")?.entitlement ?? leaveSettings.casual_leave_days} earned days left</p>
-                    <small className="text-secondary d-block mt-1">{currentMonthUsage("CASUAL")} / {leaveSettings.casual_leave_monthly_limit ?? 3} requested this month</small>
-                  </div>
-                  <IconUser size={24} className="text-info" />
-                </div>
-              </Col>
-              {([
-                ["BEREAVEMENT", "Bereavement Leave", leaveSettings.bereavement_leave_days, "secondary"],
-                ["MARRIAGE", "Marriage Leave", leaveSettings.marriage_leave_days, "warning"],
-              ] as Array<[string, string, number, string]>).map(([type, label, allowance, color]) => (
-                <Col xs={12} sm={6} lg={3} key={type}>
-                  <div className={`d-flex align-items-center justify-content-between p-3 bg-${color}-subtle rounded-3`}>
-                    <div>
-                      <p className={`text-${color} small fw-semibold mb-1`}>{label}</p>
-                      <p className={`text-${color} mb-0`}><strong>{leaveBalance(type, Number(allowance))}</strong> / {allowance} days left</p>
-                      <small className="text-secondary d-block mt-1">
-                        {type === "MARRIAGE" ? "Own or sibling's marriage" : "Immediate family bereavement"}
-                      </small>
+
+              {/* Sick Leave */}
+              <Col xs={12} md={4}>
+                {(() => {
+                  const auth = authoritativeBalance("SICK");
+                  const remaining = auth?.remaining ?? leaveBalance("SICK", leaveSettings.sick_leave_days);
+                  const entitlement = auth?.entitlement ?? leaveSettings.sick_leave_days;
+                  const used = auth?.used ?? Math.max(0, Number((entitlement - remaining).toFixed(1)));
+                  const monthlyLimit = leaveSettings.sick_leave_monthly_limit ?? 7;
+
+                  return (
+                    <div className="p-3 bg-danger-subtle rounded-3 h-100 d-flex flex-column justify-content-between">
+                      <div>
+                        <div className="d-flex align-items-center justify-content-between mb-2">
+                          <p className="text-danger small fw-bold mb-0">Sick Leave</p>
+                          <IconHeart size={20} className="text-danger" />
+                        </div>
+                        <div className="mb-2">
+                          <span className="fs-3 fw-bold text-danger me-1">{remaining}</span>
+                          <span className="fw-bold text-danger" style={{ fontSize: "14px" }}>Days Available</span>
+                        </div>
+                        <div className="small text-secondary" style={{ fontSize: "12px" }}>
+                          <div>• Earned so far: <strong>{entitlement} days</strong> <span className="text-muted">(of {leaveSettings.sick_leave_days} annual)</span></div>
+                          <div>• Already taken/used: <strong>{used} days</strong></div>
+                        </div>
+                      </div>
+                      <div className="mt-2 pt-2 border-top border-danger-subtle d-flex align-items-center justify-content-between">
+                        <span className="badge bg-white text-danger border border-danger-subtle fw-medium" style={{ fontSize: "11px" }}>
+                          Max {monthlyLimit} days/month
+                        </span>
+                      </div>
                     </div>
-                    <IconCalendarEvent size={24} className={`text-${color}`} />
-                  </div>
-                </Col>
-              ))}
-              <Col xs={12} className="pt-2">
-                <h6 className="text-uppercase text-secondary small fw-bold mb-0">Parental Leave</h6>
+                  );
+                })()}
               </Col>
-              {([
-                ["MATERNITY", "Maternity Leave", leaveSettings.maternity_leave_days, "success"],
-                ["PATERNITY", "Paternity Leave", leaveSettings.paternity_leave_days, "primary"],
-              ] as Array<[string, string, number, string]>).map(([type, label, allowance, color]) => (
-                <Col md={4} key={type}>
-                  <div className={`d-flex align-items-center justify-content-between p-3 bg-${color}-subtle rounded-3`}>
-                    <div>
-                      <p className={`text-${color} small fw-semibold mb-1`}>{label}</p>
-                      <p className={`text-${color} mb-0`}><strong>{leaveBalance(type, allowance)}</strong> / {allowance} days left</p>
-                      <small className="text-secondary d-block mt-1">
-                        {type === "MATERNITY" ? "For eligible new mothers" : "For eligible new fathers"}
-                      </small>
+
+              {/* Casual Leave */}
+              <Col xs={12} md={4}>
+                {(() => {
+                  const auth = authoritativeBalance("CASUAL");
+                  const remaining = auth?.remaining ?? leaveBalance("CASUAL", leaveSettings.casual_leave_days);
+                  const entitlement = auth?.entitlement ?? leaveSettings.casual_leave_days;
+                  const used = auth?.used ?? Math.max(0, Number((entitlement - remaining).toFixed(1)));
+                  const monthlyLimit = leaveSettings.casual_leave_monthly_limit ?? 3;
+
+                  return (
+                    <div className="p-3 bg-info-subtle rounded-3 h-100 d-flex flex-column justify-content-between">
+                      <div>
+                        <div className="d-flex align-items-center justify-content-between mb-2">
+                          <p className="text-info-emphasis small fw-bold mb-0">Casual Leave</p>
+                          <IconUser size={20} className="text-info" />
+                        </div>
+                        <div className="mb-2">
+                          <span className="fs-3 fw-bold text-info-emphasis me-1">{remaining}</span>
+                          <span className="fw-bold text-info-emphasis" style={{ fontSize: "14px" }}>Days Available</span>
+                        </div>
+                        <div className="small text-secondary" style={{ fontSize: "12px" }}>
+                          <div>• Earned so far: <strong>{entitlement} days</strong> <span className="text-muted">(of {leaveSettings.casual_leave_days} annual)</span></div>
+                          <div>• Already taken/used: <strong>{used} days</strong></div>
+                        </div>
+                      </div>
+                      <div className="mt-2 pt-2 border-top border-info-subtle d-flex align-items-center justify-content-between">
+                        <span className="badge bg-white text-info-emphasis border border-info-subtle fw-medium" style={{ fontSize: "11px" }}>
+                          Max {monthlyLimit} days/month
+                        </span>
+                      </div>
                     </div>
-                    <IconCalendarEvent size={24} className={`text-${color}`} />
-                  </div>
-                </Col>
-              ))}
+                  );
+                })()}
+              </Col>
+
+              {/* Bereavement Leave */}
+              <Col xs={12} md={4}>
+                {(() => {
+                  const auth = authoritativeBalance("BEREAVEMENT");
+                  const allowance = auth?.entitlement ?? Number(leaveSettings.bereavement_leave_days);
+                  const remaining = auth?.remaining ?? leaveBalance("BEREAVEMENT", allowance);
+                  const used = auth?.used ?? Math.max(0, Number((allowance - remaining).toFixed(1)));
+
+                  return (
+                    <div className="p-3 bg-secondary-subtle rounded-3 h-100 d-flex flex-column justify-content-between">
+                      <div>
+                        <div className="d-flex align-items-center justify-content-between mb-2">
+                          <p className="text-secondary-emphasis small fw-bold mb-0">Bereavement Leave</p>
+                          <IconCalendarEvent size={20} className="text-secondary" />
+                        </div>
+                        <div className="mb-2">
+                          <span className="fs-3 fw-bold text-secondary-emphasis me-1">{remaining}</span>
+                          <span className="fw-bold text-secondary-emphasis" style={{ fontSize: "14px" }}>Days Available</span>
+                        </div>
+                        <div className="small text-secondary" style={{ fontSize: "12px" }}>
+                          <div>• Total policy: <strong>{allowance} days</strong></div>
+                          <div>• Already taken/used: <strong>{used} days</strong></div>
+                        </div>
+                      </div>
+                      <div className="mt-2 pt-2 border-top border-secondary-subtle">
+                        <span className="badge bg-white text-secondary border border-secondary-subtle fw-medium" style={{ fontSize: "11px" }}>
+                          Immediate family
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </Col>
+
+              {/* Marriage Leave */}
+              <Col xs={12} md={4}>
+                {(() => {
+                  const auth = authoritativeBalance("MARRIAGE");
+                  const allowance = auth?.entitlement ?? Number(leaveSettings.marriage_leave_days);
+                  const remaining = auth?.remaining ?? leaveBalance("MARRIAGE", allowance);
+                  const used = auth?.used ?? Math.max(0, Number((allowance - remaining).toFixed(1)));
+
+                  return (
+                    <div className="p-3 bg-warning-subtle rounded-3 h-100 d-flex flex-column justify-content-between">
+                      <div>
+                        <div className="d-flex align-items-center justify-content-between mb-2">
+                          <p className="text-warning-emphasis small fw-bold mb-0">Marriage Leave</p>
+                          <IconCalendarEvent size={20} className="text-warning-emphasis" />
+                        </div>
+                        <div className="mb-2">
+                          <span className="fs-3 fw-bold text-warning-emphasis me-1">{remaining}</span>
+                          <span className="fw-bold text-warning-emphasis" style={{ fontSize: "14px" }}>Days Available</span>
+                        </div>
+                        <div className="small text-secondary" style={{ fontSize: "12px" }}>
+                          <div>• Total policy: <strong>{allowance} days</strong></div>
+                          <div>• Already taken/used: <strong>{used} days</strong></div>
+                        </div>
+                      </div>
+                      <div className="mt-2 pt-2 border-top border-warning-subtle">
+                        <span className="badge bg-white text-warning-emphasis border border-warning-subtle fw-medium" style={{ fontSize: "11px" }}>
+                          Own / Sibling marriage
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </Col>
+
+              {/* Maternity Leave */}
+              <Col xs={12} md={4}>
+                {(() => {
+                  const auth = authoritativeBalance("MATERNITY");
+                  const allowance = auth?.entitlement ?? Number(leaveSettings.maternity_leave_days);
+                  const remaining = auth?.remaining ?? leaveBalance("MATERNITY", allowance);
+                  const used = auth?.used ?? Math.max(0, Number((allowance - remaining).toFixed(1)));
+
+                  return (
+                    <div className="p-3 bg-success-subtle rounded-3 h-100 d-flex flex-column justify-content-between">
+                      <div>
+                        <div className="d-flex align-items-center justify-content-between mb-2">
+                          <p className="text-success-emphasis small fw-bold mb-0">Maternity Leave</p>
+                          <IconCalendarEvent size={20} className="text-success" />
+                        </div>
+                        <div className="mb-2">
+                          <span className="fs-3 fw-bold text-success-emphasis me-1">{remaining}</span>
+                          <span className="fw-bold text-success-emphasis" style={{ fontSize: "14px" }}>Days Available</span>
+                        </div>
+                        <div className="small text-secondary" style={{ fontSize: "12px" }}>
+                          <div>• Total policy: <strong>{allowance} days</strong></div>
+                          <div>• Already taken/used: <strong>{used} days</strong></div>
+                        </div>
+                      </div>
+                      <div className="mt-2 pt-2 border-top border-success-subtle">
+                        <span className="badge bg-white text-success-emphasis border border-success-subtle fw-medium" style={{ fontSize: "11px" }}>
+                          Eligible new mothers
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </Col>
+
+              {/* Paternity Leave */}
+              <Col xs={12} md={4}>
+                {(() => {
+                  const auth = authoritativeBalance("PATERNITY");
+                  const allowance = auth?.entitlement ?? Number(leaveSettings.paternity_leave_days);
+                  const remaining = auth?.remaining ?? leaveBalance("PATERNITY", allowance);
+                  const used = auth?.used ?? Math.max(0, Number((allowance - remaining).toFixed(1)));
+
+                  return (
+                    <div className="p-3 bg-primary-subtle rounded-3 h-100 d-flex flex-column justify-content-between">
+                      <div>
+                        <div className="d-flex align-items-center justify-content-between mb-2">
+                          <p className="text-primary-emphasis small fw-bold mb-0">Paternity Leave</p>
+                          <IconCalendarEvent size={20} className="text-primary" />
+                        </div>
+                        <div className="mb-2">
+                          <span className="fs-3 fw-bold text-primary-emphasis me-1">{remaining}</span>
+                          <span className="fw-bold text-primary-emphasis" style={{ fontSize: "14px" }}>Days Available</span>
+                        </div>
+                        <div className="small text-secondary" style={{ fontSize: "12px" }}>
+                          <div>• Total policy: <strong>{allowance} days</strong></div>
+                          <div>• Already taken/used: <strong>{used} days</strong></div>
+                        </div>
+                      </div>
+                      <div className="mt-2 pt-2 border-top border-primary-subtle">
+                        <span className="badge bg-white text-primary-emphasis border border-primary-subtle fw-medium" style={{ fontSize: "11px" }}>
+                          Eligible new fathers
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </Col>
             </Row>
+
             <Alert variant="light" className="border mt-4 mb-0 small">
-              <strong>Earned leave policy:</strong> Casual and Sick Leave accrue monthly from your joining month. Unused credits accumulate within the calendar year, and future credits cannot be used in advance. Monthly request limits remain {leaveSettings.casual_leave_monthly_limit ?? 3} Casual and {leaveSettings.sick_leave_monthly_limit ?? 7} Sick Leave days.
+              <strong>Accrual & Monthly Request Policy:</strong> Casual and Sick Leave accrue monthly from your joining date. An employee can apply up to the monthly limit ({leaveSettings.casual_leave_monthly_limit ?? 3} Casual / {leaveSettings.sick_leave_monthly_limit ?? 7} Sick days per month) <em>only if</em> sufficient collected/accrued balance is available in their account. Unearned future credits cannot be drawn in advance.
             </Alert>
           </Card.Body>
         </Card>
@@ -525,23 +677,23 @@ const EmployeeLeavesClient = () => {
 
       {/* Metrics Row */}
       <Row className="mb-4 g-3">
-        <Col xs={12} md={4}>
-          <Card className="border-0 shadow-sm p-3 rounded-4 bg-white">
+        <Col xs={6} md={3}>
+          <Card className="border-0 shadow-sm p-3 rounded-4 bg-white h-100">
             <div className="d-flex align-items-center gap-3">
-              <div className="p-3 bg-primary-subtle text-primary rounded-3">
+              <div className="p-3 bg-primary-subtle text-primary rounded-3 flex-shrink-0">
                 <IconCalendarEvent size={24} />
               </div>
               <div>
-                <h5 className="text-secondary small fw-semibold mb-0">Total Leaves Requested</h5>
+                <h5 className="text-secondary small fw-semibold mb-0">Total Requested</h5>
                 <h3 className="fw-bold text-dark mb-0 mt-1">{totalRequested}</h3>
               </div>
             </div>
           </Card>
         </Col>
-        <Col xs={12} md={4}>
-          <Card className="border-0 shadow-sm p-3 rounded-4 bg-white">
+        <Col xs={6} md={3}>
+          <Card className="border-0 shadow-sm p-3 rounded-4 bg-white h-100">
             <div className="d-flex align-items-center gap-3">
-              <div className="p-3 bg-success-subtle text-success rounded-3">
+              <div className="p-3 bg-success-subtle text-success rounded-3 flex-shrink-0">
                 <IconCircleCheck size={24} />
               </div>
               <div>
@@ -551,15 +703,28 @@ const EmployeeLeavesClient = () => {
             </div>
           </Card>
         </Col>
-        <Col xs={12} md={4}>
-          <Card className="border-0 shadow-sm p-3 rounded-4 bg-white">
+        <Col xs={6} md={3}>
+          <Card className="border-0 shadow-sm p-3 rounded-4 bg-white h-100">
             <div className="d-flex align-items-center gap-3">
-              <div className="p-3 bg-warning-subtle text-warning rounded-3">
+              <div className="p-3 bg-warning-subtle text-warning-emphasis rounded-3 flex-shrink-0">
                 <IconClock size={24} />
               </div>
               <div>
-                <h5 className="text-secondary small fw-semibold mb-0">Pending HR Reviews</h5>
+                <h5 className="text-secondary small fw-semibold mb-0">Pending Reviews</h5>
                 <h3 className="fw-bold text-dark mb-0 mt-1">{pendingLeaves}</h3>
+              </div>
+            </div>
+          </Card>
+        </Col>
+        <Col xs={6} md={3}>
+          <Card className="border-0 shadow-sm p-3 rounded-4 bg-white h-100">
+            <div className="d-flex align-items-center gap-3">
+              <div className="p-3 bg-danger-subtle text-danger rounded-3 flex-shrink-0">
+                <IconCircleX size={24} />
+              </div>
+              <div>
+                <h5 className="text-secondary small fw-semibold mb-0">Rejected / Disapproved</h5>
+                <h3 className="fw-bold text-dark mb-0 mt-1">{rejectedLeaves}</h3>
               </div>
             </div>
           </Card>
@@ -782,24 +947,45 @@ const EmployeeLeavesClient = () => {
                       {isHalfDay ? "0.5 Day" : `${calculateDays(startDate, endDate)} ${calculateDays(startDate, endDate) === 1 ? "Day" : "Days"}`}
                     </h4>
                     {isPreviewLoading ? (
-                      <small className="text-secondary mt-2">Calculating paid leave impact…</small>
+                      <small className="text-secondary mt-2">Calculating paid leave & salary impact…</small>
                     ) : leavePreview && (
-                      <div className="leave-impact-preview mt-2 pt-2 border-top text-start">
-                        {leavePreview.monthly_periods.map((period) => (
-                          <div key={`${period.year}-${period.month}`} className={`small mb-2 p-2 rounded ${period.exceeded ? "bg-danger-subtle text-danger" : "bg-success-subtle text-success"}`}>
-                            <div className="d-flex justify-content-between gap-2">
-                              <span>{period.month_name} monthly limit</span>
-                              <strong>{period.projected} / {period.limit} days</strong>
+                      <div className="leave-impact-preview mt-3 pt-2 border-top text-start">
+                        {leavePreview.monthly_limit_message && (
+                          <div className="alert alert-warning border-0 p-3 rounded-3 mb-3 small d-flex align-items-start gap-2">
+                            <IconInfoCircle size={18} className="text-warning flex-shrink-0 mt-0.5" />
+                            <div>
+                              <strong className="d-block text-dark">Monthly Paid Limit Exceeded</strong>
+                              <span className="text-secondary">{leavePreview.monthly_limit_message}</span>
                             </div>
-                            <span className="d-block mt-1">{period.used} already pending/approved + {period.requested} in this request</span>
                           </div>
-                        ))}
-                        {leavePreview.monthly_limit_message && <div className="small text-danger fw-semibold mb-2">{leavePreview.monthly_limit_message}</div>}
-                        <div className="d-flex justify-content-between small"><span>Earned paid balance available</span><strong className="text-success">{leavePreview.paid_leave_available} days</strong></div>
-                        <div className="d-flex justify-content-between small mt-1"><span>Paid leave used</span><strong>{leavePreview.paid_leave_used} days</strong></div>
-                        <div className="d-flex justify-content-between small mt-1"><span>Unpaid leave</span><strong className={leavePreview.unpaid_leave_days ? "text-danger" : "text-success"}>{leavePreview.unpaid_leave_days} days</strong></div>
-                        {/* Estimated salary deduction hidden per request */}
-                        <small className="d-block text-secondary mt-2">{leavePreview.note}</small>
+                        )}
+
+                        <div className="bg-white border rounded-3 p-3 mb-3 shadow-sm">
+                          <div className="d-flex justify-content-between align-items-center small mb-2">
+                            <span className="text-secondary">Earned Paid Balance:</span>
+                            <strong className="text-success">{leavePreview.paid_leave_available} Days</strong>
+                          </div>
+                          <div className="d-flex justify-content-between align-items-center small mb-2">
+                            <span className="text-secondary">Paid Leave Approved:</span>
+                            <strong className="text-primary">{leavePreview.paid_leave_used} Days</strong>
+                          </div>
+                          <div className="d-flex justify-content-between align-items-center small">
+                            <span className="text-secondary">Unpaid Leave (Loss of Pay):</span>
+                            <strong className={leavePreview.unpaid_leave_days > 0 ? "text-danger fw-bold" : "text-success"}>
+                              {leavePreview.unpaid_leave_days} Days
+                            </strong>
+                          </div>
+                        </div>
+
+                        {leavePreview.unpaid_leave_days > 0 && (
+                          <div className="alert alert-danger border-0 p-3 rounded-3 mb-3 small">
+                            <strong>Note:</strong> {leavePreview.unpaid_leave_days} day(s) exceed your available paid balance or monthly limit and will be processed as <strong>Unpaid Leave (Loss of Pay)</strong>.
+                          </div>
+                        )}
+
+                        <small className="d-block text-muted" style={{ fontSize: "11px" }}>
+                          {leavePreview.note}
+                        </small>
                       </div>
                     )}
                   </div>

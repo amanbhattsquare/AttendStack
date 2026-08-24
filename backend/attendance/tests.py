@@ -489,6 +489,11 @@ class AttendanceVisibilityApiTests(APITestCase):
 
     def test_inactive_employee_can_view_historical_attendance_report(self):
         from django.contrib.auth import get_user_model
+        from organizations.models import Organization
+
+        org = Organization.objects.create(name="Test Org")
+        self.employee.organization = org
+        self.employee.save(update_fields=["organization"])
 
         AttendanceRecord.objects.create(
             employee=self.employee,

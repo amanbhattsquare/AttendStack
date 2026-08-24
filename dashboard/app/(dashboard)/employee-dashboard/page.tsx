@@ -568,7 +568,7 @@ const EmployeeDashboard = () => {
               <p className="employee-designation-line text-secondary fw-medium mb-3">
                 {employee.designation} <span className="mx-1 text-muted">-</span> {employee.department} <span className="mx-1 text-muted">-</span> Bhatt Square Pvt Ltd
               </p>
-              
+
               <div className="employee-contact-grid text-muted small">
                 <span>
                   <IconMail size={16} className="text-secondary" /> <span>{employee.email}</span>
@@ -594,7 +594,7 @@ const EmployeeDashboard = () => {
       <div className="shift-banner alert alert-primary border-0 shadow-sm d-flex align-items-start gap-3 mb-4">
         <IconClock size={20} className="text-primary flex-shrink-0 mt-1" />
         <div>
-          <strong className="text-primary-emphasis">Shift Schedule:</strong> 
+          <strong className="text-primary-emphasis">Shift Schedule:</strong>
           <span className="text-secondary">
             Standard office timing is <strong>{settings ? `${settings.shift_start_time} to ${settings.shift_end_time}` : "10:00 AM to 06:00 PM"}</strong>. Please check in and check out daily from your portal to track working hours accurately.
           </span>
@@ -699,7 +699,7 @@ const EmployeeDashboard = () => {
                             <IconCircleCheck size={20} /> Shift Completed Today!
                           </h6>
                           <p className="text-secondary small mb-0">
-                            Check In: <strong>{new Date(today.check_in).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true })}</strong> | 
+                            Check In: <strong>{new Date(today.check_in).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true })}</strong> |
                             Check Out: <strong>{new Date(today.check_out).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true })}</strong>
                           </p>
                         </div>
@@ -792,7 +792,7 @@ const EmployeeDashboard = () => {
             </Col>
           </Row>
 
-         
+
         </Card.Body>
       </Card>
 
@@ -915,13 +915,13 @@ const EmployeeDashboard = () => {
       <h4 className="section-heading fw-bold mb-3 text-dark d-flex align-items-center gap-2">
         <IconShield size={22} className="text-primary" /> Core Workspaces & Actions
       </h4>
-      
+
       <div className="row g-3 g-lg-4">
         {quickActions.map((action) => (
           <div className="col-12 col-md-6 col-xl-4" key={action.href}>
             <Link href={action.href} className="card h-100 border-0 shadow-sm quick-action-card text-decoration-none">
               <div className="card-body p-4 d-flex gap-3">
-                <div 
+                <div
                   className="action-icon-wrapper d-flex align-items-center justify-content-center flex-shrink-0"
                   style={{ backgroundColor: action.bgColor, color: action.color }}
                 >
@@ -936,6 +936,11 @@ const EmployeeDashboard = () => {
           </div>
         ))}
       </div>
+
+
+      {/* Salary Increment Growth & History Widget */}
+      <EmployeeIncrementWidget />
+
 
       {/* Attendance Rules Section */}
       {attendanceRules && (
@@ -952,8 +957,7 @@ const EmployeeDashboard = () => {
         </Card>
       )}
 
-      {/* Salary Increment Growth & History Widget */}
-      <EmployeeIncrementWidget />
+
 
       <style jsx global>{`
         .employee-dashboard-container {

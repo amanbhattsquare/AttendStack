@@ -82,6 +82,10 @@ import {
   closeConversationNotifications,
   markMessageAsNotified,
   hasMessageBeenNotified,
+  isChatNotificationDisabled,
+  setChatNotificationDisabled,
+  updateTabTitleBadge,
+  clearTabTitleBadge,
 } from "../../../helper/browserNotification";
 import {
   playMessageChime,
@@ -513,9 +517,9 @@ function ChatPageContent() {
 
     if (msg.message_type === "STICKER") {
       if (msg.content?.includes("giphy.com") || msg.content?.match(/\.(gif|webp)(\?.*)?$/i)) {
-        return "👾 GIF";
+        return " GIF";
       }
-      return "👾 Sticker";
+      return " Sticker";
     }
 
     if (msg.message_type === "IMAGE") {
@@ -532,10 +536,10 @@ function ChatPageContent() {
 
     if (msg.content) {
       if (msg.content.includes("giphy.com") || msg.content.match(/\.gif(\?.*)?$/i)) {
-        return "👾 GIF";
+        return " GIF";
       }
       if (msg.content.match(/\.(png|jpg|jpeg|webp)(\?.*)?$/i)) {
-        return "👾 Sticker";
+        return " Sticker";
       }
       return msg.content;
     }
@@ -861,13 +865,23 @@ function ChatPageContent() {
 
   const searchParams = useSearchParams();
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>("default");
+  const [isNotificationDisabled, setIsNotificationDisabled] = useState<boolean>(false);
   const [isSoundMuted, setIsSoundMuted] = useState<boolean>(false);
 
   useEffect(() => {
     setNotificationPermission(getNotificationPermission());
+    setIsNotificationDisabled(isChatNotificationDisabled());
     setIsSoundMuted(isChatSoundMuted());
     registerChatServiceWorker();
     preloadNotificationSound();
+
+    const handleNotifToggle = (e: any) => {
+      setIsNotificationDisabled(Boolean(e.detail?.disabled));
+    };
+    window.addEventListener("attendstack_chat_notification_toggle", handleNotifToggle);
+    return () => {
+      window.removeEventListener("attendstack_chat_notification_toggle", handleNotifToggle);
+    };
   }, []);
 
   const handleToggleSound = () => {
@@ -879,7 +893,7 @@ function ChatPageContent() {
     }
   };
 
-  const handleEnableNotifications = async () => {
+  const handleToggleNotifications = async () => {
     if (typeof window === "undefined" || !("Notification" in window)) {
       Swal.fire({
         icon: "info",
@@ -910,33 +924,63 @@ function ChatPageContent() {
       return;
     }
 
-    try {
-      const res = await requestNotificationPermission();
-      setNotificationPermission(res);
-      if (res === "granted") {
-        playMessageChime();
-        await sendBrowserChatNotification({
-          title: "AttendStack Notifications Active! 🎉",
-          body: "You will now receive instant desktop and background chat alerts.",
-          playSound: false,
-        });
-        Swal.fire({
-          icon: "success",
-          title: "Notifications Enabled!",
-          text: "You will now receive instant alerts whenever teammates message you.",
-          timer: 2500,
-          showConfirmButton: false,
-        });
-      } else if (res === "denied") {
-        Swal.fire({
-          icon: "warning",
-          title: "Permission Denied",
-          text: "Notifications were blocked. You can enable them anytime from your browser address bar settings.",
-          confirmButtonColor: "#4f46e5",
-        });
+    // If permission not granted yet, request it
+    if (currentPerm !== "granted") {
+      try {
+        const res = await requestNotificationPermission();
+        setNotificationPermission(res);
+        if (res === "granted") {
+          setIsNotificationDisabled(false);
+          setChatNotificationDisabled(false);
+          playMessageChime();
+          await sendBrowserChatNotification({
+            title: "AttendStack Notifications Active! 🎉",
+            body: "You will now receive instant desktop and background chat alerts.",
+            playSound: false,
+          });
+          Swal.fire({
+            icon: "success",
+            title: "Notifications Enabled!",
+            text: "You will now receive instant alerts whenever teammates message you.",
+            timer: 2000,
+            showConfirmButton: false,
+          });
+        } else if (res === "denied") {
+          Swal.fire({
+            icon: "warning",
+            title: "Permission Denied",
+            text: "Notifications were blocked. You can enable them anytime from your browser address bar settings.",
+            confirmButtonColor: "#4f46e5",
+          });
+        }
+      } catch (err) {
+        console.error("Error enabling notifications:", err);
       }
-    } catch (err) {
-      console.error("Error enabling notifications:", err);
+      return;
+    }
+
+    // If permission is already granted, toggle between Enabled and Disabled
+    const nextDisabled = !isNotificationDisabled;
+    setIsNotificationDisabled(nextDisabled);
+    setChatNotificationDisabled(nextDisabled);
+
+    if (nextDisabled) {
+      Swal.fire({
+        icon: "info",
+        title: "Notifications Muted",
+        text: "Browser notifications for chat have been turned off.",
+        timer: 1800,
+        showConfirmButton: false,
+      });
+    } else {
+      playMessageChime();
+      Swal.fire({
+        icon: "success",
+        title: "Notifications Enabled",
+        text: "Browser notifications for chat are now active.",
+        timer: 1800,
+        showConfirmButton: false,
+      });
     }
   };
 
@@ -949,6 +993,17 @@ function ChatPageContent() {
     queryKey: ["conversations"],
     queryFn: fetchConversations,
   });
+
+  // Sync browser tab title & favicon Green Dot with total unread messages
+  useEffect(() => {
+    if (!conversations || !Array.isArray(conversations)) return;
+    const totalUnread = conversations.reduce((sum, c) => sum + (c.unread_count || 0), 0);
+    if (totalUnread > 0) {
+      updateTabTitleBadge(totalUnread);
+    } else {
+      clearTabTitleBadge();
+    }
+  }, [conversations]);
 
   // Deep linking: Open specific conversation from URL query parameter (?convId=...)
   useEffect(() => {
@@ -2755,17 +2810,26 @@ function ChatPageContent() {
                   {isSoundMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
                 </button>
 
-                {/* Notification Enable / Test Button */}
+                {/* Notification Enable / Disable Toggle Button */}
                 <button
-                  className={`chat-icon-btn ${notificationPermission === "granted" ? "text-primary" : "text-warning border-warning-subtle"}`}
+                  className={`chat-icon-btn ${notificationPermission === "granted" && !isNotificationDisabled
+                      ? "text-success"
+                      : "text-muted opacity-60"
+                    }`}
                   title={
-                    notificationPermission === "granted"
-                      ? "Browser Notifications Active (Click to Test)"
-                      : "Click to Enable Browser Notifications"
+                    notificationPermission !== "granted"
+                      ? "Click to Allow Browser Notifications"
+                      : isNotificationDisabled
+                        ? "Browser Notifications Disabled (Click to Enable)"
+                        : "Browser Notifications Active (Click to Disable)"
                   }
-                  onClick={handleEnableNotifications}
+                  onClick={handleToggleNotifications}
                 >
-                  {notificationPermission === "granted" ? <Bell size={16} /> : <BellOff size={16} />}
+                  {notificationPermission === "granted" && !isNotificationDisabled ? (
+                    <Bell size={16} />
+                  ) : (
+                    <BellOff size={16} />
+                  )}
                 </button>
 
                 {/* New Chat Actions Dropdown */}
@@ -2811,18 +2875,18 @@ function ChatPageContent() {
             </div>
 
             {/* Notification Permission Banner */}
-            {notificationPermission !== "granted" && (
+            {(notificationPermission !== "granted" || isNotificationDisabled) && (
               <div className="d-flex align-items-center justify-content-between p-2 mb-2.5 bg-primary-subtle border border-primary-subtle rounded-3">
                 <div className="d-flex align-items-center gap-2 overflow-hidden">
                   <Bell size={15} className="text-primary flex-shrink-0" />
                   <span className="small text-primary fw-semibold text-truncate" style={{ fontSize: "11.5px" }}>
-                    Enable background alerts
+                    {notificationPermission !== "granted" ? "Enable background alerts" : "Chat notifications are paused"}
                   </span>
                 </div>
                 <button
                   className="btn btn-primary btn-sm rounded-pill px-2.5 py-0.5 fw-semibold shadow-xs"
                   style={{ fontSize: "11px" }}
-                  onClick={handleEnableNotifications}
+                  onClick={handleToggleNotifications}
                 >
                   Turn On
                 </button>
@@ -2907,19 +2971,26 @@ function ChatPageContent() {
                       size={42}
                       fontSize={15}
                       isGroup={conv.type === "GROUP"}
-                      showOnlineDot={false}
+                      showOnlineDot={conv.unread_count > 0}
                       className="flex-shrink-0"
                     />
 
                     <div className="chat-conv-info">
                       <div className="chat-conv-top">
-                        <span className="chat-conv-name text-truncate">{conv.display_name}</span>
-                        <span className="chat-conv-time">
+                        <div className="d-flex align-items-center gap-1.5 min-w-0">
+                          <span className={`chat-conv-name text-truncate ${conv.unread_count > 0 ? "fw-bold text-dark" : ""}`}>
+                            {conv.display_name}
+                          </span>
+                          {conv.unread_count > 0 && (
+                            <span className="chat-new-msg-dot" title="New message" />
+                          )}
+                        </div>
+                        <span className={`chat-conv-time ${conv.unread_count > 0 ? "text-success fw-bold" : ""}`}>
                           {conv.last_message ? formatSidebarTime(conv.last_message.created_at) : ""}
                         </span>
                       </div>
                       <div className="chat-conv-bottom">
-                        <span className="chat-conv-preview">
+                        <span className={`chat-conv-preview ${conv.unread_count > 0 ? "fw-semibold text-dark" : ""}`}>
                           {conv.last_message ? (
                             getCleanMessagePreview(conv.last_message)
                           ) : (
@@ -3010,14 +3081,11 @@ function ChatPageContent() {
                         </span>
                       ) : (
                         <div className="d-flex align-items-center gap-2">
-                          <span className="chat-online-status-text">Active Now</span>
+                          {/* <span className="chat-online-status-text">Active Now</span> */}
                           {activeConversation.other_user?.department && (
-                            <>
-                              <span className="chat-meta-separator">•</span>
-                              <span className="chat-meta-dept">
-                                {activeConversation.other_user.department}
-                              </span>
-                            </>
+                            <span className="chat-meta-dept">
+                              {activeConversation.other_user.department}
+                            </span>
                           )}
                         </div>
                       )}
@@ -3389,11 +3457,10 @@ function ChatPageContent() {
                               <button
                                 key={chip.label}
                                 type="button"
-                                className={`btn btn-xs rounded-pill px-2.5 py-0.5 text-nowrap transition-all border ${
-                                  giphyStickerQuery === chip.tag
-                                    ? "bg-primary text-white border-primary shadow-xs"
-                                    : "bg-light text-secondary border-transparent"
-                                }`}
+                                className={`btn btn-xs rounded-pill px-2.5 py-0.5 text-nowrap transition-all border ${giphyStickerQuery === chip.tag
+                                  ? "bg-primary text-white border-primary shadow-xs"
+                                  : "bg-light text-secondary border-transparent"
+                                  }`}
                                 style={{ fontSize: "10.5px" }}
                                 onClick={() => setGiphyStickerQuery(chip.tag)}
                               >
@@ -3470,11 +3537,10 @@ function ChatPageContent() {
                               <button
                                 key={chip.label}
                                 type="button"
-                                className={`btn btn-xs rounded-pill px-2.5 py-0.5 text-nowrap transition-all border ${
-                                  giphySearchQuery === chip.tag
-                                    ? "bg-primary text-white border-primary shadow-xs"
-                                    : "bg-light text-secondary border-transparent"
-                                }`}
+                                className={`btn btn-xs rounded-pill px-2.5 py-0.5 text-nowrap transition-all border ${giphySearchQuery === chip.tag
+                                  ? "bg-primary text-white border-primary shadow-xs"
+                                  : "bg-light text-secondary border-transparent"
+                                  }`}
                                 style={{ fontSize: "10.5px" }}
                                 onClick={() => setGiphySearchQuery(chip.tag)}
                               >
@@ -4260,14 +4326,39 @@ function ChatPageContent() {
 
         .chat-online-dot {
           position: absolute;
-          bottom: 0px;
-          right: 0px;
-          width: 11px;
-          height: 11px;
+          bottom: 1px;
+          right: 1px;
+          width: 12px;
+          height: 12px;
           background: #10b981;
           border: 2px solid #ffffff;
           border-radius: 50%;
-          z-index: 2;
+          z-index: 3;
+          box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+          animation: pulseGreenDot 2s infinite;
+        }
+
+        .chat-new-msg-dot {
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          background-color: #10b981;
+          display: inline-block;
+          flex-shrink: 0;
+          box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.25);
+          animation: pulseGreenDot 2s infinite;
+        }
+
+        @keyframes pulseGreenDot {
+          0% {
+            box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.6);
+          }
+          70% {
+            box-shadow: 0 0 0 6px rgba(16, 185, 129, 0);
+          }
+          100% {
+            box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+          }
         }
 
         .chat-conv-info {
@@ -4323,9 +4414,9 @@ function ChatPageContent() {
         }
 
         .chat-unread-badge {
-          background: #4f46e5;
+          background: #10b981;
           color: #ffffff;
-          font-size: 10px;
+          font-size: 10.5px;
           font-weight: 700;
           min-width: 18px;
           height: 18px;
@@ -4336,6 +4427,7 @@ function ChatPageContent() {
           padding: 0 5px;
           flex-shrink: 0;
           margin-left: 6px;
+          box-shadow: 0 2px 4px rgba(16, 185, 129, 0.3);
         }
 
         .chat-conv-delete-wrap {

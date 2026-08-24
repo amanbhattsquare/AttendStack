@@ -13,8 +13,9 @@ from organizations.models import Organization
 class EmployeeStatus(models.TextChoices):
     ACTIVE = "ACTIVE", "Active"
     PROVISION = "PROVISION", "Provision"
-    INACTIVE = "INACTIVE", "Inactive"
     ON_LEAVE = "ON_LEAVE", "On Leave"
+    NOTICE_PERIOD = "NOTICE_PERIOD", "Notice Period"
+    INACTIVE = "INACTIVE", "Inactive"
     TERMINATED = "TERMINATED", "Terminated"
 
 
@@ -22,11 +23,13 @@ ATTENDANCE_ELIGIBLE_STATUSES = (
     EmployeeStatus.ACTIVE,
     EmployeeStatus.PROVISION,
     EmployeeStatus.ON_LEAVE,
+    EmployeeStatus.NOTICE_PERIOD,
 )
 
 ATTENDANCE_WORKING_STATUSES = (
     EmployeeStatus.ACTIVE,
     EmployeeStatus.PROVISION,
+    EmployeeStatus.NOTICE_PERIOD,
 )
 
 
@@ -114,6 +117,16 @@ class Employee(models.Model):
         choices=EmployeeStatus.choices,
         default=EmployeeStatus.ACTIVE,
         db_index=True,
+    )
+    status_end_date = models.DateField(
+        null=True, blank=True,
+        help_text="Optional end date for status period (e.g. end of notice period or provision)."
+    )
+    auto_transition_status = models.CharField(
+        max_length=20,
+        choices=EmployeeStatus.choices,
+        null=True, blank=True,
+        help_text="Status to automatically transition to after status_end_date expires."
     )
 
     annual_salary = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
@@ -212,20 +225,86 @@ class Employee(models.Model):
                     break
                 new_num += 1
                 
+        status_has_changed = is_new or (status_is_saved and previous_status != self.status) or hasattr(self, "_status_effective_date") or hasattr(self, "_status_end_date")
+        if status_has_changed:
+            end_date = getattr(self, "_status_end_date", self.status_end_date)
+            auto_transition = getattr(self, "_auto_transition_status", self.auto_transition_status)
+            if end_date and not auto_transition:
+                if self.status == EmployeeStatus.NOTICE_PERIOD:
+                    auto_transition = EmployeeStatus.INACTIVE
+                elif self.status == EmployeeStatus.PROVISION:
+                    auto_transition = EmployeeStatus.ACTIVE
+            self.status_end_date = end_date
+            self.auto_transition_status = auto_transition
+
+            if update_fields is not None:
+                update_fields_set = set(update_fields)
+                update_fields_set.add("status_end_date")
+                update_fields_set.add("auto_transition_status")
+                kwargs["update_fields"] = list(update_fields_set)
+
         with transaction.atomic():
             super().save(*args, **kwargs)
 
-            if is_new or (status_is_saved and previous_status != self.status):
+            if status_has_changed:
                 default_effective_date = self.joining_date if is_new else timezone.localdate()
                 effective_date = getattr(self, "_status_effective_date", default_effective_date)
                 effective_date = max(effective_date, self.joining_date)
+                end_date = self.status_end_date
+                auto_transition = self.auto_transition_status
+
                 EmployeeStatusHistory.objects.create(
                     employee=self,
                     status=self.status,
                     effective_date=effective_date,
+                    end_date=end_date,
+                    auto_transition_status=auto_transition,
                 )
+
+                if end_date and auto_transition:
+                    transition_date = end_date + timezone.timedelta(days=1)
+                    EmployeeStatusHistory.objects.filter(
+                        employee=self,
+                        effective_date=transition_date,
+                    ).delete()
+
+                    EmployeeStatusHistory.objects.create(
+                        employee=self,
+                        status=auto_transition,
+                        effective_date=transition_date,
+                    )
+
             if hasattr(self, "_status_effective_date"):
                 del self._status_effective_date
+            if hasattr(self, "_status_end_date"):
+                del self._status_end_date
+            if hasattr(self, "_auto_transition_status"):
+                del self._auto_transition_status
+
+    def sync_status(self, today=None):
+        """Syncs cached status fields on Employee with active status in status history for today."""
+        if today is None:
+            today = timezone.localdate()
+        latest_history = (
+            self.status_history.filter(effective_date__lte=today)
+            .order_by("-effective_date", "-created_at", "-pk")
+            .first()
+        )
+        if latest_history:
+            updated_fields = []
+            if self.status != latest_history.status:
+                self.status = latest_history.status
+                updated_fields.append("status")
+            if self.status_end_date != latest_history.end_date:
+                self.status_end_date = latest_history.end_date
+                updated_fields.append("status_end_date")
+            if self.auto_transition_status != latest_history.auto_transition_status:
+                self.auto_transition_status = latest_history.auto_transition_status
+                updated_fields.append("auto_transition_status")
+            if updated_fields:
+                updated_fields.append("updated_at")
+                super().save(update_fields=updated_fields)
+        return self.status
 
     def status_on(self, effective_date):
         prefetched_history = getattr(self, "_prefetched_objects_cache", {}).get("status_history")
@@ -260,6 +339,10 @@ class EmployeeStatusHistory(models.Model):
     )
     status = models.CharField(max_length=20, choices=EmployeeStatus.choices)
     effective_date = models.DateField(db_index=True)
+    end_date = models.DateField(null=True, blank=True)
+    auto_transition_status = models.CharField(
+        max_length=20, choices=EmployeeStatus.choices, null=True, blank=True
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

@@ -40,7 +40,7 @@ type EmployeeOption = {
   employee_id: string;
   full_name: string;
   email: string;
-  status: "ACTIVE" | "PROVISION" | "ON_LEAVE" | "INACTIVE" | "TERMINATED";
+  status: "ACTIVE" | "PROVISION" | "ON_LEAVE" | "NOTICE_PERIOD" | "INACTIVE" | "TERMINATED";
   annual_salary?: number | string;
 };
 
@@ -219,7 +219,7 @@ const AttendanceRecordsClient = () => {
       const employees = (Array.isArray(data) ? data : data.results || []) as EmployeeOption[];
       setEmployeesList(
         employees.filter((employee) =>
-          ["ACTIVE", "PROVISION", "ON_LEAVE"].includes(employee.status)
+          ["ACTIVE", "PROVISION", "ON_LEAVE", "NOTICE_PERIOD"].includes(employee.status)
         )
       );
     } catch (err) {

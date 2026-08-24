@@ -104,6 +104,9 @@ class EmployeeListSerializer(serializers.ModelSerializer):
     profile_photo_url = serializers.SerializerMethodField()
     account_exists = serializers.SerializerMethodField()
     status_label = serializers.CharField(source="get_status_display", read_only=True)
+    auto_transition_status_label = serializers.CharField(
+        source="get_auto_transition_status_display", read_only=True, allow_null=True
+    )
 
     class Meta:
         model = Employee
@@ -118,6 +121,9 @@ class EmployeeListSerializer(serializers.ModelSerializer):
             "account_exists",
             "status",
             "status_label",
+            "status_end_date",
+            "auto_transition_status",
+            "auto_transition_status_label",
             "annual_salary",
         ]
 
@@ -138,6 +144,10 @@ class EmployeeListSerializer(serializers.ModelSerializer):
 class EmployeeStatusUpdateSerializer(serializers.Serializer):
     status = serializers.ChoiceField(choices=EmployeeStatus.choices)
     effective_date = serializers.DateField(default=timezone.localdate)
+    end_date = serializers.DateField(required=False, allow_null=True, default=None)
+    auto_transition_status = serializers.ChoiceField(
+        choices=EmployeeStatus.choices, required=False, allow_null=True, default=None
+    )
 
     def validate_effective_date(self, value):
         employee = self.context["employee"]
@@ -154,6 +164,13 @@ class EmployeeStatusUpdateSerializer(serializers.Serializer):
             )
         return value
 
+    def validate(self, data):
+        effective_date = data.get("effective_date")
+        end_date = data.get("end_date")
+        if end_date and effective_date and end_date < effective_date:
+            raise serializers.ValidationError({"end_date": "The end date cannot be before the effective date."})
+        return data
+
 
 class EmployeeSerializer(serializers.ModelSerializer):
     profile_photo_url = serializers.SerializerMethodField()
@@ -162,6 +179,9 @@ class EmployeeSerializer(serializers.ModelSerializer):
     cv_document_url = serializers.SerializerMethodField()
     account_exists = serializers.SerializerMethodField()
     status_label = serializers.CharField(source="get_status_display", read_only=True)
+    auto_transition_status_label = serializers.CharField(
+        source="get_auto_transition_status_display", read_only=True, allow_null=True
+    )
     employment_type_label = serializers.CharField(source="get_employment_type_display", read_only=True)
     pay_frequency_label = serializers.CharField(source="get_pay_frequency_display", read_only=True)
 
@@ -196,6 +216,9 @@ class EmployeeSerializer(serializers.ModelSerializer):
             "reporting_manager",
             "status",
             "status_label",
+            "status_end_date",
+            "auto_transition_status",
+            "auto_transition_status_label",
             "annual_salary",
             "casual_leave_days_override",
             "sick_leave_days_override",

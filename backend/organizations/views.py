@@ -207,7 +207,7 @@ class OrganizationEmployeesSyncStatusView(APIView):
             last_login = user.last_login.isoformat() if user and user.last_login else None
 
             # Determine high-level sync status
-            if has_logged_in or emp.status == EmployeeStatus.ACTIVE:
+            if has_logged_in or emp.status in (EmployeeStatus.ACTIVE, EmployeeStatus.NOTICE_PERIOD):
                 sync_status = "ACTIVE_ONBOARDED"
                 status_display = "Active in AttendStack"
             elif is_account_created or emp.status == EmployeeStatus.PROVISION:

@@ -30,7 +30,7 @@ const emptyTask: TaskForm = { title: "", description: "", project: "", parent: "
 const taskStatuses: Array<{ value: Status; label: string }> = [{ value: "PENDING", label: "Pending" }, { value: "TODO", label: "To do" }, { value: "IN_PROGRESS", label: "In progress" }, { value: "ON_HOLD", label: "On hold" }, { value: "COMPLETED", label: "Completed" }, { value: "CLOSED", label: "Closed" }, { value: "CANCELLED", label: "Cancelled" }];
 const taskPriorities: Array<{ value: Priority; label: string }> = [{ value: "LOW", label: "Low" }, { value: "MEDIUM", label: "Medium" }, { value: "HIGH", label: "High" }, { value: "URGENT", label: "Urgent" }];
 const TASKS_PER_PAGE = 10;
-const ASSIGNABLE_EMPLOYEE_STATUSES = new Set(["ACTIVE", "PROVISION", "ON_LEAVE"]);
+const ASSIGNABLE_EMPLOYEE_STATUSES = new Set(["ACTIVE", "PROVISION", "ON_LEAVE", "NOTICE_PERIOD"]);
 const dashboardTaskFilterLabels: Record<DashboardTaskFilter, string> = { open: "Open tasks", active: "Active", overdue: "Overdue", "due-soon": "Due soon", "on-hold": "On hold", "high-priority": "High priority" };
 
 const headers = (): Record<string, string> => {

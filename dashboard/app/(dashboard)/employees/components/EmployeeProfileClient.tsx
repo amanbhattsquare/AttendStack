@@ -49,8 +49,11 @@ type Employee = {
   employment_type: string;
   employment_type_label: string;
   reporting_manager: string;
-  status: "ACTIVE" | "PROVISION" | "INACTIVE" | "ON_LEAVE" | "TERMINATED";
+  status: "ACTIVE" | "PROVISION" | "INACTIVE" | "ON_LEAVE" | "NOTICE_PERIOD" | "TERMINATED";
   status_label: string;
+  status_end_date?: string | null;
+  auto_transition_status?: string | null;
+  auto_transition_status_label?: string | null;
   annual_salary: string;
   pay_frequency: string;
   pay_frequency_label: string;
@@ -97,8 +100,9 @@ const API_URL = `${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/employees/`;
 const statusBadgeClass: Record<Employee["status"], string> = {
   ACTIVE: "bg-success-subtle text-success",
   PROVISION: "bg-info-subtle text-info",
-  INACTIVE: "bg-secondary-subtle text-secondary",
   ON_LEAVE: "bg-warning-subtle text-warning",
+  NOTICE_PERIOD: "bg-warning-subtle text-danger",
+  INACTIVE: "bg-secondary-subtle text-secondary",
   TERMINATED: "bg-danger-subtle text-danger",
 };
 
@@ -450,6 +454,10 @@ const EmployeeProfileClient = ({ employeeId, employee: legacyEmployee }: Employe
           { label: "Employment Type", value: employee.employment_type_label || employee.employment_type, icon: <IconUsers size={18} /> },
           { label: "Reporting Manager", value: employee.reporting_manager, icon: <IconUser size={18} /> },
           { label: "Login Account", value: employee.account_exists ? "Created" : "Not created", icon: <IconShieldCheck size={18} /> },
+          ...(employee.status_end_date ? [
+            { label: "Status End Date", value: formatDate(employee.status_end_date), icon: <IconCalendar size={18} /> },
+            { label: "Next Auto Transition", value: employee.auto_transition_status_label || employee.auto_transition_status || "-", icon: <IconShieldCheck size={18} /> },
+          ] : []),
         ],
       },
       {

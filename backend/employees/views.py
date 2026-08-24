@@ -72,9 +72,10 @@ class EmployeeViewSet(viewsets.ModelViewSet):
                 When(status=EmployeeStatus.ACTIVE, then=Value(0)),
                 When(status=EmployeeStatus.PROVISION, then=Value(1)),
                 When(status=EmployeeStatus.ON_LEAVE, then=Value(2)),
-                When(status=EmployeeStatus.INACTIVE, then=Value(3)),
-                When(status=EmployeeStatus.TERMINATED, then=Value(4)),
-                default=Value(5),
+                When(status=EmployeeStatus.NOTICE_PERIOD, then=Value(3)),
+                When(status=EmployeeStatus.INACTIVE, then=Value(4)),
+                When(status=EmployeeStatus.TERMINATED, then=Value(5)),
+                default=Value(6),
                 output_field=IntegerField(),
             ),
         )
@@ -85,6 +86,11 @@ class EmployeeViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(department__iexact=department)
         if status_filter:
             queryset = queryset.filter(status=status_filter.upper())
+
+        # Auto-sync status for active date range transitions
+        today = timezone.localdate()
+        for emp in list(queryset):
+            emp.sync_status(today)
 
         return queryset
 
@@ -261,7 +267,10 @@ class EmployeeViewSet(viewsets.ModelViewSet):
 
         employee.status = serializer.validated_data["status"]
         employee._status_effective_date = serializer.validated_data["effective_date"]
-        employee.save(update_fields=["status", "updated_at"])
+        employee._status_end_date = serializer.validated_data.get("end_date")
+        employee._auto_transition_status = serializer.validated_data.get("auto_transition_status")
+
+        employee.save(update_fields=["status", "status_end_date", "auto_transition_status", "updated_at"])
         sync_employee_user_access(employee)
 
         response_serializer = EmployeeListSerializer(employee, context={"request": request})

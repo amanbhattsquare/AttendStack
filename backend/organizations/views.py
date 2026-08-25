@@ -277,26 +277,21 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         org = Organization.objects.filter(owner=user).first()
         if org:
             return org
-        # 2. Employee profile
+        # 2. Employee profile link
         if hasattr(user, "employee_profile") and user.employee_profile and user.employee_profile.organization:
             return user.employee_profile.organization
-        # 3. Employee email match
+        # 3. Employee record by email
+        emp = Employee.objects.filter(email__iexact=user.email, organization__isnull=False).select_related('organization').first()
+        if emp and emp.organization:
+            return emp.organization
+        # 4. Reverse relation on Organization
         org = Organization.objects.filter(employees__email__iexact=user.email).first()
         if org:
             return org
-        # 4. Email keyword match (e.g. bhattsquare email -> Bhatt Square org)
-        if "bhatt" in user.email.lower():
-            org = Organization.objects.filter(name__icontains="Bhatt").first()
-            if org:
-                return org
-        # 5. Super Admin / HR / Staff fallback: primary or first available organization
-        user_role = getattr(user, "role", "")
-        if user.is_superuser or user_role in [UserRole.SUPER_ADMIN, UserRole.HR] or getattr(user, "is_staff", False):
-            org = Organization.objects.filter(name__icontains="Bhatt").first() or Organization.objects.filter(is_active=True).first() or Organization.objects.order_by("created_at").first()
-            if org:
-                return org
-        # 6. Fallback if any single org exists
-        return Organization.objects.first()
+        # 5. Super Admin only fallback
+        if user.is_superuser or getattr(user, "role", "") == UserRole.SUPER_ADMIN:
+            return Organization.objects.order_by("created_at").first()
+        return None
 
     def get_queryset(self):
         user = self.request.user
@@ -310,59 +305,28 @@ class OrganizationViewSet(viewsets.ModelViewSet):
                 return Organization.objects.filter(id=org.id)
             return Organization.objects.none()
 
-        from django.db.models import Case, When, Value, IntegerField
-
-        user_org = self._find_user_organization(user)
-        user_org_id = user_org.id if user_org else None
         user_role = getattr(user, "role", "")
 
         if user.is_superuser or user_role == UserRole.SUPER_ADMIN:
-            return Organization.objects.all().annotate(
-                user_priority=Case(
-                    When(id=user_org_id, then=Value(0)),
-                    When(owner=user, then=Value(1)),
-                    When(employees__email__iexact=user.email, then=Value(2)),
-                    When(name__icontains="Bhatt", then=Value(3)),
-                    default=Value(4),
-                    output_field=IntegerField(),
-                )
-            ).distinct().order_by("user_priority", "id")
+            return Organization.objects.all().order_by("-created_at")
 
-        if user_role == UserRole.HR or getattr(user, "is_staff", False):
-            hr_orgs = (
-                Organization.objects.filter(owner=user) | Organization.objects.filter(
-                    employees__email__iexact=user.email
-                )
-            ).distinct()
-            if hr_orgs.exists():
-                return hr_orgs.annotate(
-                    user_priority=Case(
-                        When(id=user_org_id, then=Value(0)),
-                        When(owner=user, then=Value(1)),
-                        default=Value(2),
-                        output_field=IntegerField(),
-                    )
-                ).order_by("user_priority", "-created_at")
-            # If HR user has no specifically assigned org yet, fallback to all organizations so they are not locked out
-            return Organization.objects.all().annotate(
-                user_priority=Case(
-                    When(id=user_org_id, then=Value(0)),
-                    default=Value(1),
-                    output_field=IntegerField(),
-                )
-            ).order_by("user_priority", "-created_at")
+        # Multi-tenant isolation: HR / Owner / Staff only see their own organization(s)
+        user_orgs = (
+            Organization.objects.filter(owner=user)
+            | Organization.objects.filter(employees__email__iexact=user.email)
+        ).distinct()
 
-        return Organization.objects.none()
+        return user_orgs.order_by("-created_at")
 
     @action(detail=False, methods=["get"], url_path="me")
     def me(self, request):
         user = request.user
         org = self._find_user_organization(user)
         if not org:
-            # Create a default fallback organization if none exists in database
-            org = Organization.objects.first()
-        if not org:
-            return Response({"detail": "No organization found."}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": "No organization workspace is associated with this account."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
         return Response(OrganizationSerializer(org, context={"request": request}).data)
 
     def perform_create(self, serializer):

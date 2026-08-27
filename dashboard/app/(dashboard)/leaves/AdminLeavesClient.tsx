@@ -5,6 +5,7 @@ import { Card, Button, Table, Badge, Modal, Form, Row, Col, Alert, Spinner, Inpu
 import { IconSearch, IconCalendarEvent, IconMessage, IconInfoCircle, IconClock, IconCircleCheck, IconCircleX, IconDotsVertical, IconEye, IconSettings, IconTrash, IconPaperclip, IconDownload } from "@tabler/icons-react";
 import { Avatar } from "components/common/Avatar";
 import { getAssetPath } from "helper/assetPath";
+import { resolveMediaUrl, triggerFileDownload, getDownloadProxyUrl } from "../../../helper/mediaUrl";
 
 interface LeaveRequest {
   id: number;
@@ -499,17 +500,22 @@ const AdminLeavesClient = () => {
                         <div className="small text-secondary text-truncate" title={attachmentName(selectedLeave.attachment)}>{attachmentName(selectedLeave.attachment)}</div>
                       </div>
                       <div className="d-flex gap-2 flex-shrink-0">
-                        <Button as="a" href={selectedLeave.attachment} target="_blank" rel="noreferrer" variant="outline-primary" size="sm" className="d-inline-flex align-items-center gap-1">
+                        <Button as="a" href={resolveMediaUrl(selectedLeave.attachment)} target="_blank" rel="noreferrer" variant="outline-primary" size="sm" className="d-inline-flex align-items-center gap-1">
                           <IconEye size={15} /> Open
                         </Button>
-                        <Button as="a" href={selectedLeave.attachment} download variant="primary" size="sm" className="d-inline-flex align-items-center gap-1">
+                        <Button
+                          onClick={() => triggerFileDownload(selectedLeave.attachment!, attachmentName(selectedLeave.attachment!))}
+                          variant="primary"
+                          size="sm"
+                          className="d-inline-flex align-items-center gap-1"
+                        >
                           <IconDownload size={15} /> Download
                         </Button>
                       </div>
                     </div>
                     {isImageAttachment(selectedLeave.attachment) && (
                       <div className="border-top bg-light p-3 text-center">
-                        <img src={selectedLeave.attachment} alt={`Attachment from ${selectedLeave.employee_name}`} className="img-fluid rounded-2 border" style={{ maxHeight: 300, objectFit: "contain" }} />
+                        <img src={resolveMediaUrl(selectedLeave.attachment)} alt={`Attachment from ${selectedLeave.employee_name}`} className="img-fluid rounded-2 border" style={{ maxHeight: 300, objectFit: "contain" }} />
                       </div>
                     )}
                   </div>

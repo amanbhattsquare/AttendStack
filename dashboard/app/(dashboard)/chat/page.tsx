@@ -1934,10 +1934,14 @@ function ChatPageContent() {
 
     return parts.map((part, idx) => {
       if (part.match(/^https?:\/\/[^\s]+$/i)) {
+        const secureUrl = resolveMediaUrl(part);
+        const isMediaFile = /\.(zip|rar|tar|gz|7z|pdf|docx?|xlsx?|pptx?|txt|csv|png|jpe?g|gif|webp|mp4|mov)$/i.test(part);
+        const fileName = part.split("/").pop()?.split("?")[0] || "Attachment";
+
         return (
           <a
             key={idx}
-            href={part}
+            href={secureUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="chat-clickable-link"
@@ -1947,7 +1951,13 @@ function ChatPageContent() {
               wordBreak: "break-all",
               fontWeight: 600,
             }}
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (isMediaFile && (part.includes("/media/") || part.includes("nextgenapplication.com"))) {
+                e.preventDefault();
+                handleDownloadFile(e, secureUrl, fileName);
+              }
+            }}
           >
             {part}
           </a>
@@ -1995,7 +2005,8 @@ function ChatPageContent() {
     const match = content.match(/https?:\/\/[^\s]+/i);
     if (!match) return null;
 
-    const url = match[0];
+    const rawUrl = match[0];
+    const url = resolveMediaUrl(rawUrl);
     let domain = "";
     try {
       domain = new URL(url).hostname.replace(/^www\./, "");
@@ -2057,6 +2068,8 @@ function ChatPageContent() {
 
     // Standard Link Card with Favicon
     const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
+    const isMediaFile = /\.(zip|rar|tar|gz|7z|pdf|docx?|xlsx?|pptx?|txt|csv|png|jpe?g|gif|webp|mp4|mov)$/i.test(url);
+    const fileName = url.split("/").pop()?.split("?")[0] || "Attachment";
 
     return (
       <div
@@ -2068,7 +2081,11 @@ function ChatPageContent() {
         }}
         onClick={(e) => {
           e.stopPropagation();
-          window.open(url, "_blank", "noopener,noreferrer");
+          if (isMediaFile && (url.includes("/media/") || url.includes("nextgenapplication.com"))) {
+            handleDownloadFile(e, url, fileName);
+          } else {
+            window.open(url, "_blank", "noopener,noreferrer");
+          }
         }}
       >
         <div className="d-flex align-items-center gap-2.5 overflow-hidden">

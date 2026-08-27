@@ -39,8 +39,28 @@ export const resolveMediaUrl = (url?: string | null): string => {
 
   // If already absolute URL
   if (/^https?:\/\//i.test(trimmed)) {
+    // Always upgrade attendance.nextgenapplication.com or nextgenapplication.com to HTTPS
+    if (trimmed.startsWith("http://attendance.nextgenapplication.com")) {
+      return trimmed.replace(/^http:\/\//i, "https://");
+    }
+    if (trimmed.startsWith("http://nextgenapplication.com")) {
+      return trimmed.replace(/^http:\/\//i, "https://");
+    }
+
     if (typeof window !== "undefined") {
       const currentOrigin = window.location.origin;
+
+      // If page is on HTTPS, ensure same-host HTTP URLs are upgraded to HTTPS to avoid mixed content
+      if (window.location.protocol === "https:" && trimmed.startsWith("http://")) {
+        try {
+          const parsed = new URL(trimmed);
+          if (parsed.hostname === window.location.hostname) {
+            return `https://${parsed.host}${parsed.pathname}${parsed.search}`;
+          }
+        } catch {
+          // ignore
+        }
+      }
 
       // In live production: if any old DB record has localhost / 127.0.0.1, convert to live domain
       if (
@@ -119,14 +139,15 @@ export const triggerFileDownload = async (fileUrl: string, fileName?: string): P
     document.body.removeChild(link);
     setTimeout(() => window.URL.revokeObjectURL(blobUrl), 4000);
   } catch (err) {
-    console.warn("Direct blob download failed, falling back to direct anchor proxy download:", err);
-    const forceLink = document.createElement("a");
-    forceLink.href = proxyUrl;
-    forceLink.download = safeName;
-    forceLink.setAttribute("download", safeName);
-    forceLink.style.display = "none";
-    document.body.appendChild(forceLink);
-    forceLink.click();
-    document.body.removeChild(forceLink);
+    console.warn("Proxy blob download failed, attempting direct download:", err);
+    const directLink = document.createElement("a");
+    directLink.href = resolved;
+    directLink.target = "_blank";
+    directLink.download = safeName;
+    directLink.setAttribute("download", safeName);
+    directLink.style.display = "none";
+    document.body.appendChild(directLink);
+    directLink.click();
+    document.body.removeChild(directLink);
   }
 };

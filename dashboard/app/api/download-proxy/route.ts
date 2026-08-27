@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
+import fs from "fs";
+import path from "path";
 
 const LIVE_ORIGIN = "https://attendance.nextgenapplication.com";
+const LOCAL_MEDIA_DIR = "/home/squarefit/AttendStack/backend/media";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -9,6 +12,64 @@ export async function GET(request: Request) {
 
   if (!rawUrl) {
     return NextResponse.json({ message: "File URL is required." }, { status: 400 });
+  }
+
+  const cleanFilename =
+    filename
+      .replace(/[/\\?%*:|"<>]/g, "_")
+      .replace(/\s+/g, " ")
+      .trim() || "download";
+
+  let targetUrl = rawUrl.trim();
+
+  // If URL has http://attendance.nextgenapplication.com, convert to https://
+  if (targetUrl.startsWith("http://attendance.nextgenapplication.com")) {
+    targetUrl = targetUrl.replace(/^http:\/\//i, "https://");
+  }
+  if (targetUrl.startsWith("http://nextgenapplication.com")) {
+    targetUrl = targetUrl.replace(/^http:\/\//i, "https://");
+  }
+
+  // 1. Direct Local File System Check for /media/ files (Zero latency & 100% reliable)
+  try {
+    let mediaRelativePath = "";
+    if (targetUrl.includes("/media/")) {
+      mediaRelativePath = targetUrl.substring(targetUrl.indexOf("/media/") + "/media/".length).split("?")[0];
+    } else if (!targetUrl.startsWith("http://") && !targetUrl.startsWith("https://")) {
+      mediaRelativePath = targetUrl.replace(/^\/+/, "").replace(/^media\//, "").split("?")[0];
+    }
+
+    if (mediaRelativePath) {
+      // Decode URI components in path (e.g. spaces %20)
+      const decodedRelPath = decodeURIComponent(mediaRelativePath);
+      const diskFilePath = path.join(LOCAL_MEDIA_DIR, decodedRelPath);
+
+      // Prevent path traversal
+      if (diskFilePath.startsWith(LOCAL_MEDIA_DIR) && fs.existsSync(diskFilePath)) {
+        const fileBuffer = fs.readFileSync(diskFilePath);
+        const ext = path.extname(diskFilePath).toLowerCase();
+        let mimeType = "application/octet-stream";
+        if (ext === ".zip") mimeType = "application/zip";
+        else if (ext === ".pdf") mimeType = "application/pdf";
+        else if (ext === ".png") mimeType = "image/png";
+        else if (ext === ".jpg" || ext === ".jpeg") mimeType = "image/jpeg";
+        else if (ext === ".txt") mimeType = "text/plain";
+        else if (ext === ".json") mimeType = "application/json";
+        else if (ext === ".mp4") mimeType = "video/mp4";
+
+        return new NextResponse(fileBuffer, {
+          status: 200,
+          headers: {
+            "Content-Type": mimeType,
+            "Content-Disposition": `attachment; filename="${cleanFilename}"; filename*=UTF-8''${encodeURIComponent(cleanFilename)}`,
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Content-Length": fileBuffer.length.toString(),
+          },
+        });
+      }
+    }
+  } catch (fsErr) {
+    console.warn("Direct disk read attempt in download-proxy skipped:", fsErr);
   }
 
   const reqOrigin = new URL(request.url).origin;
@@ -32,8 +93,6 @@ export async function GET(request: Request) {
     }
   }
 
-  let targetUrl = rawUrl.trim();
-
   // If URL is relative (/media/...), prepend backendBase
   if (!targetUrl.startsWith("http://") && !targetUrl.startsWith("https://")) {
     const cleanPath = targetUrl.startsWith("/") ? targetUrl : `/${targetUrl}`;
@@ -49,19 +108,6 @@ export async function GET(request: Request) {
       try {
         const parsed = new URL(targetUrl);
         targetUrl = `${LIVE_ORIGIN}${parsed.pathname}${parsed.search}`;
-      } catch {
-        // ignore
-      }
-    } else if (
-      (reqOrigin.includes("localhost:3000") || reqOrigin.includes("127.0.0.1:3000")) &&
-      (targetUrl.startsWith("http://localhost:3000/") || targetUrl.startsWith("http://127.0.0.1:3000/"))
-    ) {
-      // If URL mistakenly has frontend port 3000 in local dev, rewrite to backend port 8000
-      try {
-        const parsed = new URL(targetUrl);
-        if (parsed.pathname.startsWith("/media/") || parsed.pathname.startsWith("/static/")) {
-          targetUrl = `${backendBase}${parsed.pathname}${parsed.search}`;
-        }
       } catch {
         // ignore
       }
@@ -89,6 +135,20 @@ export async function GET(request: Request) {
       }
     }
 
+    // Try fallback against local Django backend port (8001)
+    if (!response.ok) {
+      try {
+        const parsed = new URL(targetUrl);
+        const localGunicornUrl = `http://127.0.0.1:8001${parsed.pathname}${parsed.search}`;
+        const localRes = await fetch(localGunicornUrl, { cache: "no-store" });
+        if (localRes.ok) {
+          response = localRes;
+        }
+      } catch {
+        // local gunicorn fallback failed
+      }
+    }
+
     if (!response.ok) {
       console.error(`Download proxy could not fetch file at '${targetUrl}', status: ${response.status}`);
       return NextResponse.json(
@@ -99,12 +159,6 @@ export async function GET(request: Request) {
 
     const contentType = response.headers.get("content-type") || "application/octet-stream";
     const fileBytes = await response.arrayBuffer();
-
-    const cleanFilename =
-      filename
-        .replace(/[/\\?%*:|"<>]/g, "_")
-        .replace(/\s+/g, " ")
-        .trim() || "download";
 
     return new NextResponse(fileBytes, {
       status: 200,

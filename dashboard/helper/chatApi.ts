@@ -5,11 +5,15 @@ export interface UserMinimal {
   username: string;
   email: string;
   name: string;
+  role?: string;
   is_active?: boolean;
   status?: string;
   employment_status?: string;
   profile_photo_url?: string;
   avatar?: string;
+  designation?: string;
+  department?: string;
+  company_logo?: string;
 }
 
 export interface Attachment {
@@ -21,12 +25,29 @@ export interface Attachment {
   created_at: string;
 }
 
+export interface ReactionSummary {
+  emoji: string;
+  count: number;
+  users: { id: string; name: string }[];
+  reacted_by_me: boolean;
+}
+
+export interface QuotedMessage {
+  id: string;
+  sender?: UserMinimal;
+  content: string | null;
+  message_type: 'TEXT' | 'IMAGE' | 'VIDEO' | 'FILE' | 'STICKER' | 'SYSTEM';
+  is_deleted?: boolean;
+  created_at?: string;
+}
+
 export interface Message {
   id: string;
   conversation: string;
   sender: UserMinimal;
+  reply_to?: QuotedMessage | null;
   content: string | null;
-  message_type: 'TEXT' | 'IMAGE' | 'VIDEO' | 'FILE' | 'SYSTEM';
+  message_type: 'TEXT' | 'IMAGE' | 'VIDEO' | 'FILE' | 'STICKER' | 'SYSTEM';
   is_edited: boolean;
   is_deleted: boolean;
   is_announcement?: boolean;
@@ -38,6 +59,7 @@ export interface Message {
   is_acknowledged_by_me?: boolean;
   created_at: string;
   attachments: Attachment[];
+  reactions?: ReactionSummary[];
 }
 
 export interface ConversationMember {
@@ -58,6 +80,7 @@ export interface Conversation {
   members: ConversationMember[];
   last_message: Message | null;
   unread_count: number;
+  designation?: string;
   other_user?: UserMinimal;
 }
 
@@ -77,11 +100,19 @@ export const fetchMessages = async (conversationId: string, page = 1): Promise<{
 export const sendMessageWithAttachments = async (
   conversationId: string,
   content: string,
-  files: File[] = []
+  files: File[] = [],
+  replyToId?: string | null,
+  messageType?: string
 ): Promise<Message> => {
   const formData = new FormData();
   if (content) {
     formData.append('content', content);
+  }
+  if (replyToId) {
+    formData.append('reply_to', replyToId);
+  }
+  if (messageType) {
+    formData.append('message_type', messageType);
   }
   files.forEach((file) => {
     formData.append('files', file);
@@ -171,37 +202,59 @@ export const connectChatWebSocket = (
     const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
     if (!token || isClosedManually) return;
 
-    const rawBackend = (process.env.NEXT_PUBLIC_API_ENDPOINT || 'http://127.0.0.1:8000').trim();
+    const rawBackend = (process.env.NEXT_PUBLIC_API_ENDPOINT || '').trim();
+    if (!rawBackend) {
+      console.error("NEXT_PUBLIC_API_ENDPOINT is not set. WebSocket connection aborted.");
+      return;
+    }
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     
-    let host = '127.0.0.1:8000';
+    let host;
     try {
-      const urlObj = new URL(rawBackend);
-      host = urlObj.host;
+      // If the endpoint is a full URL, extract the host.
+      // Otherwise, assume the endpoint is the host itself.
+      if (rawBackend.startsWith('http')) {
+        const urlObj = new URL(rawBackend);
+        host = urlObj.host;
+      } else {
+        host = rawBackend;
+      }
+      console.log('WebSocket connecting to:', host);
     } catch (e) {
-      host = window.location.host;
+      // Fallback for any unexpected parsing errors
+      host = rawBackend.replace(/^https?:\/\//, '').replace(/\/$/, '');
+      console.warn('Could not parse backend URL, falling back to host:', host, 'Error:', e);
     }
 
     const wsUrl = `${wsProtocol}//${host}/ws/chat/${conversationId}/?token=${encodeURIComponent(token)}`;
+    console.log('Full WebSocket URL:', wsUrl);
     const ws = new WebSocket(wsUrl);
     activeWs = ws;
+
+    ws.onopen = () => {
+      console.log('WebSocket connection established successfully');
+    };
 
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
+        console.log('Received WebSocket message:', data);
         onMessage(data);
       } catch (err) {
         console.error('Failed to parse WS message:', err);
       }
     };
 
-    if (onError) {
-      ws.onerror = onError;
-    }
+    ws.onerror = (err) => {
+      console.error('WebSocket error occurred:', err);
+      if (onError) onError(err);
+    };
 
     ws.onclose = (event) => {
+      console.log('WebSocket closed with code:', event.code, 'reason:', event.reason);
       if (!isClosedManually && event.code !== 1000 && event.code !== 4001 && event.code !== 4003) {
         // Attempt auto-reconnect after 2s if closed unexpectedly
+        console.log('Attempting to reconnect WebSocket...');
         reconnectTimeout = setTimeout(() => {
           connect();
         }, 2000);
@@ -223,4 +276,19 @@ export const connectChatWebSocket = (
       }
     },
   };
+};
+
+export const reactToMessage = async (
+  conversationId: string,
+  messageId: string,
+  emoji: string
+): Promise<Message> => {
+  const response = await apiClient.post(
+    `/api/v1/chat/conversations/${conversationId}/react/`,
+    {
+      message_id: messageId,
+      emoji,
+    }
+  );
+  return response.data;
 };

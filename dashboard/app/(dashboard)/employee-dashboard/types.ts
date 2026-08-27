@@ -21,8 +21,11 @@ export type CurrentEmployee = {
   employment_type: string;
   employment_type_label: string;
   reporting_manager: string;
-  status: "ACTIVE" | "INACTIVE" | "ON_LEAVE" | "TERMINATED";
+  status: "ACTIVE" | "PROVISION" | "ON_LEAVE" | "NOTICE_PERIOD" | "INACTIVE" | "TERMINATED";
   status_label: string;
+  status_end_date?: string | null;
+  auto_transition_status?: string | null;
+  auto_transition_status_label?: string | null;
   annual_salary: string;
   pay_frequency: string;
   pay_frequency_label: string;

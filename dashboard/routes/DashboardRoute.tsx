@@ -20,6 +20,7 @@ import {
   IconMessage,
   IconBuildingSkyscraper,
   IconShieldCheck,
+  IconCreditCard,
 } from "@tabler/icons-react";
 
 //import custom type
@@ -41,23 +42,27 @@ export const DashboardMenu: MenuItemType[] = [
     id: uuid(),
     title: "Employees",
     link: "/employees",
+    featureKey: "allows_employees",
     icon: <IconUsers size={20} strokeWidth={1.5} />,
   },
   {
     id: uuid(),
     title: "Attendance",
+    featureKey: "allows_attendance",
     icon: <IconCalendarEvent size={20} strokeWidth={1.5} />,
     children: [
       {
         id: uuid(),
         title: "Today's Attendance",
         link: "/attendance/todays-attendance",
+        featureKey: "allows_attendance",
         icon: <IconCircleCheck size={20} strokeWidth={1.5} />,
       },
       {
         id: uuid(),
         title: "Attendance Records",
         link: "/attendance/records",
+        featureKey: "allows_attendance",
         icon: <IconListDetails size={20} strokeWidth={1.5} />,
       },
     ],
@@ -66,30 +71,38 @@ export const DashboardMenu: MenuItemType[] = [
     id: uuid(),
     title: "Holidays",
     link: "/holidays",
+    featureKey: "allows_holidays",
     icon: <IconBeach size={20} strokeWidth={1.5} />,
   },
   {
     id: uuid(),
     title: "Salary & Payroll",
     link: "/salary",
+    featureKey: "allows_payroll_reports",
+    requiresPro: true,
     icon: <IconCoin size={20} strokeWidth={1.5} />,
   },
   {
     id: uuid(),
     title: "Leave Requests",
     link: "/leaves",
+    featureKey: "allows_leaves",
     icon: <IconCalendarTime size={20} strokeWidth={1.5} />,
   },
   {
     id: uuid(),
     title: "Projects & Tasks",
     link: "/tasks",
+    featureKey: "allows_projects_tasks",
+    requiresPro: true,
     icon: <IconListDetails size={20} strokeWidth={1.5} />,
   },
   {
     id: uuid(),
     title: "Chat & Messages",
     link: "/chat",
+    featureKey: "allows_chat",
+    requiresPro: true,
     icon: <IconMessage size={20} strokeWidth={1.5} />,
     badge: "Beta",
     badgecolor: "primary",
@@ -101,6 +114,12 @@ export const DashboardMenu: MenuItemType[] = [
   },
   {
     id: uuid(),
+    title: "Plans & Billing",
+    link: "/plans",
+    icon: <IconCreditCard size={20} strokeWidth={1.5} />,
+  },
+  {
+    id: uuid(),
     title: "Settings",
     link: "/settings",
     icon: <IconSettings size={20} strokeWidth={1.5} />,
@@ -109,6 +128,8 @@ export const DashboardMenu: MenuItemType[] = [
     id: uuid(),
     title: "Rulebook",
     link: "/system/rulebook",
+    featureKey: "allows_custom_shifts",
+    requiresPro: true,
     icon: <IconBook size={20} strokeWidth={1.5} />,
   },
   {

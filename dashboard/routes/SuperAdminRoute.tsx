@@ -6,6 +6,7 @@ import {
   IconActivity,
   IconLogout,
   IconPlus,
+  IconCreditCard,
 } from "@tabler/icons-react";
 import { MenuItemType } from "types/menuTypes";
 
@@ -20,6 +21,17 @@ export const SuperAdminMenu: MenuItemType[] = [
     title: "Platform Overview",
     link: "/super-admin/dashboard",
     icon: <IconLayoutDashboard size={20} strokeWidth={1.5} />,
+  },
+  {
+    id: uuid(),
+    title: "BILLING & TIERS",
+    grouptitle: true,
+  },
+  {
+    id: uuid(),
+    title: "Subscription Plans",
+    link: "/super-admin/plans",
+    icon: <IconCreditCard size={20} strokeWidth={1.5} />,
   },
   {
     id: uuid(),

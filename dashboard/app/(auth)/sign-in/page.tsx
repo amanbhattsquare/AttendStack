@@ -39,6 +39,9 @@ const SignInPage = () => {
         localStorage.setItem("authToken", response.data.access);
         localStorage.setItem("refreshToken", response.data.refresh);
         localStorage.setItem("user", JSON.stringify(response.data.user));
+        if (response.data.organization) {
+          localStorage.setItem("organization", JSON.stringify(response.data.organization));
+        }
         const role = response.data.user?.role;
         if (role === "EMPLOYEE") {
           router.push("/employee-dashboard");
@@ -60,13 +63,25 @@ const SignInPage = () => {
   };
 
   return (
-    <Container fluid className="min-vh-100 d-flex align-items-center justify-content-center bg-light py-4">
-      <Row>
-        <Col md={12}>
-          <Card
-            style={{ width: "min(25rem, calc(100vw - 2rem))" }}
-            className="p-4 shadow-sm"
-          >
+    <div
+      className="min-vh-100 d-flex align-items-center justify-content-center py-5 position-relative"
+      style={{
+        background: "linear-gradient(135deg, rgba(241, 245, 249, 0.85) 0%, rgba(226, 232, 240, 0.92) 100%), url('/images/background/super-admin-bg.jpg') center/cover no-repeat fixed",
+      }}
+    >
+      <Container className="position-relative" style={{ zIndex: 2 }}>
+        <Row className="justify-content-center">
+          <Col md={12} className="d-flex justify-content-center">
+            <Card
+              style={{
+                width: "min(26rem, calc(100vw - 2rem))",
+                backgroundColor: "rgba(255, 255, 255, 0.96)",
+                backdropFilter: "blur(20px)",
+                WebkitBackdropFilter: "blur(20px)",
+                boxShadow: "0 20px 45px -10px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(255, 255, 255, 0.4)",
+              }}
+              className="p-4 border-0 rounded-4"
+            >
             <Card.Body>
               <div className="text-center mb-4">
                 <Link href="/" aria-label="AttendStack home">
@@ -163,6 +178,7 @@ const SignInPage = () => {
         </Col>
       </Row>
     </Container>
+  </div>
   );
 };
 

@@ -90,14 +90,27 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
 
     def _organization_for_user(self):
         user = self.request.user
-        if not user.is_authenticated or user.is_superuser or getattr(user, 'role', '') == "SUPER_ADMIN":
+        if not user or not user.is_authenticated:
             return None
+        # 1. Direct ownership
         org = Organization.objects.filter(owner=user).first()
-        if not org:
-            emp = Employee.objects.filter(email__iexact=user.email).first()
-            if emp:
-                org = emp.organization
-        return org
+        if org:
+            return org
+        # 2. Employee profile
+        if hasattr(user, "employee_profile") and user.employee_profile and user.employee_profile.organization:
+            return user.employee_profile.organization
+        # 3. Employee record by email
+        emp = Employee.objects.filter(email__iexact=user.email, organization__isnull=False).select_related('organization').first()
+        if emp and emp.organization:
+            return emp.organization
+        # 4. Reverse employee relation on Organization
+        org = Organization.objects.filter(employees__email__iexact=user.email).first()
+        if org:
+            return org
+        # 5. Super Admin only fallback
+        if user.is_superuser or getattr(user, 'role', '') == "SUPER_ADMIN":
+            return Organization.objects.order_by("created_at").first()
+        return None
 
     def get_queryset(self):
         queryset = attendance_eligible_records(super().get_queryset())

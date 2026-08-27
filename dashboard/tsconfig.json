@@ -19,11 +19,21 @@
     "incremental": true,
     "baseUrl": ".",
     "paths": {
-      "components/*": ["components/*"],
-      "data/*": ["data/*"],
-      "layouts/*": ["layouts/*"],
-      "sub-components/*": ["sub-components/*"],
-      "widgets/*": ["widgets/*"]
+      "components/*": [
+        "components/*"
+      ],
+      "data/*": [
+        "data/*"
+      ],
+      "layouts/*": [
+        "layouts/*"
+      ],
+      "sub-components/*": [
+        "sub-components/*"
+      ],
+      "widgets/*": [
+        "widgets/*"
+      ]
     },
     "plugins": [
       {

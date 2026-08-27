@@ -8,6 +8,7 @@ import PayslipPreview from "components/payroll/PayslipPreview";
 import { downloadPayslipPdf } from "components/payroll/payslipPdf";
 import { useBranding } from "context/BrandingContext";
 import UpcomingIncrementsWidget from "components/UpcomingIncrementsWidget";
+import PlanFeatureLockedPaywall from "components/PlanFeatureLockedPaywall";
 
 const BASE_URL = `${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/payroll/`;
 
@@ -284,10 +285,50 @@ const SalaryPage = () => {
     }
   };
 
+  const [organization, setOrganization] = useState<any>(null);
+
+  // Parse User Credentials & Organization
+  useEffect(() => {
+    const userData = localStorage.getItem("user");
+    if (userData) {
+      try {
+        const parsed = JSON.parse(userData);
+        setIsAdmin(parsed.role === "SUPER_ADMIN" || parsed.role === "HR");
+      } catch (err) {
+        console.error("Failed to parse user data.", err);
+      }
+    }
+    const orgData = localStorage.getItem("organization");
+    if (orgData) {
+      try {
+        setOrganization(JSON.parse(orgData));
+      } catch {}
+    }
+  }, []);
+
+  const isFeatureLocked =
+    organization?.plan_features && organization.plan_features.allows_payroll_reports === false;
+
   const handleDownloadPdf = async () => {
     if (!payslipData) return;
     await downloadPayslipPdf(payslipData, { companyLogo, companyName });
   };
+
+  if (isFeatureLocked) {
+    return (
+      <PlanFeatureLockedPaywall
+        featureTitle="Salary & Payroll Processing"
+        featureDescription="Automated monthly salary calculation, deduction engine, and PDF payslip distribution are locked under your current plan."
+        benefits={[
+          "Instant monthly payroll calculations & bulk disbursement",
+          "Automated deduction, overtime & late penalty logic",
+          "Official downloadable PDF payslips with company branding",
+          "Salary increment history & milestone tracking",
+        ]}
+        requiredTier="Growth Pro or Enterprise"
+      />
+    );
+  }
 
   return (
     <Fragment>

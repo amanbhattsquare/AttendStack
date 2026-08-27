@@ -171,12 +171,14 @@ from .serializers import (
     EmployeeIncrementSerializer,
     RescheduleIncrementSerializer,
     ProcessIncrementActionSerializer,
+    EditIncrementHikeSerializer,
 )
 from .increment_service import (
     sync_employee_increments,
     approve_increment,
     reject_increment,
     reschedule_increment,
+    update_increment_hike,
     get_effective_increment_config,
     get_increment_chart_projections,
 )
@@ -400,6 +402,29 @@ class EmployeeIncrementViewSet(viewsets.ModelViewSet):
             )
             return Response(
                 EmployeeIncrementSerializer(rescheduled_item, context={"request": request}).data,
+                status=status.HTTP_200_OK
+            )
+        except ValueError as err:
+            return Response({"detail": str(err)}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=["post", "patch"], url_path="edit-hike")
+    def edit_hike(self, request, pk=None):
+        """Admin action to edit proposed salary hike percentage or flat amount."""
+        increment = self.get_object()
+        serializer = EditIncrementHikeSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            updated_item = update_increment_hike(
+                increment=increment,
+                increment_type=serializer.validated_data["increment_type"],
+                increment_value=serializer.validated_data["increment_value"],
+                notes=serializer.validated_data.get("notes", ""),
+                update_employee_policy=serializer.validated_data.get("update_employee_policy", False),
+                user=request.user,
+            )
+            return Response(
+                EmployeeIncrementSerializer(updated_item, context={"request": request}).data,
                 status=status.HTTP_200_OK
             )
         except ValueError as err:

@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { Card, Col, Row, Button, Form, Alert, Tabs, Tab, Badge, Spinner } from "react-bootstrap";
 import Swal from 'sweetalert2';
 import {
@@ -25,6 +26,14 @@ import {
   IconCurrentLocation,
   IconAlertTriangle,
   IconTrendingUp,
+  IconKey,
+  IconLink,
+  IconEye,
+  IconEyeOff,
+  IconCreditCard,
+  IconInfoCircle,
+  IconSparkles,
+  IconExternalLink,
 } from "@tabler/icons-react";
 
 const apiRoot = (process.env.NEXT_PUBLIC_API_ENDPOINT || "").replace(/\/$/, "");
@@ -86,6 +95,15 @@ interface OrganizationAccess {
   id: number;
   name: string;
   invite_code: string;
+  api_key?: string;
+  plan_name?: string;
+  plan_expires_at?: string | null;
+  plan_status?: string;
+  plan_source?: string;
+  days_until_plan_expiry?: number | null;
+  is_plan_expiring_soon?: boolean;
+  is_plan_expired?: boolean;
+  max_employees?: number;
   external_company_id?: string;
   external_source?: string;
   is_simplyjob_linked?: boolean;
@@ -108,38 +126,6 @@ const SettingsPage = () => {
   const [isUpdatingOrganizationCode, setIsUpdatingOrganizationCode] = useState(false);
   const [organizationCodeNotice, setOrganizationCodeNotice] = useState("");
   const [organizationCodeError, setOrganizationCodeError] = useState("");
-
-  const [simplyJobOrgIdInput, setSimplyJobOrgIdInput] = useState("");
-  const [isLinkingSimplyJob, setIsLinkingSimplyJob] = useState(false);
-
-  const handleLinkSimplyJob = async () => {
-    if (!simplyJobOrgIdInput.trim() || !organizationAccess) return;
-    setIsLinkingSimplyJob(true);
-    setOrganizationCodeError("");
-    setOrganizationCodeNotice("");
-
-    try {
-      const API_URL = process.env.NEXT_PUBLIC_API_ENDPOINT;
-      const res = await fetch(`${API_URL}/api/v1/organizations/${organizationAccess.id}/link-simplyjob/`, {
-        method: "POST",
-        headers: authHeaders(),
-        body: JSON.stringify({ simplyjob_org_id: simplyJobOrgIdInput.trim() }),
-      });
-
-      if (res.ok) {
-        const updatedOrg = await res.json();
-        setOrganizationAccess(updatedOrg);
-        setOrganizationCodeNotice(`SimplyJob Organization ID successfully linked: "${simplyJobOrgIdInput.trim()}"`);
-      } else {
-        const data = await res.json();
-        setOrganizationCodeError(data.detail || "Failed to link SimplyJob Organization ID.");
-      }
-    } catch {
-      setOrganizationCodeError("Error connecting to server. Please try again.");
-    } finally {
-      setIsLinkingSimplyJob(false);
-    }
-  };
 
   // Detect admin's current GPS location for easy office coord setup
   const detectMyLocation = () => {
@@ -297,15 +283,29 @@ const SettingsPage = () => {
 
     const loadOrganizationAccess = async () => {
       try {
-        const response = await fetch(`${apiRoot}/api/v1/organizations/`, { headers: authHeaders() });
-        if (!response.ok) {
+        let orgData: any = null;
+        const response = await fetch(`${apiRoot}/api/v1/organizations/?scope=me`, { headers: authHeaders() });
+        if (response.ok) {
+          const data = await response.json();
+          const list = Array.isArray(data) ? data : data.results || [];
+          if (list.length > 0) orgData = list[0];
+        }
+        if (!orgData) {
+          const fallbackRes = await fetch(`${apiRoot}/api/v1/organizations/`, { headers: authHeaders() });
+          if (fallbackRes.ok) {
+            const data = await fallbackRes.json();
+            const list = Array.isArray(data) ? data : data.results || [];
+            const storedUserStr = typeof window !== "undefined" ? localStorage.getItem("user") : null;
+            const storedUser = storedUserStr ? JSON.parse(storedUserStr) : null;
+            orgData = (storedUser?.email && list.find((o: any) => o.owner_email && o.owner_email.toLowerCase() === storedUser.email.toLowerCase())) || list[0];
+          }
+        }
+        if (!orgData && !response.ok) {
           throw new Error(response.status === 401
             ? "Your session has expired. Please sign in again."
             : "Your company workspace could not be loaded. Refresh the page and try again.");
         }
-        const data = await response.json();
-        const organizations = Array.isArray(data) ? data : data.results || [];
-        if (!cancelled) setOrganizationAccess(organizations[0] || null);
+        if (!cancelled) setOrganizationAccess(orgData || null);
       } catch (error) {
         if (!cancelled) {
           setOrganizationCodeError(error instanceof TypeError
@@ -476,20 +476,121 @@ const SettingsPage = () => {
     setOrganizationCodeError("");
     setOrganizationCodeNotice("");
     try {
-      const response = await fetch(`${apiRoot}/api/v1/organizations/${organizationAccess.id}/regenerate-invite-code/`, {
+      const orgId = organizationAccess.id || "me";
+      let response = await fetch(`${apiRoot}/api/v1/organizations/${orgId}/regenerate-invite-code/`, {
         method: "POST",
         headers: authHeaders(),
       });
-      if (!response.ok) throw new Error("Unable to generate code");
+      if (response.status === 404 && orgId !== "me") {
+        response = await fetch(`${apiRoot}/api/v1/organizations/me/regenerate-invite-code/`, {
+          method: "POST",
+          headers: authHeaders(),
+        });
+      }
+      if (!response.ok) {
+        const errJson = await response.json().catch(() => ({}));
+        throw new Error(errJson.detail || errJson.error || "The code could not be generated. Please try again.");
+      }
       const organization = await response.json();
       setOrganizationAccess(organization);
-      setOrganizationCodeNotice("A new employee onboarding code is ready. The previous code no longer works.");
-    } catch {
-      setOrganizationCodeError("The code could not be generated. Please try again.");
+      const newCode = organization.invite_code;
+      setOrganizationCodeNotice(`New code generated: ${newCode}. Please update this new code in SimplyJob to keep employee onboarding active.`);
+
+      Swal.fire({
+        icon: "warning",
+        title: "New Organization Code Generated",
+        html: `
+          <div style="text-align: left; font-size: 14px;">
+            <p>Your new AttendStack Organization Code is: <strong style="font-family: monospace; font-size: 16px; color: #0d6efd;">${newCode}</strong></p>
+            <p style="color: #dc3545; font-weight: 600;">⚠️ Previous codes are now expired and invalid.</p>
+            <p><strong>Action Required:</strong> If your company is connected with <strong>SimplyJob</strong>, please copy this new code and update it in your SimplyJob <em>"Hired & AttendStack"</em> workspace so hired candidates can be onboarded.</p>
+          </div>
+        `,
+        confirmButtonText: "I Understand & Will Update SimplyJob",
+        confirmButtonColor: "#0d6efd",
+      });
+    } catch (err: any) {
+      setOrganizationCodeError(err.message || "The code could not be generated. Please try again.");
     } finally {
       setIsUpdatingOrganizationCode(false);
     }
   };
+
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [isUpdatingApiKey, setIsUpdatingApiKey] = useState(false);
+
+  const copyApiKey = async () => {
+    if (!organizationAccess?.api_key) return;
+    try {
+      await navigator.clipboard.writeText(organizationAccess.api_key);
+      Swal.fire({
+        icon: "success",
+        title: "API Key Copied!",
+        text: "Paste this API Key into SimplyJob to connect your AttendStack organization workspace.",
+        timer: 2500,
+        showConfirmButton: false,
+      });
+    } catch {
+      alert("Could not copy API Key automatically. Please copy it manually.");
+    }
+  };
+
+  const regenerateApiKey = async () => {
+    if (!organizationAccess || !organizationAccess.can_manage_invite_code) return;
+
+    const confirmResult = await Swal.fire({
+      title: "Regenerate API Key?",
+      text: "Any active external integrations (like SimplyJob) using this API key will stop syncing until you paste the new key.",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#dc3545",
+      confirmButtonText: "Yes, regenerate key",
+      cancelButtonText: "Cancel",
+    });
+
+    if (!confirmResult.isConfirmed) return;
+
+    setIsUpdatingApiKey(true);
+    try {
+      const orgId = organizationAccess.id || "me";
+      let response = await fetch(`${apiRoot}/api/v1/organizations/${orgId}/regenerate-api-key/`, {
+        method: "POST",
+        headers: authHeaders(),
+      });
+      if (response.status === 404 && orgId !== "me") {
+        response = await fetch(`${apiRoot}/api/v1/organizations/me/regenerate-api-key/`, {
+          method: "POST",
+          headers: authHeaders(),
+        });
+      }
+      if (!response.ok) {
+        const errJson = await response.json().catch(() => ({}));
+        throw new Error(errJson.detail || errJson.error || "Failed to regenerate API Key.");
+      }
+      const data = await response.json();
+      setOrganizationAccess(data);
+      Swal.fire({
+        icon: "success",
+        title: "New API Key Generated!",
+        html: `
+          <div style="text-align: left; font-size: 14px;">
+            <p>Your new API Key is: <strong style="font-family: monospace; font-size: 15px; color: #0d6efd;">${data.api_key}</strong></p>
+            <p class="text-muted small">Please copy and update this key in your SimplyJob settings.</p>
+          </div>
+        `,
+        showConfirmButton: true,
+      });
+    } catch (err: any) {
+      Swal.fire({
+        icon: "error",
+        title: "Error",
+        text: err.message || "Failed to generate new API Key.",
+      });
+    } finally {
+      setIsUpdatingApiKey(false);
+    }
+  };
+
 
   const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -1620,59 +1721,6 @@ const SettingsPage = () => {
                     <h4 className="fw-bold mb-4">Security Settings</h4>
                     <Row className="g-4">
                       <Col md={6}>
-                        {/* SimplyJob Integration Card */}
-                        <Card className="border shadow-sm mb-4">
-                          <Card.Body>
-                            <div className="d-flex align-items-center justify-content-between mb-3">
-                              <h5 className="fw-semibold mb-0 d-flex align-items-center gap-2">
-                                <IconBuildingBank className="text-primary" size={22} />
-                                SimplyJob Integration & Org ID
-                              </h5>
-                              <Badge bg={organizationAccess?.external_company_id ? "success" : "warning"} text={organizationAccess?.external_company_id ? "white" : "dark"}>
-                                {organizationAccess?.external_company_id ? "VERIFIED & CONNECTED" : "ACTION REQUIRED: SET ORG ID"}
-                              </Badge>
-                            </div>
-                            <p className="text-secondary small mb-3">
-                              Copy your AttendStack Organization ID (<strong>{organizationAccess?.invite_code || "ORG-ID"}</strong>) and paste it into SimplyJob. Then paste your SimplyJob Org ID here to unlock employee invitations.
-                            </p>
-
-                            <Row className="g-3 align-items-end mb-2">
-                              <Col md={6}>
-                                <Form.Group controlId="attendstack-org-id">
-                                  <Form.Label className="small fw-semibold">AttendStack Org ID (Copy to SimplyJob)</Form.Label>
-                                  <div className="input-group">
-                                    <Form.Control value={organizationAccess?.invite_code || ""} readOnly className="font-monospace fw-bold bg-light" />
-                                    <Button variant="outline-primary" size="sm" onClick={copyOrganizationCode}>
-                                      <IconCopy size={16} className="me-1" /> Copy
-                                    </Button>
-                                  </div>
-                                </Form.Group>
-                              </Col>
-                              <Col md={6}>
-                                <Form.Group controlId="simplyjob-org-id">
-                                  <Form.Label className="small fw-semibold">SimplyJob Org ID / Integration Code *</Form.Label>
-                                  <div className="input-group">
-                                    <Form.Control
-                                      placeholder="e.g. SIMPLYJOB-ORG-101"
-                                      value={simplyJobOrgIdInput || organizationAccess?.external_company_id || ""}
-                                      onChange={(e) => setSimplyJobOrgIdInput(e.target.value)}
-                                    />
-                                    <Button variant="primary" size="sm" onClick={handleLinkSimplyJob} disabled={isLinkingSimplyJob || !simplyJobOrgIdInput.trim()}>
-                                      {isLinkingSimplyJob ? <Spinner size="sm" /> : "Link Org ID"}
-                                    </Button>
-                                  </div>
-                                </Form.Group>
-                              </Col>
-                            </Row>
-
-                            {!organizationAccess?.external_company_id && (
-                              <Alert variant="warning" className="py-2 px-3 small border-0 mt-3 mb-0">
-                                <strong>Notice:</strong> Employee invitations are disabled until you paste and save your SimplyJob Org ID above.
-                              </Alert>
-                            )}
-                          </Card.Body>
-                        </Card>
-
                         <Card className="border shadow-sm h-100">
                           <Card.Body>
                             <h5 className="fw-semibold mb-2">Employee onboarding code</h5>
@@ -1842,6 +1890,274 @@ const SettingsPage = () => {
                             </Form.Group>
                           </Card.Body>
                         </Card>
+                      </Col>
+                    </Row>
+                  </div>
+                </Tab>
+
+                {/* API & SimplyJob Integration Tab */}
+                <Tab
+                  eventKey="integrations"
+                  title={
+                    <span className="d-flex align-items-center gap-2 py-2">
+                      <IconKey size={18} />
+                      API & Integrations
+                    </span>
+                  }
+                >
+                  <div className="p-4 border-top">
+                    <div className="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+                      <div>
+                        <h4 className="fw-bold mb-1">API Key & External Integrations</h4>
+                        <p className="text-secondary small mb-0">
+                          Connect AttendStack with SimplyJob and other external platforms using your secure organization API Key.
+                        </p>
+                      </div>
+                      <Badge bg={organizationAccess?.api_key ? "success" : "warning"} className="px-3 py-2 fs-6">
+                        {organizationAccess?.api_key ? "API Active & Ready" : "API Setup Required"}
+                      </Badge>
+                    </div>
+
+                    <Row className="g-4">
+                      {/* Left Column: API Key & SimplyJob Connection */}
+                      <Col lg={7}>
+                        <Card className="border shadow-sm h-100">
+                          <Card.Body>
+                            <h5 className="fw-bold mb-2 d-flex align-items-center gap-2">
+                              <IconKey size={20} className="text-primary" />
+                              AttendStack Integration API Key
+                            </h5>
+                            <p className="text-muted small mb-4">
+                              Use this private key in SimplyJob (under <strong>Hired & AttendStack Invites</strong>) to link your workforce and sync employee invitations automatically.
+                            </p>
+
+                            {isLoadingOrganizationAccess ? (
+                              <div className="d-flex align-items-center gap-2 text-secondary py-3">
+                                <Spinner size="sm" /> Loading API configuration…
+                              </div>
+                            ) : organizationAccess ? (
+                              <>
+                                <Form.Group className="mb-3">
+                                  <Form.Label className="small fw-semibold text-secondary">
+                                    Your Organization API Key
+                                  </Form.Label>
+                                  <div className="input-group">
+                                    <Form.Control
+                                      type={showApiKey ? "text" : "password"}
+                                      value={organizationAccess.api_key || ""}
+                                      readOnly
+                                      className="font-monospace fw-semibold bg-light"
+                                    />
+                                    <Button
+                                      variant="outline-secondary"
+                                      type="button"
+                                      onClick={() => setShowApiKey(!showApiKey)}
+                                      title={showApiKey ? "Hide Key" : "Show Key"}
+                                    >
+                                      {showApiKey ? <IconEyeOff size={18} /> : <IconEye size={18} />}
+                                    </Button>
+                                    <Button
+                                      variant="primary"
+                                      type="button"
+                                      onClick={copyApiKey}
+                                    >
+                                      <IconCopy size={18} className="me-1" /> Copy Key
+                                    </Button>
+                                  </div>
+                                  <Form.Text className="text-muted small">
+                                    Keep this secret. Never share your API Key in public repositories.
+                                  </Form.Text>
+                                </Form.Group>
+
+                                <div className="d-flex align-items-center justify-content-between mt-4 pt-3 border-top flex-wrap gap-2">
+                                  <div>
+                                    <span className="small text-muted d-block">Need to rotate credentials?</span>
+                                    <small className="text-secondary">Regenerating creates a fresh key immediately.</small>
+                                  </div>
+                                  {organizationAccess.can_manage_invite_code ? (
+                                    <Button
+                                      variant="outline-danger"
+                                      size="sm"
+                                      onClick={regenerateApiKey}
+                                      disabled={isUpdatingApiKey}
+                                    >
+                                      {isUpdatingApiKey ? (
+                                        <><Spinner size="sm" className="me-1" /> Regenerating…</>
+                                      ) : (
+                                        <><IconRefresh size={16} className="me-1" /> Regenerate API Key</>
+                                      )}
+                                    </Button>
+                                  ) : (
+                                    <small className="text-secondary">Only the organization owner can rotate keys.</small>
+                                  )}
+                                </div>
+                              </>
+                            ) : (
+                              <Alert variant="warning" className="small mb-0">
+                                Please create a company workspace to generate your integration API key.
+                              </Alert>
+                            )}
+
+                            <hr className="my-4" />
+
+                            <h6 className="fw-bold mb-3 d-flex align-items-center gap-2">
+                              <IconLink size={18} className="text-primary" />
+                              How to connect SimplyJob with AttendStack
+                            </h6>
+                            <div className="bg-light p-3 rounded small text-secondary">
+                              <ol className="mb-0 ps-3">
+                                <li className="mb-1">Click <strong>Copy Key</strong> above to copy your unique AttendStack API Key.</li>
+                                <li className="mb-1">Open <strong>SimplyJob</strong> and navigate to <strong>Hired Employees & AttendStack</strong>.</li>
+                                <li className="mb-1">Click <strong>Connect with API Key</strong> and paste the key.</li>
+                                <li>SimplyJob will instantly connect, auto-fetch your Organization Code (<strong>{organizationAccess?.invite_code || "ORG-XXXXXX"}</strong>), and enable 1-click candidate invites!</li>
+                              </ol>
+                            </div>
+                          </Card.Body>
+                        </Card>
+                      </Col>
+
+                      {/* Right Column: Organization Code & Plan Status */}
+                      <Col lg={5}>
+                        <div className="d-flex flex-column gap-4 h-100">
+                          {/* Organization Code Box */}
+                          <Card className="border shadow-sm">
+                            <Card.Body>
+                              <h5 className="fw-bold mb-2 d-flex align-items-center gap-2">
+                                <IconShieldLock size={20} className="text-primary" />
+                                Organization Code (Org ID)
+                              </h5>
+                              <p className="text-muted small mb-3">
+                                Unique company identifier managed in AttendStack and synchronized with SimplyJob.
+                              </p>
+
+                              {organizationAccess ? (
+                                <div className="d-flex align-items-center justify-content-between bg-light p-3 rounded border">
+                                  <div>
+                                    <span className="text-xs text-muted d-block uppercase fw-bold">Active Code</span>
+                                    <span className="font-monospace fw-bold fs-5 text-primary">
+                                      {organizationAccess.invite_code}
+                                    </span>
+                                  </div>
+                                  <div className="d-flex gap-2">
+                                    <Button variant="outline-primary" size="sm" onClick={copyOrganizationCode}>
+                                      <IconCopy size={16} />
+                                    </Button>
+                                    {organizationAccess.can_manage_invite_code && (
+                                      <Button
+                                        variant="outline-secondary"
+                                        size="sm"
+                                        onClick={regenerateOrganizationCode}
+                                        disabled={isUpdatingOrganizationCode}
+                                        title="Reset Org ID (SimplyJob will auto-fetch the new one via API Key)"
+                                      >
+                                        <IconRefresh size={16} />
+                                      </Button>
+                                    )}
+                                  </div>
+                                </div>
+                              ) : (
+                                <Spinner size="sm" />
+                              )}
+                              <Form.Text className="text-muted small d-block mt-2">
+                                If this code is reset, SimplyJob will automatically update it via your stored API Key.
+                              </Form.Text>
+                            </Card.Body>
+                          </Card>
+
+                          {/* Plan & Expiry Status Box */}
+                          <Card className={`border shadow-sm ${organizationAccess?.is_plan_expired ? "border-danger bg-danger-subtle" : organizationAccess?.is_plan_expiring_soon ? "border-warning bg-warning-subtle" : ""}`}>
+                            <Card.Body>
+                              <h5 className="fw-bold mb-2 d-flex align-items-center justify-content-between">
+                                <span className="d-flex align-items-center gap-2">
+                                  <IconCreditCard size={20} className="text-primary" />
+                                  Plan & Subscription
+                                </span>
+                                <Badge
+                                  bg={
+                                    organizationAccess?.is_plan_expired
+                                      ? "danger"
+                                      : organizationAccess?.is_plan_expiring_soon
+                                      ? "warning"
+                                      : "success"
+                                  }
+                                >
+                                  {organizationAccess?.is_plan_expired
+                                    ? "EXPIRED"
+                                    : organizationAccess?.is_plan_expiring_soon
+                                    ? "EXPIRING SOON"
+                                    : "ACTIVE"}
+                                </Badge>
+                              </h5>
+
+                              <div className="mt-3">
+                                <div className="d-flex justify-content-between py-1 border-bottom">
+                                  <span className="text-muted small">Current Plan:</span>
+                                  <span className="fw-bold small">{organizationAccess?.plan_name || "Standard Plan"}</span>
+                                </div>
+                                <div className="d-flex justify-content-between py-1 border-bottom">
+                                  <span className="text-muted small">Plan Source:</span>
+                                  <span className="small">{organizationAccess?.plan_source === "SIMPLYJOB" ? "SimplyJob Integrated" : "AttendStack Direct"}</span>
+                                </div>
+                                <div className="d-flex justify-content-between py-1 border-bottom">
+                                  <span className="text-muted small">Max Capacity:</span>
+                                  <span className="small fw-semibold">{organizationAccess?.max_employees || 50} Employees</span>
+                                </div>
+                                <div className="d-flex justify-content-between py-1">
+                                  <span className="text-muted small">Expiration Date:</span>
+                                  <span className={`small fw-bold ${organizationAccess?.is_plan_expired ? "text-danger" : organizationAccess?.is_plan_expiring_soon ? "text-warning" : "text-dark"}`}>
+                                    {organizationAccess?.plan_expires_at
+                                      ? new Date(organizationAccess.plan_expires_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
+                                      : "Active (Ongoing)"}
+                                    {organizationAccess?.days_until_plan_expiry !== null && organizationAccess?.days_until_plan_expiry !== undefined && (
+                                      <span className="ms-1 fw-normal text-muted">
+                                        ({organizationAccess.days_until_plan_expiry} days left)
+                                      </span>
+                                    )}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {organizationAccess?.is_plan_expiring_soon && (
+                                <Alert variant="warning" className="mt-3 py-2 small mb-0 d-flex align-items-center gap-2">
+                                  <IconAlertTriangle size={18} className="flex-shrink-0" />
+                                  <span>Your plan expires in {organizationAccess.days_until_plan_expiry} days. Please renew to avoid service interruption.</span>
+                                </Alert>
+                              )}
+                              {organizationAccess?.is_plan_expired && (
+                                <Alert variant="danger" className="mt-3 py-2 small mb-0 d-flex align-items-center gap-2">
+                                  <IconAlertTriangle size={18} className="flex-shrink-0" />
+                                  <span>Your plan has expired. Please renew your subscription to reactivate all features.</span>
+                                </Alert>
+                              )}
+
+                              <div className="mt-3 pt-3 border-top d-flex gap-2 flex-wrap">
+                                <Button
+                                  as={Link as any}
+                                  href="/plans"
+                                  variant="primary"
+                                  size="sm"
+                                  className="fw-bold flex-grow-1 text-decoration-none d-inline-flex align-items-center justify-content-center"
+                                >
+                                  <IconSparkles size={16} className="me-1" />
+                                  {organizationAccess?.is_plan_expired ? "Reactivate Subscription" : "Renew / Upgrade Plan"}
+                                </Button>
+                                {organizationAccess?.plan_source === "SIMPLYJOB" && (
+                                  <Button
+                                    variant="outline-primary"
+                                    size="sm"
+                                    className="fw-semibold"
+                                    onClick={() => {
+                                      const simplyJobUrl = process.env.NEXT_PUBLIC_SIMPLYJOB_URL || (typeof window !== "undefined" && window.location.hostname === "localhost" ? "http://localhost:3009" : "https://simplyjob.in");
+                                      window.open(`${simplyJobUrl}/company/billing`, "_blank");
+                                    }}
+                                  >
+                                    <IconExternalLink size={15} className="me-1" /> Renew on SimplyJob
+                                  </Button>
+                                )}
+                              </div>
+                            </Card.Body>
+                          </Card>
+                        </div>
                       </Col>
                     </Row>
                   </div>

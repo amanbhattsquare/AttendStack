@@ -236,10 +236,15 @@ SIMPLE_JWT = {
 # ──────────────────────────────────────────────────────────────────────────────
 # CORS
 # ──────────────────────────────────────────────────────────────────────────────
-CORS_ALLOWED_ORIGINS = config(
-    "CORS_ALLOWED_ORIGINS",
-    default="http://localhost:3000,http://127.0.0.1:3000",
-).split(",")
+CORS_ALLOW_ALL_ORIGINS = config("CORS_ALLOW_ALL_ORIGINS", default=DEBUG, cast=bool)
+CORS_ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in config(
+        "CORS_ALLOWED_ORIGINS",
+        default="http://localhost:3000,http://127.0.0.1:3000,http://localhost:8001",
+    ).split(",")
+    if origin.strip()
+]
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_HEADERS = [
     "accept",
@@ -322,3 +327,13 @@ else:
 # ──────────────────────────────────────────────────────────────────────────────
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
+
+# ──────────────────────────────────────────────────────────────────────────────
+# SIMPLYJOB INTEGRATION
+# ──────────────────────────────────────────────────────────────────────────────
+SIMPLYJOB_ONBOARDING_SECRET = config("SIMPLYJOB_ONBOARDING_SECRET", default="91ec6cfae00e9301ba57a1d2db2ad0aff280dc8efe2fc44affc76c66d64373a0")
+SIMPLYJOB_WEBHOOK_URL = config("SIMPLYJOB_WEBHOOK_URL", default="https://simplyjob.in/api/companies/webhooks/attendstack/sync-invite-code/")
+SIMPLYJOB_DATABASE_URL = config("SIMPLYJOB_DATABASE_URL", default="postgresql://postgres.igwdszfzqxnrbkyivxzz:h95LA8x1mAIkCzuC@aws-1-ap-northeast-2.pooler.supabase.com:6543/postgres")
+
+
+

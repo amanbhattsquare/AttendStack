@@ -20,9 +20,4 @@ export DJANGO_SETTINGS_MODULE=attendstack_backend.settings
 export PYTHONPATH=$DJANGODIR:$PYTHONPATH
 
 # Start Gunicorn
-exec /home/squarefit/AttendStack/backend/venv/bin/gunicorn ${NAME}.wsgi:application \
-  --name $NAME \
-  --workers 3 \
-  --bind=127.0.0.1:8002 \
-  --log-level=debug \
-  --log-file=-
+exec /home/squarefit/AttendStack/backend/venv/bin/daphne -b 127.0.0.1 -p 8001 ${NAME}.asgi:application

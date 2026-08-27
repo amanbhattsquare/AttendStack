@@ -25,7 +25,7 @@ import { Alert, Button, Dropdown, Form, Modal } from "react-bootstrap";
 import Link from "next/link";
 import EmployeeFormWizard, { EmployeeFormData } from "./EmployeeFormWizard";
 
-type EmployeeStatus = "ACTIVE" | "PROVISION" | "INACTIVE" | "ON_LEAVE" | "TERMINATED";
+type EmployeeStatus = "ACTIVE" | "PROVISION" | "INACTIVE" | "ON_LEAVE" | "NOTICE_PERIOD" | "TERMINATED";
 
 type Employee = {
   id: string;
@@ -39,6 +39,9 @@ type Employee = {
   account_exists: boolean;
   status: EmployeeStatus;
   status_label: string;
+  status_end_date?: string | null;
+  auto_transition_status?: EmployeeStatus | null;
+  auto_transition_status_label?: string | null;
 };
 
 type EmployeeListResponse = Employee[] | {
@@ -64,8 +67,9 @@ const localDateValue = () => {
 const statusBadgeClass: Record<Employee["status"], string> = {
   ACTIVE: "bg-success-subtle text-success",
   PROVISION: "bg-info-subtle text-info",
-  INACTIVE: "bg-secondary-subtle text-secondary",
   ON_LEAVE: "bg-warning-subtle text-warning",
+  NOTICE_PERIOD: "bg-warning-subtle text-danger",
+  INACTIVE: "bg-secondary-subtle text-secondary",
   TERMINATED: "bg-danger-subtle text-danger",
 };
 
@@ -86,6 +90,10 @@ const employeeStatusOptions: Array<{
     label: "On Leave",
   },
   {
+    value: "NOTICE_PERIOD",
+    label: "Notice Period",
+  },
+  {
     value: "INACTIVE",
     label: "Inactive",
   },
@@ -104,8 +112,9 @@ const employeeStatusOrder: Record<EmployeeStatus, number> = {
   ACTIVE: 0,
   PROVISION: 1,
   ON_LEAVE: 2,
-  INACTIVE: 3,
-  TERMINATED: 4,
+  NOTICE_PERIOD: 3,
+  INACTIVE: 4,
+  TERMINATED: 5,
 };
 
 const sortEmployeesByStatus = (employees: Employee[]) => [...employees].sort((first, second) =>
@@ -165,6 +174,8 @@ const EmployeePageClient = () => {
   const [statusEmployee, setStatusEmployee] = useState<Employee | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<EmployeeStatus>("ACTIVE");
   const [statusEffectiveDate, setStatusEffectiveDate] = useState(localDateValue);
+  const [statusEndDate, setStatusEndDate] = useState("");
+  const [autoTransitionStatus, setAutoTransitionStatus] = useState<EmployeeStatus | "">("");
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Partial<EmployeeFormData> | null>(null);
   const [isEditModalLoading, setIsEditModalLoading] = useState(false);
@@ -184,25 +195,39 @@ const EmployeePageClient = () => {
 
     try {
       const token = localStorage.getItem("authToken");
-      const orgRes = await fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/organizations/`, {
+      const orgRes = await fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/organizations/my-organization/`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      let myOrg = null;
       if (orgRes.ok) {
         const orgs = await orgRes.json();
-        const myOrg = Array.isArray(orgs) ? orgs[0] : orgs.results?.[0];
-        if (myOrg) {
-          const res = await fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/organizations/${myOrg.id}/generate-invite-link/`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          const data = await res.json();
-          if (res.ok) {
-            setInviteData(data);
-          } else {
-            setInviteError(data.detail || "SimplyJob Organization ID is not configured. Please paste and save your SimplyJob Org ID in Settings before sending invitations.");
-          }
-        } else {
-          setInviteError("No organization workspace found for this account.");
+        const list = Array.isArray(orgs) ? orgs : orgs.results || [];
+        if (list.length > 0) myOrg = list[0];
+      }
+      if (!myOrg) {
+        const fallbackRes = await fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/organizations/`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (fallbackRes.ok) {
+          const orgs = await fallbackRes.json();
+          const list = Array.isArray(orgs) ? orgs : orgs.results || [];
+          const storedUserStr = typeof window !== "undefined" ? localStorage.getItem("user") : null;
+          const storedUser = storedUserStr ? JSON.parse(storedUserStr) : null;
+          myOrg = (storedUser?.email && list.find((o: any) => o.owner_email && o.owner_email.toLowerCase() === storedUser.email.toLowerCase())) || list[0];
         }
+      }
+      if (myOrg) {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/organizations/${myOrg.id}/generate-invite-link/`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+        if (res.ok) {
+          setInviteData(data);
+        } else {
+          setInviteError(data.detail || "SimplyJob Organization ID is not configured. Please paste and save your SimplyJob Org ID in Settings before sending invitations.");
+        }
+      } else {
+        setInviteError("No organization workspace found for this account.");
       }
     } catch {
       setInviteError("Failed to generate invitation link. Please check your backend connection.");
@@ -374,6 +399,8 @@ const EmployeePageClient = () => {
     setStatusEmployee(employee);
     setSelectedStatus(employee.status);
     setStatusEffectiveDate(localDateValue());
+    setStatusEndDate(employee.status_end_date || "");
+    setAutoTransitionStatus((employee.auto_transition_status as EmployeeStatus) || "");
   };
 
   const closeStatusModal = () => {
@@ -381,6 +408,8 @@ const EmployeePageClient = () => {
     setStatusEmployee(null);
     setSelectedStatus("ACTIVE");
     setStatusEffectiveDate(localDateValue());
+    setStatusEndDate("");
+    setAutoTransitionStatus("");
   };
 
   const closePasswordModal = () => {
@@ -493,6 +522,8 @@ const EmployeePageClient = () => {
         body: JSON.stringify({
           status: selectedStatus,
           effective_date: statusEffectiveDate,
+          end_date: statusEndDate || null,
+          auto_transition_status: autoTransitionStatus || (selectedStatus === "NOTICE_PERIOD" ? "INACTIVE" : selectedStatus === "PROVISION" ? "ACTIVE" : null),
         }),
       });
 
@@ -552,12 +583,12 @@ const EmployeePageClient = () => {
   const uniqueDepartments = [...new Set(employees.map((employee) => employee.department).filter(Boolean))];
   return (
     <Fragment>
-      <div className="mb-6 d-flex align-items-center justify-content-between">
+      <div className="mb-4 d-flex flex-wrap align-items-center justify-content-between gap-3">
         <div>
           <h2 className="mb-0 fw-bold">Employees</h2>
           <p className="text-secondary mb-0">Manage your workforce, view profiles, and update details.</p>
         </div>
-        <div className="d-flex align-items-center gap-2">
+        <div className="d-flex flex-wrap align-items-center gap-2">
           <Button variant="outline-primary" className="d-flex align-items-center gap-2 fw-semibold" onClick={handleOpenInviteModal}>
             <IconMail size={18} /> Invite Candidate (SimplyJob)
           </Button>
@@ -568,9 +599,9 @@ const EmployeePageClient = () => {
       </div>
 
       <div className="card border-0 shadow-sm mb-6">
-        <div className="card-header bg-white border-bottom-0 pt-4 pb-0">
+        <div className="card-header bg-white border-bottom-0 pt-4 pb-3">
           <div className="row g-3 align-items-center">
-            <div className="col-md-4">
+            <div className="col-12 col-md-5 col-lg-4">
               <div className="input-group">
                 <span className="input-group-text bg-transparent border-end-0">
                   <IconSearch size={18} className="text-muted" />
@@ -584,7 +615,7 @@ const EmployeePageClient = () => {
                 />
               </div>
             </div>
-            <div className="col-md-8 d-flex justify-content-md-end">
+            <div className="col-12 col-md-7 col-lg-8 d-flex justify-content-start justify-content-md-end">
               <Dropdown>
                 <Dropdown.Toggle variant="outline-secondary" id="dropdown-filter" className="d-flex align-items-center gap-2">
                   <IconFilter size={18} /> Filter
@@ -601,66 +632,81 @@ const EmployeePageClient = () => {
                   <Dropdown.Item onClick={() => setStatusFilter("")}>All Statuses</Dropdown.Item>
                   <Dropdown.Item onClick={() => setStatusFilter("ACTIVE")}>Active</Dropdown.Item>
                   <Dropdown.Item onClick={() => setStatusFilter("PROVISION")}>Provision</Dropdown.Item>
-                  <Dropdown.Item onClick={() => setStatusFilter("INACTIVE")}>Inactive</Dropdown.Item>
                   <Dropdown.Item onClick={() => setStatusFilter("ON_LEAVE")}>On Leave</Dropdown.Item>
+                  <Dropdown.Item onClick={() => setStatusFilter("NOTICE_PERIOD")}>Notice Period</Dropdown.Item>
+                  <Dropdown.Item onClick={() => setStatusFilter("INACTIVE")}>Inactive</Dropdown.Item>
                   <Dropdown.Item onClick={() => setStatusFilter("TERMINATED")}>Terminated</Dropdown.Item>
                 </Dropdown.Menu>
               </Dropdown>
             </div>
           </div>
         </div>
-        <div className="card-body">
-          {error && <div className="alert alert-danger">{error}</div>}
-          {successMessage && <div className="alert alert-success">{successMessage}</div>}
+        <div className="card-body p-0">
+          {error && <div className="alert alert-danger m-3">{error}</div>}
+          {successMessage && <div className="alert alert-success m-3">{successMessage}</div>}
 
-          <div className="table-responsive employee-table-responsive">
+          <div className="table-responsive employee-table-wrapper">
             <table className="table table-sm table-borderless table-striped align-middle table-hover text-nowrap mb-0">
               <thead className="table-light">
                 <tr>
-                  <th className="py-2.5 ps-3">Employee Name</th>
-                  <th className="py-2.5">ID</th>
-                  <th className="py-2.5">Department</th>
-                  <th className="py-2.5">Designation</th>
-                  <th className="py-2.5">Status</th>
-                  <th className="py-2.5 text-center employee-action-column pe-3">Action</th>
+                  <th className="py-2.5 ps-3" style={{ minWidth: "220px" }}>Employee Name</th>
+                  <th className="py-2.5" style={{ minWidth: "110px" }}>ID</th>
+                  <th className="py-2.5" style={{ minWidth: "130px" }}>Department</th>
+                  <th className="py-2.5" style={{ minWidth: "140px" }}>Designation</th>
+                  <th className="py-2.5" style={{ minWidth: "150px" }}>Status</th>
+                  <th className="py-2.5 text-center employee-action-column pe-3" style={{ minWidth: "90px" }}>Action</th>
                 </tr>
               </thead>
               <tbody>
                 {isLoading && (
                   <tr>
-                    <td colSpan={7} className="text-center py-4 text-secondary">Loading employees...</td>
+                    <td colSpan={6} className="text-center py-4 text-secondary">Loading employees...</td>
                   </tr>
                 )}
 
                 {!isLoading && filteredEmployees.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="text-center py-4 text-secondary">No employees found.</td>
+                    <td colSpan={6} className="text-center py-4 text-secondary">No employees found.</td>
                   </tr>
                 )}
 
                 {!isLoading && filteredEmployees.map((employee) => (
                   <tr key={employee.id} style={{ cursor: "pointer" }} onClick={() => handleRowClick(employee.id)}>
-                    <td className="py-2 ps-3">
+                    <td className="py-2 ps-3" style={{ maxWidth: "220px" }}>
                       <div className="d-flex align-items-center">
                         <img
                           src={employee.profile_photo_url || "/images/avatar/avatar-fallback.jpg"}
                           alt={employee.full_name}
-                          className="rounded-circle me-2.5"
+                          className="rounded-circle me-2.5 flex-shrink-0"
                           style={{ width: "32px", height: "32px", objectFit: "cover" }}
                         />
-                        <div>
-                          <h6 className="mb-0 fw-semibold fs-6">{employee.full_name}</h6>
-                          <small className="text-muted" style={{ fontSize: "0.78rem" }}>{employee.email}</small>
+                        <div className="min-w-0">
+                          <h6 className="mb-0 fw-semibold fs-6 text-truncate" title={employee.full_name}>{employee.full_name}</h6>
+                          <small className="text-muted d-block text-truncate" style={{ fontSize: "0.78rem" }} title={employee.email}>{employee.email}</small>
                         </div>
                       </div>
                     </td>
                     <td>{employee.employee_id}</td>
-                    <td>{employee.department}</td>
-                    <td>{employee.designation}</td>
+                    <td style={{ maxWidth: "140px" }}>
+                      <div className="text-truncate" style={{ maxWidth: "140px" }} title={employee.department || "-"}>
+                        {employee.department || "-"}
+                      </div>
+                    </td>
+                    <td style={{ maxWidth: "180px" }}>
+                      <div className="text-truncate" style={{ maxWidth: "180px" }} title={employee.designation || "-"}>
+                        {employee.designation || "-"}
+                      </div>
+                    </td>
                     <td>
                       <span className={`badge ${statusBadgeClass[employee.status] || "bg-secondary-subtle text-secondary"}`}>
                         {employee.status_label}
                       </span>
+                      {employee.status_end_date && (
+                        <small className="d-block text-muted mt-1" style={{ fontSize: "11px" }}>
+                          Until {formatDate(employee.status_end_date)}
+                          {employee.auto_transition_status_label ? ` → ${employee.auto_transition_status_label}` : ""}
+                        </small>
+                      )}
                     </td>
                     <td className="text-center employee-action-column">
                       <Dropdown
@@ -839,21 +885,62 @@ const EmployeePageClient = () => {
               </div>
             </Form.Group>
 
-            <Form.Group controlId="statusEffectiveDate">
-              <Form.Label className="fw-semibold">Effective Date</Form.Label>
-              <Form.Control
-                type="date"
-                required
-                min={statusEmployee?.joining_date}
-                max={localDateValue()}
-                value={statusEffectiveDate}
-                onChange={(event) => setStatusEffectiveDate(event.target.value)}
-              />
-              <Form.Text className="text-muted">
-                Attendance is shown only while the employee is Active, Provision, or On Leave.
-                Inactive and Terminated dates are excluded from this date onward.
-              </Form.Text>
-            </Form.Group>
+            <div className="row g-3 mb-3">
+              <div className="col-md-6">
+                <Form.Group controlId="statusEffectiveDate">
+                  <Form.Label className="fw-semibold">Start Date (From)</Form.Label>
+                  <Form.Control
+                    type="date"
+                    required
+                    min={statusEmployee?.joining_date}
+                    value={statusEffectiveDate}
+                    onChange={(event) => setStatusEffectiveDate(event.target.value)}
+                  />
+                </Form.Group>
+              </div>
+
+              <div className="col-md-6">
+                <Form.Group controlId="statusEndDate">
+                  <Form.Label className="fw-semibold">
+                    End Date (To) {selectedStatus === "NOTICE_PERIOD" || selectedStatus === "PROVISION" ? <span className="text-danger">*</span> : <small className="text-muted">(Optional)</small>}
+                  </Form.Label>
+                  <Form.Control
+                    type="date"
+                    min={statusEffectiveDate}
+                    value={statusEndDate}
+                    onChange={(event) => setStatusEndDate(event.target.value)}
+                  />
+                </Form.Group>
+              </div>
+            </div>
+
+            {(selectedStatus === "NOTICE_PERIOD" || selectedStatus === "PROVISION" || statusEndDate) && (
+              <div className="alert alert-warning border-0 shadow-sm rounded-3 mb-3 p-3">
+                <div className="d-flex align-items-center gap-2 mb-1 fw-bold text-dark">
+                  <IconCalendarStats size={18} className="text-warning me-1" />
+                  Automated Status Transition
+                </div>
+                <div className="small text-secondary">
+                  {selectedStatus === "NOTICE_PERIOD" && (
+                    statusEndDate ? (
+                      <>Employee serves Notice Period until <strong>{formatDate(statusEndDate)}</strong>. Once the notice period ends, status will automatically transition to <span className="badge bg-secondary-subtle text-secondary ms-1">Inactive</span>.</>
+                    ) : (
+                      <>Select the Notice Period end date above. Once completed, employee status will automatically transition to <span className="badge bg-secondary-subtle text-secondary ms-1">Inactive</span>.</>
+                    )
+                  )}
+                  {selectedStatus === "PROVISION" && (
+                    statusEndDate ? (
+                      <>Provision ends on <strong>{formatDate(statusEndDate)}</strong>. Once provision completes, status will automatically transition to <span className="badge bg-success-subtle text-success ms-1">Active</span>.</>
+                    ) : (
+                      <>Select the Provision end date above. Once completed, employee status will automatically transition to <span className="badge bg-success-subtle text-success ms-1">Active</span>.</>
+                    )
+                  )}
+                  {selectedStatus !== "NOTICE_PERIOD" && selectedStatus !== "PROVISION" && statusEndDate && (
+                    <>Status active from <strong>{formatDate(statusEffectiveDate)}</strong> until <strong>{formatDate(statusEndDate)}</strong>.</>
+                  )}
+                </div>
+              </div>
+            )}
           </Modal.Body>
           <Modal.Footer>
             <Button variant="outline-secondary" onClick={closeStatusModal} disabled={actionLoadingKey === `${statusEmployee?.id}:status`}>
@@ -963,13 +1050,20 @@ const EmployeePageClient = () => {
       </Modal>
 
       <style jsx global>{`
-        .employee-table-responsive {
-          overflow: visible;
+        .employee-table-wrapper {
+          width: 100%;
+          overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
+        }
+
+        .employee-table-wrapper table {
+          min-width: 860px;
+          width: 100%;
         }
 
         .employee-action-column {
-          width: 112px;
-          min-width: 112px;
+          width: 90px;
+          min-width: 90px;
         }
 
         .employee-action-toggle {
@@ -1069,9 +1163,9 @@ const EmployeePageClient = () => {
         }
 
         @media (max-width: 991.98px) {
-          .employee-table-responsive {
+          .employee-table-wrapper {
             overflow-x: auto;
-            padding-bottom: 180px;
+            padding-bottom: 20px;
           }
         }
       `}</style>

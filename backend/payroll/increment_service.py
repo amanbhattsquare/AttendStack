@@ -95,9 +95,12 @@ def sync_employee_increments(employee: Employee = None):
 
         if existing_pending:
             if existing_pending.status == IncrementStatus.PENDING:
+                target_type = existing_pending.increment_type or inc_type
+                target_val = existing_pending.increment_value if existing_pending.increment_value is not None else inc_val
+                calc_amount, new_salary = calculate_increment_amounts(current_salary, target_type, target_val)
                 existing_pending.current_salary = current_salary
-                existing_pending.increment_type = inc_type
-                existing_pending.increment_value = inc_val
+                existing_pending.increment_type = target_type
+                existing_pending.increment_value = target_val
                 existing_pending.calculated_increment_amount = calc_amount
                 existing_pending.new_salary = new_salary
                 existing_pending.due_date = due_date
@@ -194,6 +197,44 @@ def reschedule_increment(increment: EmployeeIncrement, new_date: date, user=None
     emp.save(update_fields=["next_increment_date"])
 
     return increment
+
+
+@transaction.atomic
+def update_increment_hike(
+    increment: EmployeeIncrement,
+    increment_type: str,
+    increment_value: Decimal,
+    notes: str = "",
+    update_employee_policy: bool = False,
+    user=None,
+):
+    """
+    Updates the proposed salary hike (type and amount) for a pending or rescheduled increment.
+    Optionally updates the employee's default increment policy.
+    """
+    if increment.status in [IncrementStatus.APPROVED, IncrementStatus.REJECTED]:
+        raise ValueError("Cannot edit an increment that has already been approved or rejected.")
+
+    current_salary = Decimal(str(increment.current_salary or increment.employee.annual_salary or 0))
+    calc_amount, new_salary = calculate_increment_amounts(current_salary, increment_type, increment_value)
+
+    increment.increment_type = increment_type
+    increment.increment_value = increment_value
+    increment.calculated_increment_amount = calc_amount
+    increment.new_salary = new_salary
+    if notes:
+        increment.notes = notes
+    increment.save()
+
+    if update_employee_policy:
+        emp = increment.employee
+        emp.override_increment_policy = True
+        emp.custom_increment_type = increment_type
+        emp.custom_increment_value = increment_value
+        emp.save(update_fields=["override_increment_policy", "custom_increment_type", "custom_increment_value"])
+
+    return increment
+
 
 
 def get_increment_chart_projections(months_ahead: int = 12):

@@ -18,10 +18,9 @@ User = get_user_model()
 
 
 def sync_employee_user_access(employee: Employee):
-    employee_users = User.objects.filter(role=UserRole.EMPLOYEE)
-    user = employee_users.filter(employee_id=employee.employee_id).first()
+    user = User.objects.filter(employee_id=employee.employee_id).first() if employee.employee_id else None
     if user is None:
-        user = employee_users.filter(email__iexact=employee.email).first()
+        user = User.objects.filter(email__iexact=employee.email).first()
     if user is None:
         return None
 
@@ -87,8 +86,9 @@ def resolve_employee_password(password=None):
 
 
 def create_employee_user(employee: Employee, password=None):
-    if User.objects.filter(email__iexact=employee.email).exists():
-        raise ValidationError({"detail": "A login account already exists for this employee."})
+    existing_user = User.objects.filter(email__iexact=employee.email).first()
+    if existing_user:
+        return reset_employee_user_password(employee, password)
 
     if len(employee.employee_id) > 20:
         raise ValidationError({"detail": "Employee ID must be 20 characters or fewer to create a login account."})
@@ -114,10 +114,9 @@ def create_employee_user(employee: Employee, password=None):
 
 
 def reset_employee_user_password(employee: Employee, password=None):
-    try:
-        user = User.objects.get(email__iexact=employee.email, role=UserRole.EMPLOYEE)
-    except User.DoesNotExist as exc:
-        raise ValidationError({"detail": "No login account exists for this employee. Create a password first."}) from exc
+    user = sync_employee_user_access(employee)
+    if user is None:
+        raise ValidationError({"detail": "No login account exists for this employee. Create a password first."})
 
     employee_password = resolve_employee_password(password)
     user.set_password(employee_password)

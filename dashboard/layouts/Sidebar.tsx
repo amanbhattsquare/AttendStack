@@ -22,7 +22,7 @@ import { Avatar } from "components/common/Avatar";
 import CustomToggle, { CustomToggleLevel2 } from "./SidebarMenuToggle";
 
 // import required routes
-import { IconBuildingSkyscraper } from "@tabler/icons-react";
+import { IconBuildingSkyscraper, IconLock } from "@tabler/icons-react";
 import { getAssetPath } from "helper/assetPath";
 import { DashboardMenu } from "routes/DashboardRoute";
 import { EmployeeDashboardMenu } from "routes/EmployeeDashboardRoute";
@@ -59,6 +59,7 @@ const Sidebar: React.FC<SidebarProps> = ({ hideLogo = false, containerId, curren
   const { companyLogo, companyName } = useBranding();
   const menuItems = isEmployee ? EmployeeDashboardMenu : DashboardMenu;
   const [user, setUser] = useState<{ full_name: string; designation: string } | null>(null);
+  const [organization, setOrganization] = useState<any>(null);
   const [adminStatus, setAdminStatus] = useState<AdminLiveStatus | null>(null);
 
   useEffect(() => {
@@ -66,6 +67,12 @@ const Sidebar: React.FC<SidebarProps> = ({ hideLogo = false, containerId, curren
     if (userData) {
       const parsedUser = JSON.parse(userData);
       setUser(parsedUser);
+    }
+    const orgData = localStorage.getItem("organization");
+    if (orgData) {
+      try {
+        setOrganization(JSON.parse(orgData));
+      } catch {}
     }
   }, []);
 
@@ -105,11 +112,14 @@ const Sidebar: React.FC<SidebarProps> = ({ hideLogo = false, containerId, curren
   //Generate Link
   const generateLink = (item: MenuItemType) => {
     const isactive = currentPath === item.link;
+    const isLocked =
+      Boolean(item.featureKey) &&
+      organization?.plan_features &&
+      organization.plan_features[item.featureKey!] === false;
+
     if (item.logout) {
       const handleLogout = () => {
-        onNavigate?.();
         localStorage.removeItem("authToken");
-        localStorage.removeItem("refreshToken");
         localStorage.removeItem("user");
         window.location.href = item.link || "/sign-in";
       };
@@ -131,14 +141,22 @@ const Sidebar: React.FC<SidebarProps> = ({ hideLogo = false, containerId, curren
       >
         {item.icon && <span className="nav-icon">{item.icon}</span>}
         <span className="text">{item.name || item.title}</span>
-        {item.badge && (
+        {isLocked ? (
+          <Badge
+            bg="warning-subtle"
+            className="text-warning-emphasis border border-warning-subtle rounded-pill px-1.5 py-0.5 ms-auto d-inline-flex align-items-center gap-1"
+            style={{ fontSize: "10px" }}
+          >
+            <IconLock size={11} /> PRO
+          </Badge>
+        ) : item.badge ? (
           <Badge
             className="ms-1"
             bg={item.badgecolor ? item.badgecolor : "primary"}
           >
             {item.badge}
           </Badge>
-        )}
+        ) : null}
       </Link>
     );
   };

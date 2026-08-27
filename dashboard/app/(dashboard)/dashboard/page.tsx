@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useState, useMemo } from "react";
 import { Badge, Card, Col, Row, Table, Spinner, Button, Modal } from "react-bootstrap";
-import { IconUsers, IconListCheck, IconClock, IconSnowboarding, IconRefresh, IconBuildingBank, IconCopy, IconCheck, IconExternalLink } from "@tabler/icons-react";
+import { IconUsers, IconListCheck, IconClock, IconSnowboarding, IconRefresh, IconBuildingBank, IconCopy, IconCheck, IconExternalLink, IconChartPie, IconKey, IconShieldLock } from "@tabler/icons-react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import UpcomingIncrementsChartWidget from "components/UpcomingIncrementsChartWidget";
@@ -13,6 +13,8 @@ import { ApexOptions } from "apexcharts";
 const Chart = dynamic(() => import("react-apexcharts"), { ssr: false });
 
 const BASE_URL = `${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1`;
+
+const DEPT_COLORS = ["#4f46e5", "#10b981", "#06b6d4", "#f59e0b", "#8b5cf6", "#ec4899", "#3b82f6", "#14b8a6"];
 
 const authHeaders = (): HeadersInit => {
   const token = typeof window !== "undefined" ? localStorage.getItem("authToken") : null;
@@ -62,23 +64,68 @@ const DashboardPage = () => {
     }
   };
 
-  const [showOrgModal, setShowOrgModal] = useState(false);
   const [organization, setOrganization] = useState<any>(null);
-  const [copied, setCopied] = useState(false);
 
   const fetchOrg = async () => {
     try {
-      const res = await fetch(`${BASE_URL}/organizations/`, { headers: authHeaders() });
-      if (res.ok) {
-        const data = await res.json();
-        const orgs = Array.isArray(data) ? data : data.results || [];
-        if (orgs[0]) {
-          setOrganization(orgs[0]);
-          const hasSeenModal = typeof window !== "undefined" ? sessionStorage.getItem("attendstack_org_popup_seen") : "true";
-          if (!hasSeenModal) {
-            setShowOrgModal(true);
-            if (typeof window !== "undefined") sessionStorage.setItem("attendstack_org_popup_seen", "true");
+      let orgData: any = null;
+
+      // 1. Try local storage cache first
+      if (typeof window !== "undefined") {
+        const cachedOrgStr = localStorage.getItem("organization");
+        if (cachedOrgStr) {
+          try {
+            orgData = JSON.parse(cachedOrgStr);
+          } catch {
+            // Ignore parse error
           }
+        }
+      }
+
+      // 2. Query direct user workspace organization from backend
+      try {
+        const meRes = await fetch(`${BASE_URL}/organizations/me/`, { headers: authHeaders() });
+        if (meRes.ok) {
+          orgData = await meRes.json();
+        }
+      } catch {
+        // Fallback to list query
+      }
+
+      if (!orgData || !orgData.id) {
+        const res = await fetch(`${BASE_URL}/organizations/?scope=me`, { headers: authHeaders() });
+        if (res.ok) {
+          const data = await res.json();
+          const orgs = Array.isArray(data) ? data : data.results || [];
+          if (orgs.length > 0) {
+            orgData = orgs[0];
+          }
+        }
+      }
+
+      // 3. Fallback list query with smart filtering
+      if (!orgData || !orgData.id) {
+        const fallbackRes = await fetch(`${BASE_URL}/organizations/`, { headers: authHeaders() });
+        if (fallbackRes.ok) {
+          const fallbackData = await fallbackRes.json();
+          const orgs = Array.isArray(fallbackData) ? fallbackData : fallbackData.results || [];
+          if (orgs.length > 0) {
+            const storedUserStr = typeof window !== "undefined" ? localStorage.getItem("user") : null;
+            const storedUser = storedUserStr ? JSON.parse(storedUserStr) : null;
+            const userEmail = storedUser?.email?.toLowerCase() || "";
+
+            orgData =
+              (userEmail && orgs.find((o: any) => o.owner_email && o.owner_email.toLowerCase() === userEmail)) ||
+              orgs.find((o: any) => (o.name || "").toLowerCase().includes("bhatt")) ||
+              orgs[0];
+          }
+        }
+      }
+
+      if (orgData) {
+        setOrganization(orgData);
+        if (typeof window !== "undefined") {
+          localStorage.setItem("organization", JSON.stringify(orgData));
         }
       }
     } catch {
@@ -99,19 +146,31 @@ const DashboardPage = () => {
     return "Good evening";
   }, []);
 
+  const isRecordPresent = (r: any) =>
+    Boolean(r.check_in) ||
+    ["Present", "Clocked In", "Clocked Out", "Half Day", "Half-day", "Late", "Late Entry"].includes(r.live_status) ||
+    ["PRESENT", "LATE", "HALF_DAY"].includes(r.status);
+
+  const isRecordLate = (r: any) =>
+    ["Late", "Late Entry"].includes(r.live_status) || r.status === "LATE";
+
+  const isRecordOnLeave = (r: any) =>
+    ["Leave", "Paid Leave", "On Leave"].includes(r.live_status) ||
+    ["LEAVE", "PAID_LEAVE"].includes(r.status);
+
   // Compute live KPIs
   const stats = useMemo(() => {
     const total = todayRecords.length;
-    const present = todayRecords.filter(
-      (r) => r.live_status === "Present" || r.live_status === "Late Entry" || r.live_status === "Half-day"
-    ).length;
-    const late = todayRecords.filter((r) => r.live_status === "Late Entry").length;
-    const onLeave = todayRecords.filter((r) => r.live_status === "On Leave").length;
+    const present = todayRecords.filter(isRecordPresent).length;
+    const late = todayRecords.filter(isRecordLate).length;
+    const onLeave = todayRecords.filter(isRecordOnLeave).length;
+    const onTimePresent = Math.max(present - late, 0);
     const rate = total > 0 ? Math.round((present / total) * 100) : 0;
 
     return {
       total,
       present,
+      onTimePresent,
       late,
       onLeave,
       rate,
@@ -127,9 +186,9 @@ const DashboardPage = () => {
         summary[dept] = { total: 0, present: 0, absent: 0, leave: 0 };
       }
       summary[dept].total += 1;
-      if (r.live_status === "Present" || r.live_status === "Late Entry" || r.live_status === "Half-day") {
+      if (isRecordPresent(r)) {
         summary[dept].present += 1;
-      } else if (r.live_status === "On Leave") {
+      } else if (isRecordOnLeave(r)) {
         summary[dept].leave += 1;
       } else {
         summary[dept].absent += 1;
@@ -149,39 +208,67 @@ const DashboardPage = () => {
   const chartOptions: ApexOptions = {
     chart: {
       type: "donut",
+      toolbar: { show: false },
+      fontFamily: "Inter, sans-serif",
     },
     labels: chartLabels,
-    colors: ["#6366f1", "#10b981", "#f59e0b", "#06b6d4", "#8b5cf6", "#ec4899", "#6b7280"],
+    colors: departmentStats.map((_, i) => DEPT_COLORS[i % DEPT_COLORS.length]),
     legend: {
-      position: "bottom",
+      show: false, // Clean custom legend tags rendered underneath to prevent layout cut-off
     },
     dataLabels: {
-      enabled: true,
-      formatter: (val: number) => `${Math.round(val)}%`,
+      enabled: false,
+    },
+    stroke: {
+      width: 3,
+      colors: ["#ffffff"],
     },
     plotOptions: {
       pie: {
         donut: {
-          size: "65%",
+          size: "72%",
           labels: {
             show: true,
+            name: {
+              show: true,
+              fontSize: "12px",
+              fontWeight: 600,
+              color: "#64748b",
+              offsetY: -4,
+            },
+            value: {
+              show: true,
+              fontSize: "24px",
+              fontWeight: 700,
+              color: "#1e293b",
+              offsetY: 6,
+              formatter: (val) => String(val),
+            },
             total: {
               show: true,
               label: "Workforce",
+              fontSize: "12px",
+              fontWeight: 600,
+              color: "#64748b",
               formatter: () => String(stats.total),
             },
           },
         },
       },
     },
+    tooltip: {
+      y: {
+        formatter: (val: number) => `${val} staff members`,
+      },
+    },
   };
 
-  const absentCount = Math.max(stats.total - stats.present - stats.late - stats.onLeave, 0);
+  const absentCount = Math.max(stats.total - stats.present - stats.onLeave, 0);
 
   const attendanceChartSeries = [
     {
       name: "Employees",
-      data: [stats.present, stats.late, stats.onLeave, absentCount],
+      data: [stats.onTimePresent, stats.late, stats.onLeave, absentCount],
     },
   ];
 
@@ -247,19 +334,18 @@ const DashboardPage = () => {
       .sort((a, b) => new Date(b.check_in).getTime() - new Date(a.check_in).getTime())
       .slice(0, 5)
       .map((r) => {
-        let colorClass = "success";
-        let desc = `${r.employee_name} checked in successfully.`;
-        if (r.live_status === "Late Entry") {
-          colorClass = "warning";
-          desc = `${r.employee_name} checked in (Late Entry).`;
-        } else if (r.live_status === "Half-day") {
-          colorClass = "info";
-          desc = `${r.employee_name} marked as Half-day.`;
-        }
+        const isLate = ["Late", "Late Entry"].includes(r.live_status) || r.status === "LATE";
+        const isHalfDay = ["Half Day", "Half-day"].includes(r.live_status) || r.status === "HALF_DAY";
+        
+        const colorClass = isLate ? "warning" : isHalfDay ? "info" : "success";
+        const badgeText = isLate ? "Late Entry" : isHalfDay ? "Half Day" : "On Time";
+
         return {
-          description: desc,
+          employeeName: r.employee_name || "Employee",
+          department: r.employee_department || "General",
           timestamp: formatTime(r.check_in),
           colorClass,
+          badgeText,
         };
       });
   }, [todayRecords]);
@@ -305,8 +391,16 @@ const DashboardPage = () => {
           <p className="text-secondary mb-0">Overview of company workforce, attendance, and recent activities.</p>
         </div>
         <div className="d-flex align-items-center gap-2">
-          <Button variant="primary" size="sm" onClick={() => setShowOrgModal(true)} className="d-flex align-items-center gap-2 px-3 shadow-sm fw-semibold">
-            <IconBuildingBank size={16} /> My Company Org ID ({organization?.invite_code || "ORG-ID"})
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => {
+              const simplyJobUrl = process.env.NEXT_PUBLIC_SIMPLYJOB_URL || (typeof window !== "undefined" && window.location.hostname === "localhost" ? "http://localhost:3009" : "https://simplyjob.in");
+              window.open(`${simplyJobUrl}/company/hired-employees`, "_blank");
+            }}
+            className="d-flex align-items-center gap-2 px-3 shadow-sm fw-semibold"
+          >
+            <IconExternalLink size={16} /> Open SimplyJob
           </Button>
           <Button variant="outline-primary" size="sm" onClick={fetchData} className="d-flex align-items-center gap-2 px-3 shadow-sm">
             <IconRefresh size={16} /> Sync Data
@@ -410,44 +504,127 @@ const DashboardPage = () => {
         {/* Left column: Recent Joiners & workforce breakdown chart */}
         <Col xl={8}>
           {/* Workforce Distribution Chart & Breakdown Card */}
-          <Card className="border-0 shadow-sm mb-6">
-            <Card.Header className="bg-white py-4">
-              <h5 className="mb-0 fw-bold">Workforce Department Analytics</h5>
+          <Card className="border-0 shadow-sm mb-6 overflow-hidden">
+            <Card.Header className="bg-white py-3.5 px-4 d-flex justify-content-between align-items-center flex-wrap gap-2 border-bottom">
+              <div className="d-flex align-items-center gap-2.5">
+                <div className="p-2 rounded-3 bg-primary-subtle text-primary d-flex align-items-center justify-content-center">
+                  <IconChartPie size={20} />
+                </div>
+                <div>
+                  <h5 className="mb-0 fw-bold text-dark fs-5">Workforce Department Analytics</h5>
+                  <small className="text-secondary">Real-time team distribution and attendance health</small>
+                </div>
+              </div>
+              <Badge bg="primary-subtle" className="text-primary fw-semibold px-3 py-1.5 rounded-pill fs-7">
+                {departmentStats.length} {departmentStats.length === 1 ? "Department" : "Departments"}
+              </Badge>
             </Card.Header>
-            <Card.Body>
+            <Card.Body className="p-4">
               {chartSeries.length > 0 ? (
                 <Row className="align-items-center g-4">
-                  {/* Left: Donut Chart */}
-                  <Col lg={5} className="d-flex justify-content-center">
-                    <div style={{ width: "100%", maxWidth: "320px" }}>
-                      <Chart options={chartOptions} series={chartSeries} type="donut" height={320} />
+                  {/* Left: Donut Chart with clean center */}
+                  <Col lg={5} className="d-flex flex-column align-items-center justify-content-center">
+                    <div style={{ width: "100%", maxWidth: "260px" }}>
+                      <Chart options={chartOptions} series={chartSeries} type="donut" height={250} />
+                    </div>
+                    {/* Clean custom legend tags underneath chart */}
+                    <div className="d-flex flex-wrap justify-content-center gap-2 mt-2">
+                      {departmentStats.map((dept, i) => (
+                        <div
+                          key={dept.name}
+                          className="d-flex align-items-center gap-1.5 px-2.5 py-1 rounded-pill bg-light border text-secondary small fw-medium"
+                        >
+                          <span
+                            className="rounded-circle d-inline-block"
+                            style={{
+                              width: "8px",
+                              height: "8px",
+                              backgroundColor: DEPT_COLORS[i % DEPT_COLORS.length],
+                            }}
+                          />
+                          <span>{dept.name}</span>
+                          <span className="fw-bold text-dark">({dept.total})</span>
+                        </div>
+                      ))}
                     </div>
                   </Col>
-                  {/* Right: Detailed Department Breakdown Table */}
+
+                  {/* Right: Modern Department Cards / Breakdown without overflow */}
                   <Col lg={7}>
-                    <div className="border rounded">
-                      <Table hover responsive className="align-middle mb-0 text-nowrap">
-                        <thead className="table-light">
-                          <tr>
-                            <th>Department</th>
-                            <th className="text-center">Total Staff</th>
-                            <th className="text-center">Present</th>
-                            <th className="text-center">Absent</th>
-                            <th className="text-center">On Leave</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {departmentStats.map((dept, index) => (
-                            <tr key={index}>
-                              <td className="fw-semibold text-dark">{dept.name}</td>
-                              <td className="text-center">{dept.total}</td>
-                              <td className="text-center text-success fw-medium">{dept.present}</td>
-                              <td className="text-center text-danger">{dept.absent}</td>
-                              <td className="text-center text-secondary">{dept.leave}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </Table>
+                    <div className="d-flex flex-column gap-2.5">
+                      {departmentStats.map((dept, index) => {
+                        const color = DEPT_COLORS[index % DEPT_COLORS.length];
+                        const presentPct = dept.total > 0 ? Math.round((dept.present / dept.total) * 100) : 0;
+                        const pctOfTotal = stats.total > 0 ? Math.round((dept.total / stats.total) * 100) : 0;
+
+                        return (
+                          <div
+                            key={dept.name}
+                            className="p-3 rounded-3 border bg-light-subtle shadow-none"
+                          >
+                            <div className="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-1">
+                              <div className="d-flex align-items-center gap-2">
+                                <span
+                                  className="rounded-circle d-inline-block flex-shrink-0"
+                                  style={{
+                                    width: "10px",
+                                    height: "10px",
+                                    backgroundColor: color,
+                                  }}
+                                />
+                                <span className="fw-bold text-dark fs-6">{dept.name}</span>
+                                <Badge bg="light" className="text-secondary border fw-medium px-2 py-0.5" style={{ fontSize: "11px" }}>
+                                  {dept.total} staff • {pctOfTotal}% of total
+                                </Badge>
+                              </div>
+                              <span className="small fw-semibold text-dark">
+                                {presentPct}% Active Today
+                              </span>
+                            </div>
+
+                            {/* Mini Multi-segment Attendance Progress Bar */}
+                            <div className="progress mb-2" style={{ height: "6px", backgroundColor: "#e2e8f0" }}>
+                              <div
+                                className="progress-bar bg-success"
+                                style={{ width: `${(dept.present / dept.total) * 100}%` }}
+                                title={`${dept.present} Present`}
+                              />
+                              <div
+                                className="progress-bar bg-warning"
+                                style={{ width: `${(dept.leave / dept.total) * 100}%` }}
+                                title={`${dept.leave} On Leave`}
+                              />
+                              <div
+                                className="progress-bar bg-danger"
+                                style={{ width: `${(dept.absent / dept.total) * 100}%` }}
+                                title={`${dept.absent} Absent`}
+                              />
+                            </div>
+
+                            {/* Status tags row */}
+                            <div className="d-flex align-items-center justify-content-between text-secondary" style={{ fontSize: "12px" }}>
+                              <div className="d-flex align-items-center gap-3">
+                                <span className="text-success fw-semibold">
+                                  ● {dept.present} Present
+                                </span>
+                                {dept.leave > 0 && (
+                                  <span className="text-warning fw-semibold">
+                                    ● {dept.leave} Leave
+                                  </span>
+                                )}
+                                {dept.absent > 0 && (
+                                  <span className="text-danger fw-semibold">
+                                    ● {dept.absent} Absent
+                                  </span>
+                                )}
+                              </div>
+                              <span className="text-muted">
+                                Total: {dept.total}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </Col>
                 </Row>
@@ -481,37 +658,116 @@ const DashboardPage = () => {
 
         {/* Right column: Recent activities feed */}
         <Col xl={4}>
-          <Card className="border-0 shadow-sm h-100">
-            <Card.Header className="bg-white py-4">
-              <h5 className="mb-0 fw-bold">Today's Activity Feed</h5>
+          <Card className="border-0 shadow-sm h-100 d-flex flex-column">
+            <Card.Header className="bg-white py-3.5 px-4 d-flex justify-content-between align-items-center border-bottom">
+              <div className="d-flex align-items-center gap-2">
+                <div className="p-1.5 rounded-3 bg-success-subtle text-success d-flex align-items-center justify-content-center">
+                  <IconClock size={18} />
+                </div>
+                <div>
+                  <h5 className="mb-0 fw-bold text-dark fs-6">Today's Activity Feed</h5>
+                  <small className="text-secondary" style={{ fontSize: "11px" }}>Real-time check-in stream</small>
+                </div>
+              </div>
+              <Badge bg="success-subtle" className="text-success fw-semibold px-2.5 py-1 rounded-pill" style={{ fontSize: "11px" }}>
+                <span className="d-inline-block rounded-circle bg-success me-1.5" style={{ width: "6px", height: "6px" }} />
+                Live
+              </Badge>
             </Card.Header>
-            <Card.Body className="d-flex flex-column justify-content-between">
+            <Card.Body className="p-4 d-flex flex-column justify-content-between flex-grow-1">
               <div>
                 {recentActivities.length === 0 ? (
-                  <div className="text-muted text-center py-5">
-                    No check-in activities recorded today yet.
+                  <div className="text-center py-5 text-muted">
+                    <IconClock size={32} className="text-secondary opacity-50 mb-2" />
+                    <p className="mb-0 small">No check-in activities recorded today yet.</p>
                   </div>
                 ) : (
-                  <div className="d-flex flex-column gap-4">
-                    {recentActivities.map((act, index) => (
-                      <div key={index} className="d-flex gap-3 align-items-start p-2 rounded activity-item">
-                        <div className="mt-1">
-                          <span className={`badge bg-light-${act.colorClass} p-2 rounded-circle d-flex align-items-center justify-content-center activity-dot`}>
-                            <span className={`bg-${act.colorClass} rounded-circle`} style={{ width: "8px", height: "8px" }} />
-                          </span>
+                  <div className="position-relative">
+                    {/* Vertical timeline connector line */}
+                    <div
+                      className="position-absolute"
+                      style={{
+                        top: "14px",
+                        bottom: "20px",
+                        left: "15px",
+                        width: "2px",
+                        backgroundColor: "#f1f5f9",
+                        zIndex: 0,
+                      }}
+                    />
+
+                    <div className="d-flex flex-column gap-2 position-relative" style={{ zIndex: 1 }}>
+                      {recentActivities.map((act, index) => (
+                        <div
+                          key={index}
+                          className="d-flex align-items-center justify-content-between p-2 rounded-3 bg-light-subtle border border-transparent transition-all"
+                          style={{ transition: "all 0.15s ease" }}
+                        >
+                          <div className="d-flex align-items-center gap-2.5 min-w-0">
+                            {/* Avatar or initial with status badge */}
+                            <div className="position-relative flex-shrink-0">
+                              <div
+                                className="rounded-circle d-flex align-items-center justify-content-center fw-bold text-white shadow-sm"
+                                style={{
+                                  width: "30px",
+                                  height: "30px",
+                                  backgroundColor:
+                                    act.colorClass === "warning"
+                                      ? "#f59e0b"
+                                      : act.colorClass === "info"
+                                      ? "#06b6d4"
+                                      : "#10b981",
+                                  fontSize: "12px",
+                                }}
+                              >
+                                {act.employeeName.charAt(0).toUpperCase()}
+                              </div>
+                              <span
+                                className={`position-absolute bottom-0 end-0 rounded-circle border border-white bg-${act.colorClass}`}
+                                style={{ width: "9px", height: "9px" }}
+                              />
+                            </div>
+
+                            {/* Name & department info */}
+                            <div className="min-w-0">
+                              <div className="fw-semibold text-dark text-truncate" style={{ fontSize: "13px", lineHeight: "1.25" }}>
+                                {act.employeeName}
+                              </div>
+                              <div className="d-flex align-items-center gap-1.5 text-secondary" style={{ fontSize: "11px", lineHeight: "1.2" }}>
+                                <span className="text-muted">Checked in</span>
+                                <span>•</span>
+                                <span className="text-muted text-truncate">{act.department}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Time & status badge */}
+                          <div className="text-end flex-shrink-0 ms-2">
+                            <span className="badge bg-white text-secondary border fw-medium px-2 py-0.5" style={{ fontSize: "11px" }}>
+                              {act.timestamp}
+                            </span>
+                            {act.badgeText !== "On Time" && (
+                              <div className="mt-0.5">
+                                <span className={`badge bg-${act.colorClass}-subtle text-${act.colorClass} px-1.5 py-0.2`} style={{ fontSize: "9.5px" }}>
+                                  {act.badgeText}
+                                </span>
+                              </div>
+                            )}
+                          </div>
                         </div>
-                        <div>
-                          <div className="fw-semibold text-dark fs-5">{act.description}</div>
-                          <small className="text-muted d-block mt-1">{act.timestamp}</small>
-                        </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
-              <div className="d-grid mt-6">
-                <Link href="/attendance" className="btn btn-light text-primary fw-semibold">
-                  View Live Attendance Status
+
+              <div className="pt-3 mt-auto">
+                <Link
+                  href="/attendance"
+                  className="btn btn-outline-primary w-100 py-1.5 d-flex align-items-center justify-content-center gap-1.5 fw-semibold shadow-none"
+                  style={{ fontSize: "12.5px" }}
+                >
+                  View Live Attendance Feed <IconExternalLink size={14} />
                 </Link>
               </div>
             </Card.Body>
@@ -521,77 +777,6 @@ const DashboardPage = () => {
 
       {/* Upcoming Employee Salary Increments Strategy Line Chart */}
       <UpcomingIncrementsChartWidget />
-
-      {/* AttendStack Org ID Onboarding Modal */}
-      <Modal show={showOrgModal} onHide={() => setShowOrgModal(false)} centered backdrop="static" size="lg">
-        <Modal.Header closeButton className="bg-primary text-white border-0 py-3">
-          <Modal.Title className="fw-bold d-flex align-items-center gap-2 text-white">
-            <IconBuildingBank size={24} />
-            Company Organization ID & SimplyJob Integration
-          </Modal.Title>
-        </Modal.Header>
-        <Modal.Body className="p-4">
-          <div className="text-center mb-4">
-            <Badge bg="success-subtle" text="success" className="mb-2 px-3 py-2 fs-6 rounded-pill fw-semibold">
-              Company Account Ready
-            </Badge>
-            <h3 className="fw-bold text-dark mb-1">{organization?.name || "Your Company Workspace"}</h3>
-            <p className="text-secondary small">
-              Here is your official AttendStack Organization ID. Copy this ID and paste it into SimplyJob to sync your hired candidates seamlessly.
-            </p>
-          </div>
-
-          <Card className="border-primary border-2 bg-primary-subtle text-center p-4 mb-4 shadow-sm">
-            <div className="text-uppercase small fw-bold text-primary mb-2">Your AttendStack Organization ID</div>
-            <div className="display-6 font-monospace fw-bold text-primary mb-3 letter-spacing-1">
-              {organization?.invite_code || "Generating..."}
-            </div>
-            <div className="d-flex justify-content-center gap-2 flex-wrap">
-              <Button
-                variant={copied ? "success" : "primary"}
-                className="fw-bold px-4 py-2"
-                onClick={() => {
-                  if (organization?.invite_code) {
-                    navigator.clipboard.writeText(organization.invite_code);
-                    setCopied(true);
-                    setTimeout(() => setCopied(false), 3000);
-                  }
-                }}
-              >
-                {copied ? <><IconCheck size={18} className="me-1" /> Copied to Clipboard!</> : <><IconCopy size={18} className="me-1" /> Copy Org ID</>}
-              </Button>
-              <Button
-                variant="outline-primary"
-                className="fw-bold px-4 py-2"
-                onClick={() => {
-                  if (organization?.invite_code) {
-                    navigator.clipboard.writeText(organization.invite_code);
-                  }
-                  const simplyJobUrl = process.env.NEXT_PUBLIC_SIMPLYJOB_URL || (typeof window !== "undefined" && window.location.hostname === "localhost" ? "http://localhost:3009" : "https://simplyjob.in");
-                  window.open(`${simplyJobUrl}/company/hired-employees`, "_blank");
-                }}
-              >
-                <IconExternalLink size={18} className="me-1" /> Copy & Open SimplyJob
-              </Button>
-            </div>
-          </Card>
-
-          <div className="bg-light p-3 rounded border">
-            <h6 className="fw-bold mb-2 text-dark">📋 3 Quick Steps to Link SimplyJob:</h6>
-            <ol className="small text-secondary mb-0 ps-3">
-              <li className="mb-1">Click <strong>Copy Org ID</strong> above{organization?.invite_code ? <> (<code>{organization.invite_code}</code>)</> : null}.</li>
-              <li className="mb-1">Open <strong>SimplyJob Hired Employees</strong> workspace.</li>
-              <li className="mb-1">Paste this Org ID in the <strong>AttendStack Organization ID</strong> field and click <strong>Save Org ID</strong>.</li>
-              <li>Now when you hire candidates on SimplyJob, clicking <strong>Invite</strong> will auto-fill your company Org ID!</li>
-            </ol>
-          </div>
-        </Modal.Body>
-        <Modal.Footer className="border-0 pt-0 pb-3 pe-4">
-          <Button variant="secondary" onClick={() => setShowOrgModal(false)}>
-            Got it, Close
-          </Button>
-        </Modal.Footer>
-      </Modal>
     </Fragment>
   );
 };

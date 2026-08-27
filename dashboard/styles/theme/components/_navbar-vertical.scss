@@ -282,10 +282,12 @@ html.collapsed #content {
   transition: margin-left 0.3s;
 
   margin-left: 3.75rem;
-  padding: 80px 40px;
+  padding: 80px 40px 16px;
   min-height: 100vh;
+  display: flex;
+  flex-direction: column;
   @media (max-width: 990px) {
-    padding: 80px 20px;
+    padding: 80px 20px 16px;
   }
 
   .collapse-expanded {
@@ -295,9 +297,12 @@ html.collapsed #content {
 
 html.expanded #content {
   margin-left: 15.875rem;
-  padding: 80px 40px;
+  padding: 80px 40px 16px;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
   @media (max-width: 990px) {
-    padding: 80px 20px;
+    padding: 80px 20px 16px;
   }
 }
 

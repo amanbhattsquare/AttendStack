@@ -62,6 +62,54 @@ class EmployeeStatusActionTests(APITestCase):
                     self.employee_user,
                 )
 
+    def test_notice_period_auto_transitions_to_inactive_after_end_date(self):
+        today = timezone.localdate()
+        end_date = today + timezone.timedelta(days=30)
+        response = self.client.patch(
+            f"/{self.employee.id}/status/",
+            {
+                "status": EmployeeStatus.NOTICE_PERIOD,
+                "effective_date": str(today),
+                "end_date": str(end_date),
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, http_status.HTTP_200_OK)
+        self.employee.refresh_from_db()
+        self.assertEqual(self.employee.status, EmployeeStatus.NOTICE_PERIOD)
+        self.assertEqual(self.employee.status_end_date, end_date)
+        self.assertEqual(self.employee.auto_transition_status, EmployeeStatus.INACTIVE)
+
+        # On the day after notice period ends, status should transition to INACTIVE
+        day_after = end_date + timezone.timedelta(days=1)
+        self.assertEqual(self.employee.status_on(day_after), EmployeeStatus.INACTIVE)
+        self.employee.sync_status(today=day_after)
+        self.assertEqual(self.employee.status, EmployeeStatus.INACTIVE)
+
+    def test_provision_auto_transitions_to_active_after_end_date(self):
+        today = timezone.localdate()
+        end_date = today + timezone.timedelta(days=60)
+        response = self.client.patch(
+            f"/{self.employee.id}/status/",
+            {
+                "status": EmployeeStatus.PROVISION,
+                "effective_date": str(today),
+                "end_date": str(end_date),
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, http_status.HTTP_200_OK)
+        self.employee.refresh_from_db()
+        self.assertEqual(self.employee.status, EmployeeStatus.PROVISION)
+        self.assertEqual(self.employee.status_end_date, end_date)
+        self.assertEqual(self.employee.auto_transition_status, EmployeeStatus.ACTIVE)
+
+        # On the day after provision ends, status should transition to ACTIVE
+        day_after = end_date + timezone.timedelta(days=1)
+        self.assertEqual(self.employee.status_on(day_after), EmployeeStatus.ACTIVE)
+        self.employee.sync_status(today=day_after)
+        self.assertEqual(self.employee.status, EmployeeStatus.ACTIVE)
+
     def test_employee_list_orders_active_first_and_terminated_last(self):
         Employee.objects.create(
             organization=self.organization,

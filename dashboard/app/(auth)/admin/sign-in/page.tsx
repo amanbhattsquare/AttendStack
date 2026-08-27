@@ -56,6 +56,9 @@ const AdminSignIn = () => {
           localStorage.setItem("authToken", response.data.access);
           localStorage.setItem("refreshToken", response.data.refresh);
           localStorage.setItem("user", JSON.stringify(user));
+          if (response.data.organization) {
+            localStorage.setItem("organization", JSON.stringify(response.data.organization));
+          }
           router.push("/dashboard");
         } else {
           setError("Access denied. Use an organization owner or HR account.");

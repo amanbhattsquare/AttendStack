@@ -114,6 +114,11 @@ import {
   acknowledgeAnnouncement,
   reactToMessage,
 } from "../../../helper/chatApi";
+import {
+  resolveMediaUrl,
+  triggerFileDownload,
+  getDownloadProxyUrl,
+} from "../../../helper/mediaUrl";
 
 // Redux for sidebar control & Branding context
 import { useAppDispatch } from "store/store";
@@ -1590,134 +1595,17 @@ function ChatPageContent() {
 
     if (!fileUrl) return;
 
-    // Normalize localhost / relative URLs for production
-    let targetFileUrl = fileUrl;
-    if (typeof window !== "undefined") {
-      const apiEndpoint = process.env.NEXT_PUBLIC_API_ENDPOINT || "";
-      const currentOrigin = window.location.origin;
-      const effectiveHost = (apiEndpoint && !apiEndpoint.includes("localhost") && !apiEndpoint.includes("127.0.0.1"))
-        ? apiEndpoint.replace(/\/api\/?$/, "")
-        : currentOrigin;
-
-      targetFileUrl = targetFileUrl
-        .replace(/^https?:\/\/localhost(:\d+)?/i, effectiveHost)
-        .replace(/^https?:\/\/127\.0\.0\.1(:\d+)?/i, effectiveHost);
-
-      if (!targetFileUrl.startsWith("http://") && !targetFileUrl.startsWith("https://")) {
-        targetFileUrl = `${effectiveHost}${targetFileUrl.startsWith("/") ? "" : "/"}${targetFileUrl}`;
-      }
-    }
-
-    const safeName =
-      fileName ||
-      targetFileUrl.split("/").pop()?.split("?")[0] ||
-      `attendstack-file-${Date.now()}`;
-
     setDownloadingFileUrl(fileUrl);
 
     try {
-      // 1. Direct Image Canvas Blob extraction (instant 100% offline & client-side download)
-      const isImg = /\.(png|jpe?g|gif|webp|bmp|svg)($|\?)/i.test(targetFileUrl) || /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(safeName);
-      if (isImg) {
-        const canvasDownloaded = await new Promise<boolean>((resolve) => {
-          const img = new Image();
-          img.crossOrigin = "anonymous";
-          img.onload = () => {
-            try {
-              const canvas = document.createElement("canvas");
-              canvas.width = img.naturalWidth || img.width;
-              canvas.height = img.naturalHeight || img.height;
-              const ctx = canvas.getContext("2d");
-              if (!ctx) return resolve(false);
-              ctx.drawImage(img, 0, 0);
-              canvas.toBlob((blob) => {
-                if (!blob) return resolve(false);
-                const blobUrl = URL.createObjectURL(blob);
-                const link = document.createElement("a");
-                link.href = blobUrl;
-                link.download = safeName;
-                link.setAttribute("download", safeName);
-                link.style.display = "none";
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                setTimeout(() => URL.revokeObjectURL(blobUrl), 3000);
-                resolve(true);
-              }, "image/png");
-            } catch {
-              resolve(false);
-            }
-          };
-          img.onerror = () => resolve(false);
-          img.src = targetFileUrl;
-        });
-
-        if (canvasDownloaded) return;
-      }
-
-      // 2. Try Next.js same-origin download proxy (guaranteed download & correct headers across PC & Phone)
-      const proxyUrl = `/api/download-proxy?url=${encodeURIComponent(targetFileUrl)}&filename=${encodeURIComponent(safeName)}`;
-      const proxyRes = await fetch(proxyUrl);
-      if (proxyRes.ok) {
-        const blob = await proxyRes.blob();
-        const blobUrl = window.URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = blobUrl;
-        link.download = safeName;
-        link.setAttribute("download", safeName);
-        link.style.display = "none";
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        setTimeout(() => window.URL.revokeObjectURL(blobUrl), 3000);
-        return;
-      }
-
-      // 3. Direct fetch with Blob fallback
-      const token = typeof window !== "undefined" ? localStorage.getItem("authToken") : null;
-      const headers: Record<string, string> = {};
-      if (token) headers["Authorization"] = `Bearer ${token}`;
-
-      const res = await fetch(targetFileUrl, { headers, mode: "cors" }).catch(() => fetch(targetFileUrl));
-      if (res && res.ok) {
-        const blob = await res.blob();
-        const blobUrl = window.URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = blobUrl;
-        link.download = safeName;
-        link.setAttribute("download", safeName);
-        link.style.display = "none";
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        setTimeout(() => window.URL.revokeObjectURL(blobUrl), 3000);
-        return;
-      }
-
-      // 4. Force same-origin proxy download trigger (Never open new tab)
-      const forceLink = document.createElement("a");
-      forceLink.href = proxyUrl;
-      forceLink.download = safeName;
-      forceLink.setAttribute("download", safeName);
-      forceLink.style.display = "none";
-      document.body.appendChild(forceLink);
-      forceLink.click();
-      document.body.removeChild(forceLink);
+      await triggerFileDownload(fileUrl, fileName);
     } catch (err) {
-      console.warn("Proxy download trigger fallback:", err);
-      const proxyUrl = `/api/download-proxy?url=${encodeURIComponent(targetFileUrl)}&filename=${encodeURIComponent(safeName)}`;
-      const forceLink = document.createElement("a");
-      forceLink.href = proxyUrl;
-      forceLink.download = safeName;
-      forceLink.setAttribute("download", safeName);
-      forceLink.style.display = "none";
-      document.body.appendChild(forceLink);
-      forceLink.click();
-      document.body.removeChild(forceLink);
+      console.error("Download failed:", err);
     } finally {
       setTimeout(() => setDownloadingFileUrl(null), 800);
     }
   };
+
 
   const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB limit
 
@@ -2547,8 +2435,9 @@ function ChatPageContent() {
             {msg.attachments && msg.attachments.length > 0 && (
               <div className="chat-attachments mt-1">
                 {msg.attachments.map((att) => {
-                  const isImg = att.file_type?.startsWith("image/") || (att.file && /\.(png|jpe?g|gif|webp|svg)$/i.test(att.file));
-                  const isVid = att.file_type?.startsWith("video/") || (att.file && /\.(mp4|webm|mov|ogg|mkv)$/i.test(att.file));
+                  const resolvedUrl = resolveMediaUrl(att.file_url || att.file);
+                  const isImg = att.file_type?.startsWith("image/") || (resolvedUrl && /\.(png|jpe?g|gif|webp|svg)$/i.test(resolvedUrl)) || (att.file && /\.(png|jpe?g|gif|webp|svg)$/i.test(att.file));
+                  const isVid = att.file_type?.startsWith("video/") || (resolvedUrl && /\.(mp4|webm|mov|ogg|mkv)$/i.test(resolvedUrl)) || (att.file && /\.(mp4|webm|mov|ogg|mkv)$/i.test(att.file));
                   const fileName = att.file ? att.file.split("/").pop()?.split("?")[0] || "Attachment" : "Attachment";
                   const fileSizeStr = att.file_size ? (
                     att.file_size < 1024 * 1024
@@ -2564,7 +2453,7 @@ function ChatPageContent() {
                         style={{ cursor: "pointer", maxWidth: "330px" }}
                         onClick={() =>
                           openMediaPreview({
-                            url: att.file_url,
+                            url: resolvedUrl,
                             type: "image",
                             name: fileName,
                             size: fileSizeStr,
@@ -2572,7 +2461,7 @@ function ChatPageContent() {
                         }
                       >
                         <BSImage
-                          src={att.file_url}
+                          src={resolvedUrl}
                           alt={fileName}
                           className="w-100"
                           style={{ maxHeight: "280px", objectFit: "cover", borderRadius: "8px", display: "block" }}
@@ -2582,13 +2471,13 @@ function ChatPageContent() {
                             className="btn btn-dark bg-opacity-75 text-white rounded-circle border-0 shadow-lg d-flex align-items-center justify-content-center"
                             style={{ width: "44px", height: "44px", backdropFilter: "blur(4px)" }}
                             title="Download & Save to Device"
-                            disabled={downloadingFileUrl === att.file_url}
+                            disabled={downloadingFileUrl === resolvedUrl || downloadingFileUrl === att.file_url}
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleDownloadFile(e, att.file_url, fileName);
+                              handleDownloadFile(e, resolvedUrl, fileName);
                             }}
                           >
-                            {downloadingFileUrl === att.file_url ? (
+                            {(downloadingFileUrl === resolvedUrl || downloadingFileUrl === att.file_url) ? (
                               <Spinner animation="border" size="sm" />
                             ) : (
                               <Download size={20} />
@@ -2614,7 +2503,7 @@ function ChatPageContent() {
                               title="Full Preview"
                               onClick={() =>
                                 openMediaPreview({
-                                  url: att.file_url,
+                                  url: resolvedUrl,
                                   type: "video",
                                   name: fileName,
                                   size: fileSizeStr,
@@ -2626,10 +2515,10 @@ function ChatPageContent() {
                             <button
                               className="btn btn-sm btn-primary text-white p-1 rounded border-0 d-flex align-items-center gap-1"
                               title="Download Video"
-                              disabled={downloadingFileUrl === att.file_url}
-                              onClick={(e) => handleDownloadFile(e, att.file_url, fileName)}
+                              disabled={downloadingFileUrl === resolvedUrl || downloadingFileUrl === att.file_url}
+                              onClick={(e) => handleDownloadFile(e, resolvedUrl, fileName)}
                             >
-                              {downloadingFileUrl === att.file_url ? (
+                              {(downloadingFileUrl === resolvedUrl || downloadingFileUrl === att.file_url) ? (
                                 <Spinner animation="border" size="sm" style={{ width: "13px", height: "13px" }} />
                               ) : (
                                 <Download size={13} />
@@ -2644,7 +2533,7 @@ function ChatPageContent() {
                           className="w-100"
                           style={{ maxHeight: "260px", display: "block" }}
                         >
-                          <source src={att.file_url} type={att.file_type || "video/mp4"} />
+                          <source src={resolvedUrl} type={att.file_type || "video/mp4"} />
                           Your browser does not support playing this video format.
                         </video>
                       </div>
@@ -2657,7 +2546,7 @@ function ChatPageContent() {
                     <div
                       key={att.id}
                       className="whatsapp-file-card d-flex align-items-center justify-content-between p-2 rounded-2"
-                      onClick={(e) => handleDownloadFile(e, att.file_url, fileName)}
+                      onClick={(e) => handleDownloadFile(e, resolvedUrl, fileName)}
                     >
                       <div className="d-flex align-items-center gap-2.5 overflow-hidden me-2">
                         <div
@@ -2701,10 +2590,10 @@ function ChatPageContent() {
                       <button
                         className="whatsapp-download-btn btn p-1.5 rounded-circle border-0 d-flex align-items-center justify-content-center flex-shrink-0"
                         title={`Download ${fileName}`}
-                        disabled={downloadingFileUrl === att.file_url}
-                        onClick={(e) => handleDownloadFile(e, att.file_url, fileName)}
+                        disabled={downloadingFileUrl === resolvedUrl || downloadingFileUrl === att.file_url}
+                        onClick={(e) => handleDownloadFile(e, resolvedUrl, fileName)}
                       >
-                        {downloadingFileUrl === att.file_url ? (
+                        {(downloadingFileUrl === resolvedUrl || downloadingFileUrl === att.file_url) ? (
                           <Spinner animation="border" size="sm" style={{ width: "16px", height: "16px" }} />
                         ) : (
                           <Download size={19} strokeWidth={2} />
@@ -4094,7 +3983,7 @@ function ChatPageContent() {
                   variant="outline-light"
                   size="sm"
                   className="d-flex align-items-center gap-1.5 px-2 py-1 rounded-pill border-opacity-50 d-none d-sm-flex"
-                  onClick={() => window.open(previewMedia.url, "_blank")}
+                  onClick={() => window.open(resolveMediaUrl(previewMedia.url), "_blank")}
                   title="Open original file in new tab"
                 >
                   <ExternalLink size={14} />

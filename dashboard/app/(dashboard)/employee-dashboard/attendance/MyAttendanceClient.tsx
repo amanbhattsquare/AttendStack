@@ -520,7 +520,7 @@ const MyAttendanceClient = () => {
           </div>
         </Card.Header>
         <Card.Body>
-          <Table hover responsive className="text-nowrap align-middle mb-0">
+          <Table hover responsive className="text-nowrap align-middle mb-0" style={{ minWidth: "750px" }}>
             <thead className="table-light">
               <tr>
                 <th className="text-center">Present</th>
@@ -573,7 +573,7 @@ const MyAttendanceClient = () => {
           </div>
         </Card.Header>
         <Card.Body>
-          <Table hover responsive className="text-nowrap align-middle">
+          <Table hover responsive className="text-nowrap align-middle" style={{ minWidth: "550px" }}>
             <thead className="table-light">
               <tr>
                 <th>Date</th>

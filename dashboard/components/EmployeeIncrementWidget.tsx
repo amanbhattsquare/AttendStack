@@ -478,22 +478,22 @@ const EmployeeIncrementWidget: React.FC = () => {
               </div>
 
               <div className="table-responsive rounded-3 border overflow-hidden">
-                <Table hover size="sm" className="mb-0 align-middle">
+                <Table hover size="sm" className="mb-0 align-middle text-nowrap" style={{ minWidth: "620px" }}>
                   <thead style={{ backgroundColor: "#f8fafc" }}>
                     <tr style={{ fontSize: "11.5px", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                      <th className="py-3 px-3.5">Effective Date</th>
-                      <th className="py-3 px-3.5">Previous Salary</th>
-                      <th className="py-3 px-3.5">Raise</th>
-                      <th className="py-3 px-3.5">Revised Salary</th>
-                      <th className="py-3 px-3.5 text-end">Status</th>
+                      <th className="py-3 px-3.5 text-nowrap">Effective Date</th>
+                      <th className="py-3 px-3.5 text-nowrap">Previous Salary</th>
+                      <th className="py-3 px-3.5 text-nowrap">Raise</th>
+                      <th className="py-3 px-3.5 text-nowrap">Revised Salary</th>
+                      <th className="py-3 px-3.5 text-end text-nowrap">Status</th>
                     </tr>
                   </thead>
                   <tbody style={{ fontSize: "12.5px" }}>
                     {data.history.map((item) => (
                       <tr key={item.id}>
-                        <td className="py-3 px-3.5 fw-semibold text-dark">{formatDate(item.due_date)}</td>
-                        <td className="py-3 px-3.5 text-secondary">₹{Number(item.current_salary).toLocaleString("en-IN")}</td>
-                        <td className="py-3 px-3.5">
+                        <td className="py-3 px-3.5 fw-semibold text-dark text-nowrap">{formatDate(item.due_date)}</td>
+                        <td className="py-3 px-3.5 text-secondary text-nowrap">₹{Number(item.current_salary).toLocaleString("en-IN")}</td>
+                        <td className="py-3 px-3.5 text-nowrap">
                           <span
                             className="badge rounded-pill px-2.5 py-1 fw-bold"
                             style={{
@@ -507,10 +507,10 @@ const EmployeeIncrementWidget: React.FC = () => {
                               : `+₹${Number(item.increment_value).toLocaleString("en-IN")}`}
                           </span>
                         </td>
-                        <td className="py-3 px-3.5 fw-bold text-success">
+                        <td className="py-3 px-3.5 fw-bold text-success text-nowrap">
                           ₹{Number(item.new_salary).toLocaleString("en-IN")}
                         </td>
-                        <td className="py-3 px-3.5 text-end">
+                        <td className="py-3 px-3.5 text-end text-nowrap">
                           <span
                             className={`badge rounded-pill px-3 py-1 fw-semibold ${
                               item.status === "APPROVED"

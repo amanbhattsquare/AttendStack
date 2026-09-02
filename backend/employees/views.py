@@ -273,5 +273,11 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         employee.save(update_fields=["status", "status_end_date", "auto_transition_status", "updated_at"])
         sync_employee_user_access(employee)
 
+        try:
+            from payroll.increment_service import sync_employee_increments
+            sync_employee_increments(employee)
+        except Exception:
+            pass
+
         response_serializer = EmployeeListSerializer(employee, context={"request": request})
         return Response(response_serializer.data)

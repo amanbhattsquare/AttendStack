@@ -1,9 +1,10 @@
+from datetime import date
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.db.models import Q
 from attendance.permissions import IsAdminOrReadOnly
-from employees.models import Employee
+from employees.models import Employee, EmployeeStatus
 from organizations.models import Organization
 from .models import Payroll, PayrollStatus
 from .serializers import PayrollSerializer
@@ -208,6 +209,14 @@ class EmployeeIncrementViewSet(viewsets.ModelViewSet):
             except Employee.DoesNotExist:
                 return queryset.none()
 
+        # Filter by employee status (defaults to ACTIVE employees only)
+        employee_status_param = self.request.query_params.get("employee_status")
+        if employee_status_param:
+            if employee_status_param.upper() != "ALL":
+                queryset = queryset.filter(employee__status=employee_status_param.upper())
+        else:
+            queryset = queryset.filter(employee__status=EmployeeStatus.ACTIVE)
+
         status_param = self.request.query_params.get("status")
         search_param = self.request.query_params.get("search")
         employee_id_param = self.request.query_params.get("employee_id")
@@ -249,7 +258,7 @@ class EmployeeIncrementViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"], url_path="summary")
     def increment_summary(self, request):
-        """Returns high-level summary metrics for increments."""
+        """Returns high-level summary metrics for increments of active employees."""
         try:
             sync_employee_increments()
         except Exception:
@@ -271,18 +280,24 @@ class EmployeeIncrementViewSet(viewsets.ModelViewSet):
         next_month_start = date(nm_year, nm_month, 1)
         next_month_end = date(nm_year, nm_month, nm_last_day)
         
-        pending_count = EmployeeIncrement.objects.filter(status__in=[IncrementStatus.PENDING, IncrementStatus.RESCHEDULED]).count()
+        pending_count = EmployeeIncrement.objects.filter(
+            employee__status=EmployeeStatus.ACTIVE,
+            status__in=[IncrementStatus.PENDING, IncrementStatus.RESCHEDULED]
+        ).count()
         due_this_month = EmployeeIncrement.objects.filter(
+            employee__status=EmployeeStatus.ACTIVE,
             status__in=[IncrementStatus.PENDING, IncrementStatus.RESCHEDULED],
             due_date__gte=this_month_start,
             due_date__lte=this_month_end
         ).count()
         due_next_month = EmployeeIncrement.objects.filter(
+            employee__status=EmployeeStatus.ACTIVE,
             status__in=[IncrementStatus.PENDING, IncrementStatus.RESCHEDULED],
             due_date__gte=next_month_start,
             due_date__lte=next_month_end
         ).count()
         approved_this_year = EmployeeIncrement.objects.filter(
+            employee__status=EmployeeStatus.ACTIVE,
             status=IncrementStatus.APPROVED,
             action_date__year=today.year
         ).count()
@@ -310,6 +325,12 @@ class EmployeeIncrementViewSet(viewsets.ModelViewSet):
             emp = Employee.objects.get(email=user.email)
         except Employee.DoesNotExist:
             return Response({"detail": "Employee profile not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if emp.status != EmployeeStatus.ACTIVE:
+            return Response(
+                {"detail": "Salary increments are only available for active employees."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         try:
             sync_employee_increments(emp)

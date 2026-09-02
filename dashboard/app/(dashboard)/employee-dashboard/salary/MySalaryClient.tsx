@@ -160,7 +160,7 @@ const MySalaryClient = () => {
                 No salary statements have been generated for your profile yet.
               </div>
             ) : (
-              <Table hover responsive className="align-middle text-nowrap mb-0">
+              <Table hover responsive className="align-middle text-nowrap mb-0" style={{ minWidth: "720px" }}>
                 <thead className="table-light">
                   <tr>
                     <th>Payroll Period</th>

@@ -438,7 +438,7 @@ const SalaryPage = () => {
                 </Spinner>
               </div>
             ) : (
-              <Table hover responsive className="align-middle text-nowrap mb-0">
+              <Table hover className="align-middle text-nowrap mb-0" style={{ minWidth: "780px" }}>
                 <thead className="table-light">
                   <tr>
                     <th>Employee Name</th>

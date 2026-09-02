@@ -834,3 +834,5 @@ class PlanViewSet(viewsets.ModelViewSet):
             p, _ = Plan.objects.update_or_create(slug=d["slug"], defaults=d)
             results.append(PlanSerializer(p).data)
         return Response({"message": "Default plans seeded successfully.", "plans": results})
+
+

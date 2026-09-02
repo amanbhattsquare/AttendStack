@@ -27,6 +27,8 @@ export interface EmployeeIncrementItem {
     email: string;
     department: string;
     designation: string;
+    status?: string;
+    status_display?: string;
     annual_salary: string;
     profile_photo_url: string | null;
   };
@@ -330,89 +332,105 @@ const UpcomingIncrementsWidget: React.FC = () => {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "APPROVED":
-        return <Badge bg="success">Approved</Badge>;
+        return (
+          <span className="badge px-2 py-1 rounded-pill fw-semibold bg-success-subtle text-success border border-success-subtle" style={{ fontSize: "11px" }}>
+            Approved
+          </span>
+        );
       case "REJECTED":
-        return <Badge bg="danger">Rejected</Badge>;
+        return (
+          <span className="badge px-2 py-1 rounded-pill fw-semibold bg-danger-subtle text-danger border border-danger-subtle" style={{ fontSize: "11px" }}>
+            Rejected
+          </span>
+        );
       case "RESCHEDULED":
-        return <Badge bg="warning" text="dark">Rescheduled</Badge>;
+        return (
+          <span className="badge px-2 py-1 rounded-pill fw-semibold bg-warning-subtle text-warning-emphasis border border-warning-subtle" style={{ fontSize: "11px" }}>
+            Rescheduled
+          </span>
+        );
       default:
-        return <Badge bg="primary">Pending Review</Badge>;
+        return (
+          <span className="badge px-2 py-1 rounded-pill fw-semibold bg-primary-subtle text-primary border border-primary-subtle" style={{ fontSize: "11px" }}>
+            Pending
+          </span>
+        );
     }
   };
 
   return (
     <div className="upcoming-increments-section my-4">
-      {/* Metric Cards Grid */}
-      <Row className="g-3 mb-4">
-        <Col xs={12} sm={6} xl={3}>
+      {/* Metric Cards Grid - 2 per row on mobile */}
+      <Row className="g-2 g-md-3 mb-4">
+        <Col xs={6} sm={6} xl={3}>
           <Card
             className="border-0 shadow-sm text-white h-100"
             style={{ background: "linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)", cursor: "pointer" }}
             onClick={() => setFilterStatus("PENDING")}
           >
-            <Card.Body className="d-flex align-items-center justify-content-between p-3">
+            <Card.Body className="d-flex align-items-center justify-content-between p-2.5 p-md-3">
               <div>
-                <span className="text-white-50 small fw-semibold text-uppercase">Pending Review</span>
-                <h3 className="mb-0 fw-bold mt-1 text-white">{summary.pending_count}</h3>
+                <span className="text-white-50 small fw-semibold text-uppercase" style={{ fontSize: "11px" }}>Pending Review</span>
+                <h3 className="mb-0 fw-bold mt-1 text-white fs-4 fs-md-3">{summary.pending_count}</h3>
               </div>
-              <div className="rounded-circle bg-white bg-opacity-20 p-2.5 d-flex align-items-center justify-content-center">
-                <IconTrendingUp size={22} className="text-white" />
+              <div className="rounded-circle bg-white bg-opacity-20 p-2 p-md-2.5 d-flex align-items-center justify-content-center">
+                <IconTrendingUp size={20} className="text-white" />
               </div>
             </Card.Body>
           </Card>
         </Col>
 
-        <Col xs={12} sm={6} xl={3}>
+        <Col xs={6} sm={6} xl={3}>
           <Card
             className="border-0 shadow-sm text-white h-100 position-relative overflow-hidden"
             style={{ background: "linear-gradient(135deg, #0d9488 0%, #059669 100%)", cursor: "pointer" }}
             onClick={() => setFilterStatus("NEXT_MONTH")}
           >
-            <Card.Body className="d-flex align-items-center justify-content-between p-3">
+            <Card.Body className="d-flex align-items-center justify-content-between p-2.5 p-md-3">
               <div>
-                <span className="text-white-50 small fw-semibold text-uppercase">
-                  Due Next Month {summary.next_month_name ? `(${summary.next_month_name})` : ""}
+                <span className="text-white-50 small fw-semibold text-uppercase" style={{ fontSize: "11px" }}>
+                  Due Next Month
                 </span>
-                <h3 className="mb-0 fw-bold mt-1 text-white">{summary.due_next_month ?? 0}</h3>
+                <h3 className="mb-0 fw-bold mt-1 text-white fs-4 fs-md-3">{summary.due_next_month ?? 0}</h3>
               </div>
-              <div className="rounded-circle bg-white bg-opacity-25 p-2.5 d-flex align-items-center justify-content-center">
-                <IconCalendarTime size={22} className="text-white" />
+              <div className="rounded-circle bg-white bg-opacity-25 p-2 p-md-2.5 d-flex align-items-center justify-content-center">
+                <IconCalendarTime size={20} className="text-white" />
               </div>
             </Card.Body>
           </Card>
         </Col>
 
-        <Col xs={12} sm={6} xl={3}>
+        <Col xs={6} sm={6} xl={3}>
           <Card
             className="border-0 shadow-sm text-dark h-100"
             style={{ background: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)", cursor: "pointer" }}
             onClick={() => setFilterStatus("THIS_MONTH")}
           >
-            <Card.Body className="d-flex align-items-center justify-content-between p-3">
+            <Card.Body className="d-flex align-items-center justify-content-between p-2.5 p-md-3">
               <div>
-                <span className="text-white-50 small fw-semibold text-uppercase">Due This Month</span>
-                <h3 className="mb-0 fw-bold mt-1 text-white">{summary.due_this_month}</h3>
+                <span className="text-white-50 small fw-semibold text-uppercase" style={{ fontSize: "11px" }}>Due This Month</span>
+                <h3 className="mb-0 fw-bold mt-1 text-white fs-4 fs-md-3">{summary.due_this_month}</h3>
               </div>
-              <div className="rounded-circle bg-white bg-opacity-25 p-2.5 d-flex align-items-center justify-content-center">
-                <IconCalendarTime size={22} className="text-white" />
+              <div className="rounded-circle bg-white bg-opacity-25 p-2 p-md-2.5 d-flex align-items-center justify-content-center">
+                <IconCalendarTime size={20} className="text-white" />
               </div>
             </Card.Body>
           </Card>
         </Col>
 
-        <Col xs={12} sm={6} xl={3}>
+        <Col xs={6} sm={6} xl={3}>
           <Card
             className="border-0 shadow-sm text-white h-100"
             style={{ background: "linear-gradient(135deg, #10b981 0%, #047857 100%)", cursor: "pointer" }}
             onClick={() => setFilterStatus("APPROVED")}
           >
-            <Card.Body className="d-flex align-items-center justify-content-between p-3">
+            <Card.Body className="d-flex align-items-center justify-content-between p-2.5 p-md-3">
               <div>
-                <span className="text-white-50 small fw-semibold text-uppercase">Approved (Year)</span>
-                <h3 className="mb-0 fw-bold mt-1 text-white">{summary.approved_this_year}</h3>
+                <span className="text-white-50 small fw-semibold text-uppercase" style={{ fontSize: "11px" }}>Approved (Year)</span>
+                <h3 className="mb-0 fw-bold mt-1 text-white fs-4 fs-md-3">{summary.approved_this_year}</h3>
               </div>
-              <div className="rounded-circle bg-white bg-opacity-20 p-2.5 d-flex align-items-center justify-content-center">
-                <IconCurrencyRupee size={22} className="text-white" />
+              <div className="rounded-circle bg-white bg-opacity-20 p-2 p-md-2.5 d-flex align-items-center justify-content-center">
+                <IconCurrencyRupee size={20} className="text-white" />
               </div>
             </Card.Body>
           </Card>
@@ -428,10 +446,10 @@ const UpcomingIncrementsWidget: React.FC = () => {
               <h5 className="mb-0 fw-bold">Employee Salary Increment Management</h5>
               <small className="text-muted">
                 {filterStatus === "NEXT_MONTH"
-                  ? `Showing employees with increments scheduled for next month (${summary.next_month_name || "Next Month"})`
+                  ? `Showing active employees with increments scheduled for next month (${summary.next_month_name || "Next Month"})`
                   : filterStatus === "THIS_MONTH"
-                  ? `Showing employees with increments scheduled for this month (${summary.this_month_name || "This Month"})`
-                  : "Track, approve, reject or reschedule upcoming employee salary raises"}
+                  ? `Showing active employees with increments scheduled for this month (${summary.this_month_name || "This Month"})`
+                  : "Track, approve, reject or reschedule upcoming salary raises for active employees"}
               </small>
             </div>
           </div>
@@ -444,7 +462,7 @@ const UpcomingIncrementsWidget: React.FC = () => {
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
             >
-              <option value="">All Increments</option>
+              <option value="">All Active Increments</option>
               <option value="NEXT_MONTH">Due Next Month {summary.next_month_name ? `(${summary.next_month_name})` : ""}</option>
               <option value="THIS_MONTH">Due This Month</option>
               <option value="PENDING">Pending Review (All)</option>
@@ -465,26 +483,26 @@ const UpcomingIncrementsWidget: React.FC = () => {
           {loading ? (
             <div className="text-center py-5">
               <Spinner animation="border" variant="primary" />
-              <p className="text-muted mt-2 mb-0 small">Checking employee increment schedules...</p>
+              <p className="text-muted mt-2 mb-0 small">Checking active employee increment schedules...</p>
             </div>
           ) : increments.length === 0 ? (
             <div className="text-center py-5 text-muted">
               <IconTrendingUp size={40} className="mb-2 text-secondary opacity-50" />
               <p className="mb-0 fw-semibold">No {filterStatus.toLowerCase()} increments found.</p>
-              <small>Salary increments will appear automatically when due based on employee joining date or company policy.</small>
+              <small>Salary increments will appear automatically when due for active employees based on joining date or company policy.</small>
             </div>
           ) : (
             <div className="table-responsive">
-              <Table hover size="sm" className="align-middle mb-0">
-                <thead className="table-light text-secondary small text-uppercase">
+              <Table hover size="sm" className="align-middle text-nowrap mb-0" style={{ minWidth: "760px" }}>
+                <thead className="table-light text-secondary small text-uppercase" style={{ fontSize: "11px", letterSpacing: "0.5px" }}>
                   <tr>
-                    <th>Employee</th>
-                    <th>Current Salary</th>
-                    <th>Proposed Raise</th>
-                    <th>New Salary</th>
-                    <th>Due Date</th>
-                    <th>Status</th>
-                    <th className="text-end">Actions</th>
+                    <th className="ps-3 py-2.5 text-nowrap">Employee</th>
+                    <th className="py-2.5 text-nowrap">Current Salary</th>
+                    <th className="py-2.5 text-nowrap">Proposed Raise</th>
+                    <th className="py-2.5 text-nowrap">New Salary</th>
+                    <th className="py-2.5 text-nowrap">Due Date</th>
+                    <th className="py-2.5 text-nowrap">Status</th>
+                    <th className="text-end pe-3 py-2.5 text-nowrap">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -495,116 +513,135 @@ const UpcomingIncrementsWidget: React.FC = () => {
                     const monthlyCurrent = isAnnual ? Math.round(Number(inc.current_salary) / 12) : Number(inc.current_salary);
                     const monthlyNew = isAnnual ? Math.round(Number(inc.new_salary) / 12) : Number(inc.new_salary);
                     const monthlyRaiseAmount = isAnnual ? Math.round(Number(inc.calculated_increment_amount) / 12) : Number(inc.calculated_increment_amount);
+                    const formattedPct = inc.increment_value ? parseFloat(String(inc.increment_value)) : 10;
 
                     return (
-                      <tr key={inc.id}>
-                        <td>
+                      <tr key={inc.id} style={{ height: "48px" }}>
+                        <td className="ps-3 py-2 text-nowrap">
                           <div className="d-flex align-items-center gap-2">
                             {emp?.profile_photo_url ? (
                               <img
                                 src={emp.profile_photo_url}
                                 alt={emp.full_name}
-                                className="rounded-circle"
-                                style={{ width: "36px", height: "36px", objectFit: "cover" }}
+                                className="rounded-circle flex-shrink-0"
+                                style={{ width: "30px", height: "30px", objectFit: "cover" }}
                               />
                             ) : (
                               <div
-                                className="rounded-circle bg-primary bg-opacity-10 text-primary fw-bold d-flex align-items-center justify-content-center"
-                                style={{ width: "36px", height: "36px" }}
+                                className="rounded-circle bg-primary bg-opacity-10 text-primary fw-bold d-flex align-items-center justify-content-center flex-shrink-0"
+                                style={{ width: "30px", height: "30px", fontSize: "12px" }}
                               >
                                 {emp?.full_name?.charAt(0) || "E"}
                               </div>
                             )}
-                            <div>
-                              <div className="fw-bold text-dark">{emp?.full_name || "Employee"}</div>
-                              <small className="text-muted">
+                            <div className="text-truncate" style={{ maxWidth: "220px" }}>
+                              <div className="fw-bold text-dark d-flex align-items-center gap-1" style={{ fontSize: "12.5px" }}>
+                                <span className="text-truncate">{emp?.full_name || "Employee"}</span>
+                                <Badge
+                                  bg={emp?.status === "ACTIVE" ? "success-subtle" : "secondary-subtle"}
+                                  className={`border ${emp?.status === "ACTIVE" ? "text-success border-success-subtle" : "text-secondary border-secondary-subtle"} rounded-pill`}
+                                  style={{ fontSize: "9.5px", padding: "1px 5px", fontWeight: 600 }}
+                                >
+                                  {emp?.status_display || emp?.status || "Active"}
+                                </Badge>
+                              </div>
+                              <small className="text-muted d-block text-truncate" style={{ fontSize: "11px" }}>
                                 {emp?.employee_id} &bull; {emp?.department || "N/A"}
                               </small>
                             </div>
                           </div>
                         </td>
 
-                        <td>
-                          <div className="fw-semibold text-dark">
+                        <td className="py-2 text-nowrap">
+                          <div className="fw-semibold text-dark" style={{ fontSize: "12.5px" }}>
                             ₹{monthlyCurrent.toLocaleString("en-IN")}
-                          </div>
-                          <small className="text-muted">monthly</small>
-                        </td>
-
-                        <td>
-                          <Badge bg="success" className="p-2">
-                            {inc.increment_type === "PERCENTAGE"
-                              ? `+${inc.increment_value}%`
-                              : `+₹${monthlyRaiseAmount.toLocaleString("en-IN")}`}
-                          </Badge>
-                          <div className="small text-muted mt-1">
-                            +₹{monthlyRaiseAmount.toLocaleString("en-IN")}/mo
+                            <span className="text-muted fw-normal ms-0.5" style={{ fontSize: "10.5px" }}>/mo</span>
                           </div>
                         </td>
 
-                        <td>
-                          <div className="fw-bold text-success">
+                        <td className="py-2 text-nowrap">
+                          <div className="d-inline-flex align-items-center gap-1.5">
+                            <span
+                              className="badge px-1.5 py-0.5 rounded-pill fw-bold text-success bg-success-subtle border border-success-subtle"
+                              style={{ fontSize: "11px", letterSpacing: "-0.2px" }}
+                            >
+                              {inc.increment_type === "PERCENTAGE"
+                                ? `+${formattedPct}%`
+                                : `+₹${monthlyRaiseAmount.toLocaleString("en-IN")}`}
+                            </span>
+                            <span className="text-muted fw-medium" style={{ fontSize: "11px" }}>
+                              +₹{monthlyRaiseAmount.toLocaleString("en-IN")}/mo
+                            </span>
+                          </div>
+                        </td>
+
+                        <td className="py-2 text-nowrap">
+                          <div className="fw-bold text-success" style={{ fontSize: "12.5px" }}>
                             ₹{monthlyNew.toLocaleString("en-IN")}
+                            <span className="text-muted fw-normal ms-0.5" style={{ fontSize: "10.5px" }}>/mo</span>
                           </div>
-                          <small className="text-muted">monthly</small>
                         </td>
 
-                        <td>
-                          <div className="fw-semibold">{inc.due_date}</div>
+                        <td className="py-2 text-nowrap">
+                          <div className="fw-medium text-dark text-nowrap" style={{ fontSize: "12px" }}>{inc.due_date}</div>
                           {inc.rescheduled_date && (
-                            <small className="text-warning d-block">
-                              Rescheduled to {inc.rescheduled_date}
+                            <small className="text-warning d-block text-nowrap" style={{ fontSize: "10px" }}>
+                              Rescheduled ({inc.rescheduled_date})
                             </small>
                           )}
                         </td>
 
-                        <td>{getStatusBadge(inc.status)}</td>
+                        <td className="py-2 text-nowrap">{getStatusBadge(inc.status)}</td>
 
-                        <td className="text-end">
+                        <td className="text-end pe-3 py-2 text-nowrap">
                           {isPending ? (
-                            <div className="d-flex justify-content-end gap-1">
+                            <div className="d-flex justify-content-end align-items-center gap-1">
                               <Button
                                 variant="outline-primary"
                                 size="sm"
-                                className="p-1 px-2 d-inline-flex align-items-center justify-content-center"
+                                className="p-0 d-inline-flex align-items-center justify-content-center rounded-2"
+                                style={{ width: "26px", height: "26px" }}
                                 onClick={() => openEditHikeModal(inc)}
                                 title="Edit Salary Hike Amount / %"
                               >
-                                <IconEdit size={16} />
+                                <IconEdit size={14} />
                               </Button>
 
                               <Button
                                 variant="success"
                                 size="sm"
-                                className="p-1 px-2 d-inline-flex align-items-center justify-content-center"
+                                className="p-0 d-inline-flex align-items-center justify-content-center rounded-2"
+                                style={{ width: "26px", height: "26px" }}
                                 onClick={() => handleApprove(inc)}
                                 title="Accept & Apply Increment"
                               >
-                                <IconCheck size={16} />
+                                <IconCheck size={14} />
                               </Button>
 
                               <Button
                                 variant="outline-warning"
                                 size="sm"
-                                className="p-1 px-2 d-inline-flex align-items-center justify-content-center"
+                                className="p-0 d-inline-flex align-items-center justify-content-center rounded-2"
+                                style={{ width: "26px", height: "26px" }}
                                 onClick={() => openRescheduleModal(inc)}
                                 title="Reschedule Due Date"
                               >
-                                <IconCalendarTime size={16} />
+                                <IconCalendarTime size={14} />
                               </Button>
 
                               <Button
                                 variant="outline-danger"
                                 size="sm"
-                                className="p-1 px-2 d-inline-flex align-items-center justify-content-center"
+                                className="p-0 d-inline-flex align-items-center justify-content-center rounded-2"
+                                style={{ width: "26px", height: "26px" }}
                                 onClick={() => openRejectModal(inc)}
                                 title="Reject Increment"
                               >
-                                <IconX size={16} />
+                                <IconX size={14} />
                               </Button>
                             </div>
                           ) : (
-                            <small className="text-muted">
+                            <small className="text-muted text-nowrap" style={{ fontSize: "11px" }}>
                               {inc.notes ? `Note: ${inc.notes}` : "Completed"}
                             </small>
                           )}

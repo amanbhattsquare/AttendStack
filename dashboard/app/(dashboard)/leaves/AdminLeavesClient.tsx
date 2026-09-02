@@ -336,7 +336,7 @@ const AdminLeavesClient = () => {
             </div>
           ) : (
             <div className="table-responsive leave-table-responsive">
-              <Table hover className="align-middle mb-0 custom-leaves-table">
+              <Table hover className="align-middle text-nowrap mb-0 custom-leaves-table" style={{ minWidth: "850px" }}>
                 <thead className="table-light">
                   <tr className="small text-secondary-emphasis" style={{ fontSize: "0.78rem", textTransform: "uppercase", fontWeight: 600 }}>
                     <th className="px-4 py-3">Employee Details</th>

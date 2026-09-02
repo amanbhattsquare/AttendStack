@@ -194,11 +194,11 @@ const UpcomingIncrementsChartWidget: React.FC = () => {
             <div className="d-flex align-items-center gap-2">
               <h5 className="mb-0 fw-bold text-dark">Upcoming Employee Increments Strategy</h5>
               <Badge bg="success-subtle" className="text-success border border-success-subtle rounded-pill px-2.5 py-1">
-                Line Trajectory
+                Active Staff Trajectory
               </Badge>
             </div>
             <p className="text-muted small mb-0 mt-0.5">
-              Month-by-month trajectory of scheduled employee salary raises and projected payroll growth.
+              Month-by-month trajectory of scheduled salary raises and projected payroll growth for active employees.
             </p>
           </div>
         </div>

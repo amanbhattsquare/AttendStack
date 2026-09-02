@@ -617,7 +617,7 @@ const AttendanceRecordsClient = () => {
         </CardHeader>
         <CardBody>
           {view === "table" ? (
-            <Table hover responsive className="text-nowrap align-middle">
+            <Table hover responsive className="text-nowrap align-middle" style={{ minWidth: "1150px" }}>
               <thead className="table-light">
                 <tr>
                   <th>Employee</th>
@@ -718,7 +718,7 @@ const AttendanceRecordsClient = () => {
           ) : error ? (
             <Alert variant="danger">{error}</Alert>
           ) : (
-            <Table hover responsive className="text-nowrap align-middle">
+            <Table hover responsive className="text-nowrap align-middle" style={{ minWidth: "750px" }}>
               <thead className="table-light">
                 <tr>
                   <th>Date</th>

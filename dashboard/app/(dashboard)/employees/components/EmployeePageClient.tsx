@@ -505,7 +505,7 @@ const EmployeePageClient = () => {
 
   const handleStatusAction = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!statusEmployee || selectedStatus === statusEmployee.status) return;
+    if (!statusEmployee) return;
 
     try {
       setError("");
@@ -539,9 +539,9 @@ const EmployeePageClient = () => {
 
       Swal.fire({
         title: "Status Updated",
-        text: `${updatedEmployee.full_name} is now ${updatedEmployee.status_label}.`,
+        text: `${updatedEmployee.full_name} is now ${updatedEmployee.status_label} (Effective: ${formatDate(statusEffectiveDate)}).`,
         icon: "success",
-        timer: 1800,
+        timer: 2000,
         showConfirmButton: false,
       });
     } catch (statusError) {
@@ -745,13 +745,13 @@ const EmployeePageClient = () => {
                           >
                             <IconKey size={16} /> {actionLoadingKey === `${employee.id}:create-password` ? "Creating..." : "Create Password"}
                           </Dropdown.Item>
-                          <Dropdown.Item
+                          {/* <Dropdown.Item
                             disabled={!employee.account_exists || actionLoadingKey === `${employee.id}:reset-password`}
                             onClick={() => openPasswordModal(employee, "reset-password")}
                             className="d-flex align-items-center gap-2"
                           >
                             <IconRefresh size={16} /> {actionLoadingKey === `${employee.id}:reset-password` ? "Resetting..." : "Reset Password"}
-                          </Dropdown.Item>
+                          </Dropdown.Item> */}
                           <Dropdown.Divider />
                           <Dropdown.Item
                             disabled={actionLoadingKey === `${employee.id}:delete`}
@@ -896,6 +896,9 @@ const EmployeePageClient = () => {
                     value={statusEffectiveDate}
                     onChange={(event) => setStatusEffectiveDate(event.target.value)}
                   />
+                  <Form.Text className="text-muted small" style={{ fontSize: "11px" }}>
+                    Select today or any past effective date (since joining: {formatDate(statusEmployee?.joining_date)}).
+                  </Form.Text>
                 </Form.Group>
               </div>
 
@@ -910,6 +913,9 @@ const EmployeePageClient = () => {
                     value={statusEndDate}
                     onChange={(event) => setStatusEndDate(event.target.value)}
                   />
+                  <Form.Text className="text-muted small" style={{ fontSize: "11px" }}>
+                    {selectedStatus === "NOTICE_PERIOD" || selectedStatus === "PROVISION" ? "End date of this transition phase." : "Optional expiration date."}
+                  </Form.Text>
                 </Form.Group>
               </div>
             </div>
@@ -947,12 +953,22 @@ const EmployeePageClient = () => {
               Cancel
             </Button>
             <Button
-              variant="primary"
+              variant={
+                selectedStatus === "ACTIVE"
+                  ? "success"
+                  : selectedStatus === "TERMINATED"
+                  ? "danger"
+                  : selectedStatus === "INACTIVE"
+                  ? "secondary"
+                  : "primary"
+              }
               type="submit"
-              disabled={!statusEmployee || selectedStatus === statusEmployee.status || actionLoadingKey === `${statusEmployee?.id}:status`}
+              disabled={!statusEmployee || actionLoadingKey === `${statusEmployee?.id}:status`}
             >
               {actionLoadingKey === `${statusEmployee?.id}:status`
                 ? "Updating..."
+                : selectedStatus === statusEmployee?.status
+                ? "Update Status Dates"
                 : `Set ${statusLabelByValue[selectedStatus]}`}
             </Button>
           </Modal.Footer>

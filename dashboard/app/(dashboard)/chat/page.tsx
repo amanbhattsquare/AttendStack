@@ -82,6 +82,7 @@ import {
   closeConversationNotifications,
   markMessageAsNotified,
   hasMessageBeenNotified,
+  initNotifiedMessages,
   isChatNotificationDisabled,
   setChatNotificationDisabled,
   updateTabTitleBadge,

@@ -104,6 +104,7 @@ class EmployeeListSerializer(serializers.ModelSerializer):
     profile_photo_url = serializers.SerializerMethodField()
     account_exists = serializers.SerializerMethodField()
     status_label = serializers.CharField(source="get_status_display", read_only=True)
+    status_effective_date = serializers.SerializerMethodField()
     auto_transition_status_label = serializers.CharField(
         source="get_auto_transition_status_display", read_only=True, allow_null=True
     )
@@ -117,10 +118,12 @@ class EmployeeListSerializer(serializers.ModelSerializer):
             "email",
             "department",
             "designation",
+            "joining_date",
             "profile_photo_url",
             "account_exists",
             "status",
             "status_label",
+            "status_effective_date",
             "status_end_date",
             "auto_transition_status",
             "auto_transition_status_label",
@@ -139,6 +142,12 @@ class EmployeeListSerializer(serializers.ModelSerializer):
         if annotated_value is not None:
             return bool(annotated_value)
         return User.objects.filter(email__iexact=obj.email, role=UserRole.EMPLOYEE).exists()
+
+    def get_status_effective_date(self, obj):
+        latest = obj.status_history.order_by("-effective_date", "-created_at", "-pk").first()
+        if latest and latest.effective_date:
+            return str(latest.effective_date)
+        return str(obj.joining_date) if obj.joining_date else None
 
 
 class EmployeeStatusUpdateSerializer(serializers.Serializer):

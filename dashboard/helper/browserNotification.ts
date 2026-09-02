@@ -7,13 +7,13 @@ let unreadTitleCount = 0;
 // Track active window notifications by tag for programmatic closing
 const activeWindowNotifications = new Map<string, Notification>();
 
-// Deduplication store for notified message IDs (In-Memory + SessionStorage)
+// Deduplication store for notified message IDs (In-Memory + LocalStorage for permanent cross-session deduplication)
 const notifiedMessageIds = new Set<string>();
 
 const loadNotifiedIdsFromStorage = () => {
   if (typeof window === 'undefined') return;
   try {
-    const raw = sessionStorage.getItem('attendstack_notified_msg_ids');
+    const raw = localStorage.getItem('attendstack_notified_msg_ids') || sessionStorage.getItem('attendstack_notified_msg_ids');
     if (raw) {
       const arr = JSON.parse(raw);
       if (Array.isArray(arr)) {
@@ -26,9 +26,9 @@ const loadNotifiedIdsFromStorage = () => {
 const saveNotifiedIdsToStorage = () => {
   if (typeof window === 'undefined') return;
   try {
-    // Keep max 500 recent IDs to avoid storage bloating
-    const arr = Array.from(notifiedMessageIds).slice(-500);
-    sessionStorage.setItem('attendstack_notified_msg_ids', JSON.stringify(arr));
+    // Keep max 1000 recent IDs to avoid storage bloating
+    const arr = Array.from(notifiedMessageIds).slice(-1000);
+    localStorage.setItem('attendstack_notified_msg_ids', JSON.stringify(arr));
   } catch (_) { }
 };
 
@@ -43,7 +43,7 @@ export const hasMessageBeenNotified = (messageId?: string | number | null): bool
 };
 
 /**
- * Mark a message as notified so it never triggers again
+ * Mark a message as notified so it never triggers again across logins and sessions
  */
 export const markMessageAsNotified = (messageId?: string | number | null): void => {
   if (!messageId) return;
@@ -55,7 +55,7 @@ export const markMessageAsNotified = (messageId?: string | number | null): void 
  * Seed existing historical messages into notified cache on login / initial load
  */
 export const initNotifiedMessages = (messageIds: (string | number)[]): void => {
-  if (!Array.isArray(messageIds)) return;
+  if (!Array.isArray(messageIds) || messageIds.length === 0) return;
   messageIds.forEach((id) => {
     if (id) notifiedMessageIds.add(String(id));
   });

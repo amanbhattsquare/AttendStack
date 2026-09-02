@@ -1008,6 +1008,13 @@ function ChatPageContent() {
     } else {
       clearTabTitleBadge();
     }
+    // Seed all existing last messages so they are permanently remembered across logins
+    const existingMsgIds = conversations
+      .map((c) => c.last_message?.id)
+      .filter(Boolean) as string[];
+    if (existingMsgIds.length > 0) {
+      initNotifiedMessages(existingMsgIds);
+    }
   }, [conversations]);
 
   // Deep linking: Open specific conversation from URL query parameter (?convId=...)
@@ -1053,6 +1060,11 @@ function ChatPageContent() {
       if (!activeConversationId) return [];
       const res = await fetchMessages(activeConversationId);
       markConversationAsRead(activeConversationId);
+      closeConversationNotifications(activeConversationId);
+      const fetchedIds = (res.results || []).map((m: any) => m.id).filter(Boolean);
+      if (fetchedIds.length > 0) {
+        initNotifiedMessages(fetchedIds);
+      }
       queryClient.setQueryData<Conversation[]>(["conversations"], (old = []) =>
         old.map((c) => (c.id === activeConversationId ? { ...c, unread_count: 0 } : c))
       );

@@ -10,6 +10,7 @@ import {
   updateTabTitleBadge,
   clearTabTitleBadge,
   initNotifiedMessages,
+  markMessageAsNotified,
   hasMessageBeenNotified,
 } from '../../helper/browserNotification';
 import { preloadNotificationSound } from '../../helper/notificationSound';
@@ -17,7 +18,8 @@ import { preloadNotificationSound } from '../../helper/notificationSound';
 export const GlobalChatNotificationListener: React.FC = () => {
   const pathname = usePathname();
   const prevConversationsRef = useRef<Record<string, { lastMsgId?: string; unread: number }>>({});
-  const isFirstLoadRef = useRef(true);
+  const initialSeededRef = useRef<boolean>(false);
+  const sessionStartTimeRef = useRef<number>(Date.now());
 
   // Current logged in user ID
   const getCurrentUserId = () => {
@@ -39,7 +41,7 @@ export const GlobalChatNotificationListener: React.FC = () => {
   }, []);
 
   // Poll conversations every 12 seconds in background to detect incoming messages
-  const { data: conversations = [] } = useQuery<Conversation[]>({
+  const { data: conversations = [], isSuccess } = useQuery<Conversation[]>({
     queryKey: ['global_conversations_notifications'],
     queryFn: fetchConversations,
     refetchInterval: 12000,
@@ -55,52 +57,66 @@ export const GlobalChatNotificationListener: React.FC = () => {
     let totalUnread = 0;
     const currentMap: Record<string, { lastMsgId?: string; unread: number }> = {};
 
-    // 1. On FIRST load / login, seed all existing messages into notified registry so old messages NEVER trigger notifications
-    if (isFirstLoadRef.current) {
-      const existingMsgIds = conversations
-        .map((c) => c.last_message?.id)
-        .filter(Boolean) as string[];
-      initNotifiedMessages(existingMsgIds);
-
-      conversations.forEach((conv) => {
-        totalUnread += conv.unread_count || 0;
-        currentMap[conv.id] = {
-          lastMsgId: conv.last_message?.id,
-          unread: conv.unread_count || 0,
-        };
-      });
-
-      if (totalUnread > 0) {
-        updateTabTitleBadge(totalUnread);
-      } else {
-        clearTabTitleBadge();
-      }
-
-      prevConversationsRef.current = currentMap;
-      isFirstLoadRef.current = false;
-      return;
-    }
-
-    // 2. Subsequent polls: only trigger for brand-new incoming messages not yet notified
     conversations.forEach((conv) => {
       totalUnread += conv.unread_count || 0;
       currentMap[conv.id] = {
         lastMsgId: conv.last_message?.id,
         unread: conv.unread_count || 0,
       };
+    });
 
+    // 1. On FIRST data fetch / login, seed all existing messages into permanent registry so old/seen messages NEVER trigger notifications
+    if (!initialSeededRef.current) {
+      if (conversations.length > 0 || isSuccess) {
+        const existingMsgIds = conversations
+          .map((c) => c.last_message?.id)
+          .filter(Boolean) as string[];
+        initNotifiedMessages(existingMsgIds);
+        prevConversationsRef.current = currentMap;
+        initialSeededRef.current = true;
+
+        if (totalUnread > 0) {
+          updateTabTitleBadge(totalUnread);
+        } else {
+          clearTabTitleBadge();
+        }
+      }
+      return;
+    }
+
+    // 2. Subsequent polls: only trigger for brand-new incoming messages not yet notified
+    conversations.forEach((conv) => {
       const lastMsg = conv.last_message;
       if (!lastMsg || !lastMsg.id) return;
 
-      const prev = prevConversationsRef.current[conv.id];
-      const isNewMessageArrival = !prev || prev.lastMsgId !== lastMsg.id;
+      // RULE 1: If conversation has 0 unread messages (user already saw it), NEVER notify!
+      if ((conv.unread_count || 0) <= 0) {
+        markMessageAsNotified(lastMsg.id);
+        return;
+      }
 
-      // Skip if this message has already triggered a notification
+      // RULE 2: Skip if this message has already triggered a notification in this or previous sessions
       if (hasMessageBeenNotified(lastMsg.id)) return;
 
-      // Skip if the message was sent by the current user
+      // RULE 3: Skip if the message was sent by the current user
       const isFromMe = currentUserId && lastMsg.sender && String(lastMsg.sender.id) === currentUserId;
-      if (isFromMe) return;
+      if (isFromMe) {
+        markMessageAsNotified(lastMsg.id);
+        return;
+      }
+
+      const prev = prevConversationsRef.current[conv.id];
+      // A new message arrived if the previous recorded lastMsgId changed or this is a fresh unread conversation
+      const isNewMessageArrival = prev ? prev.lastMsgId !== lastMsg.id : true;
+
+      // RULE 4: Message created_at must not be older than the session start time (avoid stale offline notifications on reconnect)
+      if (lastMsg.created_at) {
+        const msgTime = new Date(lastMsg.created_at).getTime();
+        if (msgTime < sessionStartTimeRef.current - 10000) {
+          markMessageAsNotified(lastMsg.id);
+          return;
+        }
+      }
 
       // Check if user is away from chat OR tab is in background
       const isDocumentHidden = typeof document !== 'undefined' && document.hidden;
@@ -138,7 +154,7 @@ export const GlobalChatNotificationListener: React.FC = () => {
     }
 
     prevConversationsRef.current = currentMap;
-  }, [conversations, pathname]);
+  }, [conversations, isSuccess, pathname]);
 
   return null; // Headless component
 };

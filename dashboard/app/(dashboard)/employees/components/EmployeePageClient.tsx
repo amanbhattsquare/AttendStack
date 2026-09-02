@@ -39,6 +39,7 @@ type Employee = {
   account_exists: boolean;
   status: EmployeeStatus;
   status_label: string;
+  status_effective_date?: string | null;
   status_end_date?: string | null;
   auto_transition_status?: EmployeeStatus | null;
   auto_transition_status_label?: string | null;
@@ -398,7 +399,8 @@ const EmployeePageClient = () => {
   const openStatusModal = (employee: Employee) => {
     setStatusEmployee(employee);
     setSelectedStatus(employee.status);
-    setStatusEffectiveDate(localDateValue());
+    const existingDate = employee.status_effective_date || employee.joining_date;
+    setStatusEffectiveDate(existingDate || localDateValue());
     setStatusEndDate(employee.status_end_date || "");
     setAutoTransitionStatus((employee.auto_transition_status as EmployeeStatus) || "");
   };
@@ -853,9 +855,16 @@ const EmployeePageClient = () => {
                 </div>
               </div>
               {statusEmployee && (
-                <span className={`badge ${statusBadgeClass[statusEmployee.status] || "bg-secondary-subtle text-secondary"}`}>
-                  Current: {statusEmployee.status_label}
-                </span>
+                <div className="d-flex flex-wrap gap-1 align-items-center justify-content-end">
+                  <span className={`badge ${statusBadgeClass[statusEmployee.status] || "bg-secondary-subtle text-secondary"}`}>
+                    Current: {statusEmployee.status_label}
+                  </span>
+                  {statusEmployee.status_effective_date && (
+                    <span className="badge bg-light text-dark border" style={{ fontSize: "11px" }}>
+                      Since: {formatDate(statusEmployee.status_effective_date)}
+                    </span>
+                  )}
+                </div>
               )}
             </div>
 

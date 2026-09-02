@@ -94,11 +94,15 @@ class PayrollSerializer(serializers.ModelSerializer):
 from .models import EmployeeIncrement
 
 
+from settings.models import SystemSettings
+
 class EmployeeIncrementSerializer(serializers.ModelSerializer):
     employee_details = EmployeeMiniSerializer(source="employee", read_only=True)
     status_display = serializers.CharField(source="get_status_display", read_only=True)
     increment_type_display = serializers.CharField(source="get_increment_type_display", read_only=True)
     action_by_name = serializers.CharField(source="action_by.get_full_name", read_only=True)
+    cycle_months = serializers.SerializerMethodField()
+    cycle_display = serializers.SerializerMethodField()
 
     class Meta:
         model = EmployeeIncrement
@@ -120,6 +124,8 @@ class EmployeeIncrementSerializer(serializers.ModelSerializer):
             "action_by",
             "action_by_name",
             "notes",
+            "cycle_months",
+            "cycle_display",
             "created_at",
             "updated_at",
         ]
@@ -129,9 +135,33 @@ class EmployeeIncrementSerializer(serializers.ModelSerializer):
             "new_salary",
             "action_date",
             "action_by",
+            "cycle_months",
+            "cycle_display",
             "created_at",
             "updated_at",
         ]
+
+    def get_cycle_months(self, obj):
+        if obj.employee.override_increment_policy and obj.employee.custom_increment_months:
+            return obj.employee.custom_increment_months
+        try:
+            settings = SystemSettings.get_settings()
+            return settings.default_increment_months or 12
+        except Exception:
+            return 12
+
+    def get_cycle_display(self, obj):
+        months = self.get_cycle_months(obj)
+        labels = {
+            1: "Monthly (Every 1 Month)",
+            3: "Quarterly (Every 3 Months)",
+            6: "Half-Yearly (Every 6 Months)",
+            9: "Every 9 Months",
+            12: "Annually (Every 12 Months / 1 Year)",
+            18: "Every 18 Months (1.5 Years)",
+            24: "Every 24 Months (2 Years)",
+        }
+        return labels.get(months, f"Every {months} Months")
 
 
 class RescheduleIncrementSerializer(serializers.Serializer):

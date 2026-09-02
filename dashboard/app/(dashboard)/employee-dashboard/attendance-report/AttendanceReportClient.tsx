@@ -123,7 +123,7 @@ const AttendanceReportClient = () => {
             </Col>
           </Row>
         </Form>
-        <Table hover responsive className="text-nowrap align-middle">
+        <Table hover responsive className="text-nowrap align-middle" style={{ minWidth: "650px" }}>
           <thead className="table-light">
             <tr>
               <th>Date</th>

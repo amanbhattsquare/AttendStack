@@ -10,12 +10,20 @@ table tr:last-child td {
 }
 
 .table {
+  vertical-align: middle;
+
   & thead {
     background-color: var(--#{$prefix}gray-100);
+    th {
+      border: 0px;
+      color: var(--#{$prefix}gray-600);
+      font-weight: 600;
+      white-space: nowrap;
+    }
   }
-  & th {
-    border: 0px;
-    color: var(--#{$prefix}gray-600);
+
+  td {
+    vertical-align: middle;
   }
 }
 
@@ -31,26 +39,46 @@ th {
 }
 
 .table-responsive {
-  /* width */
+  display: block;
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  -ms-overflow-style: -ms-autohiding-scrollbar;
+
+  /* Smooth customized modern scrollbar */
   &::-webkit-scrollbar {
-    height: 6px;
+    height: 5px;
+    width: 5px;
   }
 
-  /* Track */
   &::-webkit-scrollbar-track {
-    background: var(--#{$prefix}gray-100);
-    border-radius: $border-radius-xl;
+    background: #f1f5f9;
+    border-radius: 4px;
   }
 
-  /* Handle */
   &::-webkit-scrollbar-thumb {
-    background: var(--#{$prefix}gray-300);
-    border-radius: $border-radius-xl;
+    background: #cbd5e1;
+    border-radius: 4px;
   }
 
-  /* Handle on hover */
   &::-webkit-scrollbar-thumb:hover {
-    background: var(--#{$prefix}gray-300);
+    background: #94a3b8;
+  }
+
+  /* Ensure tables on mobile devices maintain a readable column width and scroll smoothly */
+  @media (max-width: 768px) {
+    border-radius: 0.5rem;
+    scrollbar-width: thin;
+    
+    table:not(.table-inline) {
+      min-width: 720px;
+    }
+  }
+
+  @media (max-width: 576px) {
+    table:not(.table-inline) {
+      min-width: 750px;
+    }
   }
 }
 
@@ -66,3 +94,4 @@ th {
   --ds-table-color-state: rgba(var(--#{$prefix}primary-rgb), $alpha: 1);
   --ds-table-bg-state: rgba(var(--#{$prefix}primary-rgb), $alpha: 0.75); // Slightly darker on hover
 }
+

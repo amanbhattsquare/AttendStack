@@ -98,7 +98,7 @@ function TanstackTable<TData>({
           className={
             tableClass ? tableClass : "text-nowrap table-centered mt-0"
           }
-          style={{ width: "100%" }}
+          style={{ width: "100%", minWidth: "750px" }}
           id="example"
           {...props}
         >

@@ -198,7 +198,7 @@ const TodaysAttendanceClient = () => {
         </Card.Header>
         <CardBody>
           {error && <div className="alert alert-danger">{error}</div>}
-          <Table hover responsive className="text-nowrap align-middle">
+          <Table hover responsive className="text-nowrap align-middle" style={{ minWidth: "720px" }}>
             <thead className="table-light">
               <tr>
                 <th>Employee</th>

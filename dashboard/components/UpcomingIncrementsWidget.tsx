@@ -360,77 +360,77 @@ const UpcomingIncrementsWidget: React.FC = () => {
 
   return (
     <div className="upcoming-increments-section my-4">
-      {/* Metric Cards Grid */}
-      <Row className="g-3 mb-4">
-        <Col xs={12} sm={6} xl={3}>
+      {/* Metric Cards Grid - 2 per row on mobile */}
+      <Row className="g-2 g-md-3 mb-4">
+        <Col xs={6} sm={6} xl={3}>
           <Card
             className="border-0 shadow-sm text-white h-100"
             style={{ background: "linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)", cursor: "pointer" }}
             onClick={() => setFilterStatus("PENDING")}
           >
-            <Card.Body className="d-flex align-items-center justify-content-between p-3">
+            <Card.Body className="d-flex align-items-center justify-content-between p-2.5 p-md-3">
               <div>
-                <span className="text-white-50 small fw-semibold text-uppercase">Pending Review</span>
-                <h3 className="mb-0 fw-bold mt-1 text-white">{summary.pending_count}</h3>
+                <span className="text-white-50 small fw-semibold text-uppercase" style={{ fontSize: "11px" }}>Pending Review</span>
+                <h3 className="mb-0 fw-bold mt-1 text-white fs-4 fs-md-3">{summary.pending_count}</h3>
               </div>
-              <div className="rounded-circle bg-white bg-opacity-20 p-2.5 d-flex align-items-center justify-content-center">
-                <IconTrendingUp size={22} className="text-white" />
+              <div className="rounded-circle bg-white bg-opacity-20 p-2 p-md-2.5 d-flex align-items-center justify-content-center">
+                <IconTrendingUp size={20} className="text-white" />
               </div>
             </Card.Body>
           </Card>
         </Col>
 
-        <Col xs={12} sm={6} xl={3}>
+        <Col xs={6} sm={6} xl={3}>
           <Card
             className="border-0 shadow-sm text-white h-100 position-relative overflow-hidden"
             style={{ background: "linear-gradient(135deg, #0d9488 0%, #059669 100%)", cursor: "pointer" }}
             onClick={() => setFilterStatus("NEXT_MONTH")}
           >
-            <Card.Body className="d-flex align-items-center justify-content-between p-3">
+            <Card.Body className="d-flex align-items-center justify-content-between p-2.5 p-md-3">
               <div>
-                <span className="text-white-50 small fw-semibold text-uppercase">
-                  Due Next Month {summary.next_month_name ? `(${summary.next_month_name})` : ""}
+                <span className="text-white-50 small fw-semibold text-uppercase" style={{ fontSize: "11px" }}>
+                  Due Next Month
                 </span>
-                <h3 className="mb-0 fw-bold mt-1 text-white">{summary.due_next_month ?? 0}</h3>
+                <h3 className="mb-0 fw-bold mt-1 text-white fs-4 fs-md-3">{summary.due_next_month ?? 0}</h3>
               </div>
-              <div className="rounded-circle bg-white bg-opacity-25 p-2.5 d-flex align-items-center justify-content-center">
-                <IconCalendarTime size={22} className="text-white" />
+              <div className="rounded-circle bg-white bg-opacity-25 p-2 p-md-2.5 d-flex align-items-center justify-content-center">
+                <IconCalendarTime size={20} className="text-white" />
               </div>
             </Card.Body>
           </Card>
         </Col>
 
-        <Col xs={12} sm={6} xl={3}>
+        <Col xs={6} sm={6} xl={3}>
           <Card
             className="border-0 shadow-sm text-dark h-100"
             style={{ background: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)", cursor: "pointer" }}
             onClick={() => setFilterStatus("THIS_MONTH")}
           >
-            <Card.Body className="d-flex align-items-center justify-content-between p-3">
+            <Card.Body className="d-flex align-items-center justify-content-between p-2.5 p-md-3">
               <div>
-                <span className="text-white-50 small fw-semibold text-uppercase">Due This Month</span>
-                <h3 className="mb-0 fw-bold mt-1 text-white">{summary.due_this_month}</h3>
+                <span className="text-white-50 small fw-semibold text-uppercase" style={{ fontSize: "11px" }}>Due This Month</span>
+                <h3 className="mb-0 fw-bold mt-1 text-white fs-4 fs-md-3">{summary.due_this_month}</h3>
               </div>
-              <div className="rounded-circle bg-white bg-opacity-25 p-2.5 d-flex align-items-center justify-content-center">
-                <IconCalendarTime size={22} className="text-white" />
+              <div className="rounded-circle bg-white bg-opacity-25 p-2 p-md-2.5 d-flex align-items-center justify-content-center">
+                <IconCalendarTime size={20} className="text-white" />
               </div>
             </Card.Body>
           </Card>
         </Col>
 
-        <Col xs={12} sm={6} xl={3}>
+        <Col xs={6} sm={6} xl={3}>
           <Card
             className="border-0 shadow-sm text-white h-100"
             style={{ background: "linear-gradient(135deg, #10b981 0%, #047857 100%)", cursor: "pointer" }}
             onClick={() => setFilterStatus("APPROVED")}
           >
-            <Card.Body className="d-flex align-items-center justify-content-between p-3">
+            <Card.Body className="d-flex align-items-center justify-content-between p-2.5 p-md-3">
               <div>
-                <span className="text-white-50 small fw-semibold text-uppercase">Approved (Year)</span>
-                <h3 className="mb-0 fw-bold mt-1 text-white">{summary.approved_this_year}</h3>
+                <span className="text-white-50 small fw-semibold text-uppercase" style={{ fontSize: "11px" }}>Approved (Year)</span>
+                <h3 className="mb-0 fw-bold mt-1 text-white fs-4 fs-md-3">{summary.approved_this_year}</h3>
               </div>
-              <div className="rounded-circle bg-white bg-opacity-20 p-2.5 d-flex align-items-center justify-content-center">
-                <IconCurrencyRupee size={22} className="text-white" />
+              <div className="rounded-circle bg-white bg-opacity-20 p-2 p-md-2.5 d-flex align-items-center justify-content-center">
+                <IconCurrencyRupee size={20} className="text-white" />
               </div>
             </Card.Body>
           </Card>
@@ -493,16 +493,16 @@ const UpcomingIncrementsWidget: React.FC = () => {
             </div>
           ) : (
             <div className="table-responsive">
-              <Table hover size="sm" className="align-middle mb-0">
+              <Table hover size="sm" className="align-middle text-nowrap mb-0" style={{ minWidth: "760px" }}>
                 <thead className="table-light text-secondary small text-uppercase" style={{ fontSize: "11px", letterSpacing: "0.5px" }}>
                   <tr>
-                    <th className="ps-3 py-2.5">Employee</th>
-                    <th className="py-2.5">Current Salary</th>
-                    <th className="py-2.5">Proposed Raise</th>
-                    <th className="py-2.5">New Salary</th>
-                    <th className="py-2.5">Due Date</th>
-                    <th className="py-2.5">Status</th>
-                    <th className="text-end pe-3 py-2.5">Actions</th>
+                    <th className="ps-3 py-2.5 text-nowrap">Employee</th>
+                    <th className="py-2.5 text-nowrap">Current Salary</th>
+                    <th className="py-2.5 text-nowrap">Proposed Raise</th>
+                    <th className="py-2.5 text-nowrap">New Salary</th>
+                    <th className="py-2.5 text-nowrap">Due Date</th>
+                    <th className="py-2.5 text-nowrap">Status</th>
+                    <th className="text-end pe-3 py-2.5 text-nowrap">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -517,7 +517,7 @@ const UpcomingIncrementsWidget: React.FC = () => {
 
                     return (
                       <tr key={inc.id} style={{ height: "48px" }}>
-                        <td className="ps-3 py-2">
+                        <td className="ps-3 py-2 text-nowrap">
                           <div className="d-flex align-items-center gap-2">
                             {emp?.profile_photo_url ? (
                               <img
@@ -552,14 +552,14 @@ const UpcomingIncrementsWidget: React.FC = () => {
                           </div>
                         </td>
 
-                        <td className="py-2">
+                        <td className="py-2 text-nowrap">
                           <div className="fw-semibold text-dark" style={{ fontSize: "12.5px" }}>
                             ₹{monthlyCurrent.toLocaleString("en-IN")}
                             <span className="text-muted fw-normal ms-0.5" style={{ fontSize: "10.5px" }}>/mo</span>
                           </div>
                         </td>
 
-                        <td className="py-2">
+                        <td className="py-2 text-nowrap">
                           <div className="d-inline-flex align-items-center gap-1.5">
                             <span
                               className="badge px-1.5 py-0.5 rounded-pill fw-bold text-success bg-success-subtle border border-success-subtle"
@@ -575,25 +575,25 @@ const UpcomingIncrementsWidget: React.FC = () => {
                           </div>
                         </td>
 
-                        <td className="py-2">
+                        <td className="py-2 text-nowrap">
                           <div className="fw-bold text-success" style={{ fontSize: "12.5px" }}>
                             ₹{monthlyNew.toLocaleString("en-IN")}
                             <span className="text-muted fw-normal ms-0.5" style={{ fontSize: "10.5px" }}>/mo</span>
                           </div>
                         </td>
 
-                        <td className="py-2">
-                          <div className="fw-medium text-dark" style={{ fontSize: "12px" }}>{inc.due_date}</div>
+                        <td className="py-2 text-nowrap">
+                          <div className="fw-medium text-dark text-nowrap" style={{ fontSize: "12px" }}>{inc.due_date}</div>
                           {inc.rescheduled_date && (
-                            <small className="text-warning d-block" style={{ fontSize: "10px" }}>
+                            <small className="text-warning d-block text-nowrap" style={{ fontSize: "10px" }}>
                               Rescheduled ({inc.rescheduled_date})
                             </small>
                           )}
                         </td>
 
-                        <td className="py-2">{getStatusBadge(inc.status)}</td>
+                        <td className="py-2 text-nowrap">{getStatusBadge(inc.status)}</td>
 
-                        <td className="text-end pe-3 py-2">
+                        <td className="text-end pe-3 py-2 text-nowrap">
                           {isPending ? (
                             <div className="d-flex justify-content-end align-items-center gap-1">
                               <Button
@@ -641,7 +641,7 @@ const UpcomingIncrementsWidget: React.FC = () => {
                               </Button>
                             </div>
                           ) : (
-                            <small className="text-muted" style={{ fontSize: "11px" }}>
+                            <small className="text-muted text-nowrap" style={{ fontSize: "11px" }}>
                               {inc.notes ? `Note: ${inc.notes}` : "Completed"}
                             </small>
                           )}

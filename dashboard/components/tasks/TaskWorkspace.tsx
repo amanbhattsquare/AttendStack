@@ -477,7 +477,7 @@ export default function TaskWorkspace({ employeeMode = false }: { employeeMode?:
         <Card.Body className="p-0">
           {rootTasks.length ? (
             <div className="table-responsive task-list-table-wrap">
-              <Table hover className="align-middle mb-0 workspace-task-table">
+              <Table hover className="align-middle text-nowrap mb-0 workspace-task-table" style={{ minWidth: "750px" }}>
                 <thead className="table-light">
                   <tr className="small text-secondary text-uppercase">
                     <th className="px-4 py-3">Sr. no.</th>

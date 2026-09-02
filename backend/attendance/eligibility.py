@@ -23,8 +23,8 @@ def attendance_eligible_records(queryset):
         | models.Q(check_in__isnull=False)
         | models.Q(status__in=[
             AttendanceStatus.PRESENT,
+            AttendanceStatus.LATE,
             AttendanceStatus.HALF_DAY,
-            AttendanceStatus.OVERTIME,
             AttendanceStatus.PAID_LEAVE,
             AttendanceStatus.LEAVE,
         ])

@@ -150,18 +150,9 @@ class EmployeeStatusUpdateSerializer(serializers.Serializer):
     )
 
     def validate_effective_date(self, value):
-        employee = self.context["employee"]
-        if value < employee.joining_date:
-            raise serializers.ValidationError("The effective date cannot be before the joining date.")
-        if value > timezone.localdate():
-            raise serializers.ValidationError("The effective date cannot be in the future.")
-        latest_date = employee.status_history.order_by("-effective_date").values_list(
-            "effective_date", flat=True
-        ).first()
-        if latest_date and value < latest_date:
-            raise serializers.ValidationError(
-                f"The effective date cannot be before the latest status change ({latest_date})."
-            )
+        employee = self.context.get("employee")
+        if employee and employee.joining_date and value < employee.joining_date:
+            raise serializers.ValidationError(f"The effective date cannot be before the joining date ({employee.joining_date}).")
         return value
 
     def validate(self, data):

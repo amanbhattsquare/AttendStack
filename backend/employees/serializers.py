@@ -144,7 +144,10 @@ class EmployeeListSerializer(serializers.ModelSerializer):
         return User.objects.filter(email__iexact=obj.email, role=UserRole.EMPLOYEE).exists()
 
     def get_status_effective_date(self, obj):
-        latest = obj.status_history.order_by("-effective_date", "-created_at", "-pk").first()
+        match = obj.status_history.filter(status=obj.status).order_by("-created_at", "-pk").first()
+        if match and match.effective_date:
+            return str(match.effective_date)
+        latest = obj.status_history.order_by("-created_at", "-pk").first()
         if latest and latest.effective_date:
             return str(latest.effective_date)
         return str(obj.joining_date) if obj.joining_date else None

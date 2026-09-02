@@ -253,23 +253,25 @@ class Employee(models.Model):
                 end_date = self.status_end_date
                 auto_transition = self.auto_transition_status
 
-                latest_history = EmployeeStatusHistory.objects.filter(
-                    employee=self
-                ).order_by("-effective_date", "-created_at", "-pk").first()
+                # Delete any obsolete/conflicting records on or after effective_date for this employee
+                EmployeeStatusHistory.objects.filter(
+                    employee=self,
+                    effective_date__gte=effective_date,
+                ).delete()
 
-                if latest_history and latest_history.status == self.status and not status_has_changed:
-                    latest_history.effective_date = effective_date
-                    latest_history.end_date = end_date
-                    latest_history.auto_transition_status = auto_transition
-                    latest_history.save(update_fields=["effective_date", "end_date", "auto_transition_status"])
-                else:
-                    EmployeeStatusHistory.objects.create(
-                        employee=self,
-                        status=self.status,
-                        effective_date=effective_date,
-                        end_date=end_date,
-                        auto_transition_status=auto_transition,
-                    )
+                # Also delete any older duplicate records with the exact same status to prevent stale duplicates
+                EmployeeStatusHistory.objects.filter(
+                    employee=self,
+                    status=self.status,
+                ).delete()
+
+                EmployeeStatusHistory.objects.create(
+                    employee=self,
+                    status=self.status,
+                    effective_date=effective_date,
+                    end_date=end_date,
+                    auto_transition_status=auto_transition,
+                )
 
                 if end_date and auto_transition:
                     transition_date = end_date + timezone.timedelta(days=1)

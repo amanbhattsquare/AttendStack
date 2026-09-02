@@ -44,6 +44,8 @@ export interface EmployeeIncrementItem {
   rescheduled_date?: string | null;
   action_date?: string | null;
   notes?: string;
+  cycle_months?: number;
+  cycle_display?: string;
 }
 
 export interface IncrementSummary {
@@ -82,6 +84,7 @@ const UpcomingIncrementsWidget: React.FC = () => {
   // Edit Hike Modal State
   const [showEditHikeModal, setShowEditHikeModal] = useState<boolean>(false);
   const [editHikeType, setEditHikeType] = useState<"PERCENTAGE" | "FLAT_AMOUNT">("PERCENTAGE");
+  const [editFlatMode, setEditFlatMode] = useState<"MONTHLY" | "ANNUAL">("ANNUAL");
   const [editHikeValue, setEditHikeValue] = useState<string>("");
   const [editUpdatePolicy, setEditUpdatePolicy] = useState<boolean>(false);
   const [editNotes, setEditNotes] = useState<string>("");
@@ -252,11 +255,58 @@ const UpcomingIncrementsWidget: React.FC = () => {
   // Open Edit Hike Modal
   const openEditHikeModal = (inc: EmployeeIncrementItem) => {
     setSelectedIncrement(inc);
-    setEditHikeType(inc.increment_type || "PERCENTAGE");
-    setEditHikeValue(inc.increment_value ? String(Number(inc.increment_value)) : "10");
+    const curr = Number(inc.current_salary) || 0;
+    const isFlat = inc.increment_type === "FLAT_AMOUNT";
+    setEditHikeType(isFlat ? "FLAT_AMOUNT" : "PERCENTAGE");
+    setEditFlatMode("ANNUAL");
+
+    if (isFlat) {
+      const val = Number(inc.increment_value) || 0;
+      setEditHikeValue(String(val > 0 ? val : Math.round(curr * 0.10)));
+    } else {
+      const val = inc.increment_value ? parseFloat(String(inc.increment_value)) : 10;
+      setEditHikeValue(String(val));
+    }
     setEditNotes(inc.notes || "");
     setEditUpdatePolicy(false);
     setShowEditHikeModal(true);
+  };
+
+  // Seamlessly convert value when switching Hike Type (% vs Flat)
+  const handleSwitchHikeType = (targetType: "PERCENTAGE" | "FLAT_AMOUNT") => {
+    if (targetType === editHikeType) return;
+    const curr = Number(selectedIncrement?.current_salary) || 0;
+    const val = parseFloat(editHikeValue) || 0;
+
+    if (targetType === "PERCENTAGE") {
+      // Convert Flat Amount back to Percentage (%)
+      const annualFlat = editFlatMode === "MONTHLY" ? val * 12 : val;
+      const pct = curr > 0 ? parseFloat(((annualFlat / curr) * 100).toFixed(2)) : 10;
+      setEditHikeType("PERCENTAGE");
+      setEditHikeValue(String(pct > 0 ? pct : 10));
+    } else {
+      // Convert Percentage (%) to Flat Amount (₹)
+      const annualRaise = curr * (val / 100);
+      setEditHikeType("FLAT_AMOUNT");
+      if (editFlatMode === "MONTHLY") {
+        setEditHikeValue(String(Math.round(annualRaise / 12)));
+      } else {
+        setEditHikeValue(String(Math.round(annualRaise)));
+      }
+    }
+  };
+
+  // Seamlessly convert value when switching Flat Basis (Monthly vs Annual)
+  const handleSwitchFlatMode = (targetMode: "MONTHLY" | "ANNUAL") => {
+    if (targetMode === editFlatMode) return;
+    const val = parseFloat(editHikeValue) || 0;
+    if (targetMode === "MONTHLY") {
+      setEditFlatMode("MONTHLY");
+      setEditHikeValue(String(Math.round(val / 12)));
+    } else {
+      setEditFlatMode("ANNUAL");
+      setEditHikeValue(String(Math.round(val * 12)));
+    }
   };
 
   // Dynamic preview calculation for Edit Hike modal
@@ -268,13 +318,12 @@ const UpcomingIncrementsWidget: React.FC = () => {
     if (editHikeType === "PERCENTAGE") {
       raiseAmt = curr * (val / 100);
     } else {
-      raiseAmt = val;
+      raiseAmt = editFlatMode === "MONTHLY" ? val * 12 : val;
     }
     const newSal = curr + raiseAmt;
-    const isAnnual = curr > 50000;
-    const monthlyCurrent = isAnnual ? Math.round(curr / 12) : curr;
-    const monthlyRaise = isAnnual ? Math.round(raiseAmt / 12) : raiseAmt;
-    const monthlyNew = isAnnual ? Math.round(newSal / 12) : newSal;
+    const monthlyCurrent = Math.round(curr / 12);
+    const monthlyRaise = Math.round(raiseAmt / 12);
+    const monthlyNew = Math.round(newSal / 12);
     const pctEffective = curr > 0 ? ((raiseAmt / curr) * 100).toFixed(1) : "0";
 
     return {
@@ -285,9 +334,8 @@ const UpcomingIncrementsWidget: React.FC = () => {
       monthlyRaise,
       monthlyNew,
       pctEffective,
-      isAnnual,
     };
-  }, [selectedIncrement, editHikeType, editHikeValue]);
+  }, [selectedIncrement, editHikeType, editFlatMode, editHikeValue]);
 
   // Submit Edit Hike
   const handleConfirmEditHike = async () => {
@@ -297,12 +345,16 @@ const UpcomingIncrementsWidget: React.FC = () => {
     }
     setSubmittingAction(true);
     try {
+      const val = parseFloat(editHikeValue);
+      // For FLAT_AMOUNT, convert to Annual CTC amount if currently entered as Monthly
+      const submitValue = editHikeType === "FLAT_AMOUNT" && editFlatMode === "MONTHLY" ? val * 12 : val;
+
       const res = await fetch(`${BASE_URL}/payroll/increments/${selectedIncrement.id}/edit-hike/`, {
         method: "POST",
         headers: authHeaders(),
         body: JSON.stringify({
           increment_type: editHikeType,
-          increment_value: parseFloat(editHikeValue),
+          increment_value: submitValue,
           notes: editNotes,
           update_employee_policy: editUpdatePolicy,
         }),
@@ -514,6 +566,9 @@ const UpcomingIncrementsWidget: React.FC = () => {
                     const monthlyNew = isAnnual ? Math.round(Number(inc.new_salary) / 12) : Number(inc.new_salary);
                     const monthlyRaiseAmount = isAnnual ? Math.round(Number(inc.calculated_increment_amount) / 12) : Number(inc.calculated_increment_amount);
                     const formattedPct = inc.increment_value ? parseFloat(String(inc.increment_value)) : 10;
+                    const effectivePct = Number(inc.current_salary) > 0
+                      ? ((Number(inc.calculated_increment_amount) / Number(inc.current_salary)) * 100).toFixed(1)
+                      : "0";
 
                     return (
                       <tr key={inc.id} style={{ height: "48px" }}>
@@ -567,10 +622,12 @@ const UpcomingIncrementsWidget: React.FC = () => {
                             >
                               {inc.increment_type === "PERCENTAGE"
                                 ? `+${formattedPct}%`
-                                : `+₹${monthlyRaiseAmount.toLocaleString("en-IN")}`}
+                                : `+₹${monthlyRaiseAmount.toLocaleString("en-IN")}/mo`}
                             </span>
                             <span className="text-muted fw-medium" style={{ fontSize: "11px" }}>
-                              +₹{monthlyRaiseAmount.toLocaleString("en-IN")}/mo
+                              {inc.increment_type === "PERCENTAGE"
+                                ? `+₹${monthlyRaiseAmount.toLocaleString("en-IN")}/mo`
+                                : `+${parseFloat(effectivePct)}% raise`}
                             </span>
                           </div>
                         </td>
@@ -683,27 +740,41 @@ const UpcomingIncrementsWidget: React.FC = () => {
                 </span>
               </div>
             </div>
+
+            <div className="d-flex align-items-center gap-2 mt-2 pt-2 border-top flex-wrap">
+              <span className="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill py-1 px-2 fw-semibold" style={{ fontSize: "11px" }}>
+                <IconCalendarTime size={13} className="me-1" />
+                Increment Cycle: {selectedIncrement?.cycle_display || "Annually (Every 12 Months)"}
+              </span>
+              <span className="badge bg-white text-secondary border rounded-pill py-1 px-2" style={{ fontSize: "11px" }}>
+                Due Date: {selectedIncrement?.due_date}
+              </span>
+            </div>
           </div>
 
           <Row className="g-3 mb-3">
             <Col sm={6}>
               <Form.Group>
-                <Form.Label className="fw-semibold">Hike Calculation Mode</Form.Label>
+                <Form.Label className="fw-semibold small text-uppercase text-secondary" style={{ fontSize: "11.5px" }}>
+                  Hike Calculation Mode
+                </Form.Label>
                 <div>
                   <ButtonGroup className="w-100">
                     <Button
                       variant={editHikeType === "PERCENTAGE" ? "primary" : "outline-secondary"}
-                      onClick={() => setEditHikeType("PERCENTAGE")}
+                      onClick={() => handleSwitchHikeType("PERCENTAGE")}
                       size="sm"
+                      className="fw-semibold"
                     >
                       Percentage (%)
                     </Button>
                     <Button
                       variant={editHikeType === "FLAT_AMOUNT" ? "primary" : "outline-secondary"}
-                      onClick={() => setEditHikeType("FLAT_AMOUNT")}
+                      onClick={() => handleSwitchHikeType("FLAT_AMOUNT")}
                       size="sm"
+                      className="fw-semibold"
                     >
-                      Flat Amount (₹ / Year)
+                      Flat Amount (₹)
                     </Button>
                   </ButtonGroup>
                 </div>
@@ -712,18 +783,52 @@ const UpcomingIncrementsWidget: React.FC = () => {
 
             <Col sm={6}>
               <Form.Group>
-                <Form.Label className="fw-semibold">
-                  {editHikeType === "PERCENTAGE" ? "Hike Percentage (%)" : "Flat Increment (₹ / Year)"}
-                </Form.Label>
+                <div className="d-flex align-items-center justify-content-between mb-1">
+                  <Form.Label className="fw-semibold small text-uppercase text-secondary mb-0" style={{ fontSize: "11.5px" }}>
+                    {editHikeType === "PERCENTAGE"
+                      ? "Hike Percentage (%)"
+                      : editFlatMode === "MONTHLY"
+                      ? "Flat Raise (₹ / Month)"
+                      : "Flat Raise (₹ / Year)"}
+                  </Form.Label>
+
+                  {editHikeType === "FLAT_AMOUNT" && (
+                    <div className="d-flex align-items-center gap-1">
+                      <Button
+                        variant={editFlatMode === "MONTHLY" ? "success" : "outline-secondary"}
+                        size="sm"
+                        style={{ fontSize: "10px", padding: "1px 6px" }}
+                        onClick={() => handleSwitchFlatMode("MONTHLY")}
+                      >
+                        ₹ / Month
+                      </Button>
+                      <Button
+                        variant={editFlatMode === "ANNUAL" ? "success" : "outline-secondary"}
+                        size="sm"
+                        style={{ fontSize: "10px", padding: "1px 6px" }}
+                        onClick={() => handleSwitchFlatMode("ANNUAL")}
+                      >
+                        ₹ / Year
+                      </Button>
+                    </div>
+                  )}
+                </div>
+
                 <InputGroup size="sm">
                   <InputGroup.Text>
                     {editHikeType === "PERCENTAGE" ? "%" : "₹"}
                   </InputGroup.Text>
                   <Form.Control
                     type="number"
-                    step={editHikeType === "PERCENTAGE" ? "0.5" : "1000"}
+                    step={editHikeType === "PERCENTAGE" ? "0.5" : editFlatMode === "MONTHLY" ? "100" : "1000"}
                     min="0"
-                    placeholder={editHikeType === "PERCENTAGE" ? "e.g. 15" : "e.g. 60000"}
+                    placeholder={
+                      editHikeType === "PERCENTAGE"
+                        ? "e.g. 15"
+                        : editFlatMode === "MONTHLY"
+                        ? "e.g. 2500"
+                        : "e.g. 30000"
+                    }
                     value={editHikeValue}
                     onChange={(e) => setEditHikeValue(e.target.value)}
                   />

@@ -703,12 +703,23 @@ const EmployeePageClient = () => {
                       <span className={`badge ${statusBadgeClass[employee.status] || "bg-secondary-subtle text-secondary"}`}>
                         {employee.status_label}
                       </span>
-                      {employee.status_end_date && (
-                        <small className="d-block text-muted mt-1" style={{ fontSize: "11px" }}>
+                      {employee.status === "INACTIVE" || employee.status === "TERMINATED" ? (
+                        (employee.status_effective_date || employee.joining_date) && (
+                          <small className="d-block text-muted mt-0.5" style={{ fontSize: "11px", whiteSpace: "nowrap" }}>
+                            {employee.status === "TERMINATED" ? "On " : "Since "}
+                            {formatDate(employee.status_effective_date || employee.joining_date)}
+                          </small>
+                        )
+                      ) : employee.status_end_date ? (
+                        <small className="d-block text-muted mt-0.5" style={{ fontSize: "11px", whiteSpace: "nowrap" }}>
                           Until {formatDate(employee.status_end_date)}
                           {employee.auto_transition_status_label ? ` → ${employee.auto_transition_status_label}` : ""}
                         </small>
-                      )}
+                      ) : (employee.status === "NOTICE_PERIOD" || employee.status === "PROVISION" || employee.status === "ON_LEAVE") && employee.status_effective_date ? (
+                        <small className="d-block text-muted mt-0.5" style={{ fontSize: "11px", whiteSpace: "nowrap" }}>
+                          Since {formatDate(employee.status_effective_date)}
+                        </small>
+                      ) : null}
                     </td>
                     <td className="text-center employee-action-column">
                       <Dropdown

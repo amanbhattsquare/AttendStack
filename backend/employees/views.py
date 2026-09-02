@@ -266,9 +266,9 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
 
         employee.status = serializer.validated_data["status"]
+        employee.status_end_date = serializer.validated_data.get("end_date")
+        employee.auto_transition_status = serializer.validated_data.get("auto_transition_status")
         employee._status_effective_date = serializer.validated_data["effective_date"]
-        employee._status_end_date = serializer.validated_data.get("end_date")
-        employee._auto_transition_status = serializer.validated_data.get("auto_transition_status")
 
         employee.save(update_fields=["status", "status_end_date", "auto_transition_status", "updated_at"])
         sync_employee_user_access(employee)

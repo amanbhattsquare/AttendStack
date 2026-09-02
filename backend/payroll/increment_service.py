@@ -21,7 +21,11 @@ def get_effective_increment_config(employee: Employee, settings: SystemSettings 
     """
     Returns effective increment settings for an employee:
     (enabled: bool, months: int, type: str, value: Decimal)
+    Only ACTIVE status employees are eligible for salary increments.
     """
+    if employee.status != EmployeeStatus.ACTIVE:
+        return False, 12, "PERCENTAGE", Decimal("0.00")
+
     if settings is None:
         settings = SystemSettings.get_settings()
 
@@ -61,6 +65,7 @@ def sync_employee_increments(employee: Employee = None):
     """
     Ensures active employees have next_increment_date set and
     a PENDING EmployeeIncrement record created for upcoming cycle.
+    Automatically purges pending/rescheduled increments for any employee who is not active.
     """
     settings = SystemSettings.get_settings()
     if not settings.increment_enabled:
@@ -69,8 +74,28 @@ def sync_employee_increments(employee: Employee = None):
     today = timezone.localdate()
 
     if employee:
+        if employee.status != EmployeeStatus.ACTIVE:
+            # Clean up any pending or rescheduled increments for non-active employee
+            EmployeeIncrement.objects.filter(
+                employee=employee,
+                status__in=[IncrementStatus.PENDING, IncrementStatus.RESCHEDULED]
+            ).delete()
+            if employee.next_increment_date is not None:
+                employee.next_increment_date = None
+                employee.save(update_fields=["next_increment_date"])
+            return
         employees = [employee]
     else:
+        # Purge pending/rescheduled increments for any employees whose status is not ACTIVE
+        EmployeeIncrement.objects.filter(
+            status__in=[IncrementStatus.PENDING, IncrementStatus.RESCHEDULED]
+        ).exclude(employee__status=EmployeeStatus.ACTIVE).delete()
+
+        # Also clear next_increment_date for non-active employees if set
+        Employee.objects.exclude(status=EmployeeStatus.ACTIVE).filter(
+            next_increment_date__isnull=False
+        ).update(next_increment_date=None)
+
         employees = Employee.objects.filter(status=EmployeeStatus.ACTIVE)
 
     for emp in employees:
@@ -124,6 +149,9 @@ def approve_increment(increment: EmployeeIncrement, user=None, notes: str = ""):
     Approves an increment, updates employee annual salary,
     sets last_increment_date, and schedules next cycle.
     """
+    if increment.employee.status != EmployeeStatus.ACTIVE:
+        raise ValueError("Cannot approve increment for an employee who is not active.")
+
     if increment.status in [IncrementStatus.APPROVED, IncrementStatus.REJECTED]:
         raise ValueError("Increment has already been processed.")
 
@@ -163,6 +191,9 @@ def approve_increment(increment: EmployeeIncrement, user=None, notes: str = ""):
 @transaction.atomic
 def reject_increment(increment: EmployeeIncrement, user=None, notes: str = ""):
     """Rejects an increment request."""
+    if increment.employee.status != EmployeeStatus.ACTIVE:
+        raise ValueError("Cannot reject increment for an employee who is not active.")
+
     if increment.status in [IncrementStatus.APPROVED, IncrementStatus.REJECTED]:
         raise ValueError("Increment has already been processed.")
 
@@ -179,6 +210,9 @@ def reject_increment(increment: EmployeeIncrement, user=None, notes: str = ""):
 @transaction.atomic
 def reschedule_increment(increment: EmployeeIncrement, new_date: date, user=None, notes: str = ""):
     """Reschedules an increment due date."""
+    if increment.employee.status != EmployeeStatus.ACTIVE:
+        raise ValueError("Cannot reschedule increment for an employee who is not active.")
+
     if increment.status == IncrementStatus.APPROVED:
         raise ValueError("Cannot reschedule an already approved increment.")
 
@@ -212,6 +246,9 @@ def update_increment_hike(
     Updates the proposed salary hike (type and amount) for a pending or rescheduled increment.
     Optionally updates the employee's default increment policy.
     """
+    if increment.employee.status != EmployeeStatus.ACTIVE:
+        raise ValueError("Cannot edit salary hike for an employee who is not active.")
+
     if increment.status in [IncrementStatus.APPROVED, IncrementStatus.REJECTED]:
         raise ValueError("Cannot edit an increment that has already been approved or rejected.")
 
@@ -236,11 +273,10 @@ def update_increment_hike(
     return increment
 
 
-
 def get_increment_chart_projections(months_ahead: int = 12):
     """
     Returns monthly projection data for upcoming employee increments
-    for the line chart visualization.
+    for the line chart visualization (Active employees only).
     """
     try:
         sync_employee_increments()
@@ -265,6 +301,7 @@ def get_increment_chart_projections(months_ahead: int = 12):
         m_end = date(year, month, last_day)
 
         increments = EmployeeIncrement.objects.filter(
+            employee__status=EmployeeStatus.ACTIVE,
             status__in=[IncrementStatus.PENDING, IncrementStatus.RESCHEDULED],
             due_date__gte=m_start,
             due_date__lte=m_end

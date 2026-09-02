@@ -5,10 +5,22 @@ from employees.models import Employee
 
 class EmployeeMiniSerializer(serializers.ModelSerializer):
     profile_photo_url = serializers.SerializerMethodField()
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
 
     class Meta:
         model = Employee
-        fields = ["id", "employee_id", "full_name", "email", "department", "designation", "annual_salary", "profile_photo_url"]
+        fields = [
+            "id",
+            "employee_id",
+            "full_name",
+            "email",
+            "department",
+            "designation",
+            "status",
+            "status_display",
+            "annual_salary",
+            "profile_photo_url",
+        ]
 
     def get_profile_photo_url(self, obj):
         if obj.profile_photo:

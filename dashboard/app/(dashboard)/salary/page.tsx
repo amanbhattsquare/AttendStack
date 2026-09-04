@@ -62,7 +62,7 @@ const monthsList = [
 ];
 
 const SalaryPage = () => {
-  const { companyLogo, companyName } = useBranding();
+  const branding = useBranding();
   const [payrolls, setPayrolls] = useState<any[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -311,7 +311,7 @@ const SalaryPage = () => {
 
   const handleDownloadPdf = async () => {
     if (!payslipData) return;
-    await downloadPayslipPdf(payslipData, { companyLogo, companyName });
+    await downloadPayslipPdf(payslipData, branding);
   };
 
   if (isFeatureLocked) {

@@ -6,6 +6,7 @@ from employees.models import Employee
 class EmployeeMiniSerializer(serializers.ModelSerializer):
     profile_photo_url = serializers.SerializerMethodField()
     status_display = serializers.CharField(source="get_status_display", read_only=True)
+    employment_type_display = serializers.CharField(source="get_employment_type_display", read_only=True)
 
     class Meta:
         model = Employee
@@ -18,6 +19,18 @@ class EmployeeMiniSerializer(serializers.ModelSerializer):
             "designation",
             "status",
             "status_display",
+            "employment_type",
+            "employment_type_display",
+            "joining_date",
+            "bank_name",
+            "bank_account_number",
+            "ifsc_code",
+            "aadhaar_number",
+            "pan_number",
+            "pf_number",
+            "uan_number",
+            "esic_number",
+            "tax_id",
             "annual_salary",
             "profile_photo_url",
         ]
@@ -40,6 +53,7 @@ class PayrollSerializer(serializers.ModelSerializer):
     month_name = serializers.SerializerMethodField()
     payable_salary = serializers.SerializerMethodField()
     attendance_summary = serializers.SerializerMethodField()
+    company_details = serializers.SerializerMethodField()
 
     class Meta:
         model = Payroll
@@ -47,6 +61,7 @@ class PayrollSerializer(serializers.ModelSerializer):
             "id",
             "employee_id",
             "employee_details",
+            "company_details",
             "month",
             "year",
             "month_name",
@@ -62,6 +77,32 @@ class PayrollSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at"
         ]
+
+    def get_company_details(self, obj):
+        try:
+            settings = SystemSettings.get_settings()
+            logo_url = None
+            if settings.company_logo:
+                request = self.context.get("request")
+                logo_url = request.build_absolute_uri(settings.company_logo.url) if request else settings.company_logo.url
+            return {
+                "company_name": settings.company_name or "AttendStack",
+                "company_address": settings.company_address or "",
+                "company_email": settings.company_email or "",
+                "company_phone": settings.company_phone or "",
+                "company_website": settings.company_website or "",
+                "registration_number": settings.registration_number or "",
+                "tax_id": settings.tax_id or "",
+                "company_bank_name": settings.company_bank_name or "",
+                "company_bank_account_no": settings.company_bank_account_no or "",
+                "company_bank_ifsc": settings.company_bank_ifsc or "",
+                "company_bank_branch": settings.company_bank_branch or "",
+                "company_upi_id": settings.company_upi_id or "",
+                "company_logo": logo_url,
+                "currency": settings.currency or "INR",
+            }
+        except Exception:
+            return {}
 
     def get_month_name(self, obj):
         import calendar

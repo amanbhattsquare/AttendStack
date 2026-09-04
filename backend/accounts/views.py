@@ -19,17 +19,20 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView
 
-from .models import UserRole
-from .permissions import IsSuperAdmin
+from .models import UserRole, SubAdminPermission
+from .permissions import IsSuperAdmin, IsAdminOrHR
 from .serializers import (
     ChangePasswordSerializer,
     CreateHRSerializer,
+    CreateSubAdminSerializer,
     CustomTokenObtainPairSerializer,
     RequestPasswordResetOTPSerializer,
     ResetPasswordWithOTPSerializer,
     SimplyJobEmployeeOnboardingSerializer,
     EmployeeSelfRegistrationSerializer,
     OrganizationRegistrationSerializer,
+    SubAdminPermissionSerializer,
+    UpdateSubAdminSerializer,
     UserProfileSerializer,
     UserUpdateSerializer,
 )
@@ -565,4 +568,134 @@ class HealthCheckView(APIView):
 
     def get(self, request, *args, **kwargs):
         return Response({"status": "ok"})
+
+
+from rest_framework import viewsets
+from rest_framework.decorators import action
+from organizations.models import Organization
+from accounts.utils import generate_temp_password
+
+
+class SubAdminViewSet(viewsets.ModelViewSet):
+    """
+    CRUD endpoint for Sub-Admins and their Granular RBAC Permissions.
+    Accessible by Super Admins and Company Admins (HR).
+    """
+    queryset = SubAdminPermission.objects.all()
+    serializer_class = SubAdminPermissionSerializer
+    permission_classes = [permissions.IsAuthenticated, IsAdminOrHR]
+
+    def get_queryset(self):
+        user = self.request.user
+        if not user or not user.is_authenticated:
+            return SubAdminPermission.objects.none()
+        if user.is_superuser or user.role == UserRole.SUPER_ADMIN:
+            return SubAdminPermission.objects.select_related("user", "organization").all()
+        # For HR, show sub-admins in organizations they own
+        return SubAdminPermission.objects.filter(
+            organization__owner=user
+        ).select_related("user", "organization")
+
+    def create(self, request, *args, **kwargs):
+        serializer = CreateSubAdminSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        user_auth = request.user
+        organization = None
+        org_id = data.get("organization_id")
+
+        if user_auth.is_superuser or user_auth.role == UserRole.SUPER_ADMIN:
+            if org_id:
+                organization = Organization.objects.filter(id=org_id).first()
+            if not organization:
+                organization = Organization.objects.order_by("created_at").first()
+        else:
+            # HR manager
+            organization = Organization.objects.filter(owner=user_auth).first()
+
+        if not organization:
+            return Response(
+                {"detail": "No organization workspace found to associate this sub-admin with."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        password = data.get("password") or generate_temp_password()
+        email = data["email"]
+        first_name = data.get("first_name", "").strip()
+        last_name = data.get("last_name", "").strip()
+        phone = data.get("phone", "").strip()
+        custom_role_title = data.get("custom_role_title", "HR Manager").strip() or "HR Manager"
+        permissions_matrix = data.get("permissions") or SubAdminPermission.get_default_permissions()
+
+        # Create user
+        user = User.objects.create_sub_admin(
+            email=email,
+            password=password,
+            first_name=first_name,
+            last_name=last_name,
+            phone=phone,
+        )
+        user._raw_password = password
+
+        # Create permission record
+        sub_perm = SubAdminPermission.objects.create(
+            user=user,
+            organization=organization,
+            custom_role_title=custom_role_title,
+            permissions=permissions_matrix,
+        )
+
+        resp_data = SubAdminPermissionSerializer(sub_perm).data
+        resp_data["temp_password"] = password
+        return Response(resp_data, status=status.HTTP_201_CREATED)
+
+    def update(self, request, *args, **kwargs):
+        sub_perm = self.get_object()
+        serializer = UpdateSubAdminSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        user = sub_perm.user
+        if "first_name" in data:
+            user.first_name = data["first_name"].strip()
+        if "last_name" in data:
+            user.last_name = data["last_name"].strip()
+        if "phone" in data:
+            user.phone = data["phone"].strip()
+        if "is_active" in data:
+            user.is_active = data["is_active"]
+        user.save()
+
+        if "custom_role_title" in data:
+            sub_perm.custom_role_title = data["custom_role_title"].strip() or sub_perm.custom_role_title
+        if "permissions" in data:
+            sub_perm.permissions = data["permissions"]
+        sub_perm.save()
+
+        return Response(SubAdminPermissionSerializer(sub_perm).data, status=status.HTTP_200_OK)
+
+    def partial_update(self, request, *args, **kwargs):
+        return self.update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        sub_perm = self.get_object()
+        user = sub_perm.user
+        # Deactivate or delete
+        user.is_active = False
+        user.save(update_fields=["is_active"])
+        sub_perm.delete()
+        return Response({"detail": "Sub-admin access removed successfully."}, status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=True, methods=["post"], url_path="reset-password")
+    def reset_password(self, request, pk=None):
+        sub_perm = self.get_object()
+        user = sub_perm.user
+        new_password = generate_temp_password()
+        user.set_password(new_password)
+        user.save(update_fields=["password"])
+        return Response({
+            "detail": f"New temporary password generated for {user.email}.",
+            "temp_password": new_password,
+        }, status=status.HTTP_200_OK)
 

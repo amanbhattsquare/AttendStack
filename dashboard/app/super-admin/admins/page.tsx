@@ -59,6 +59,7 @@ type Administrator = {
   full_name: string;
   email: string;
   role?: string;
+  custom_role_title?: string;
   organization_name?: string;
   is_active?: boolean;
   date_joined?: string;
@@ -87,6 +88,7 @@ export default function SuperAdminAdminsPage() {
     email: "",
     first_name: "",
     last_name: "",
+    organization_id: "",
   });
   const [submitting, setSubmitting] = useState(false);
 
@@ -113,10 +115,14 @@ export default function SuperAdminAdminsPage() {
 
   const filteredAdmins = useMemo(() => {
     return administrators.filter((admin) => {
+      // Exclude superadmin users from directory
+      if (admin.role === "SUPER_ADMIN" || admin.role === "Super Admin") return false;
+
       const matchesSearch =
-        admin.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        admin.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (admin.organization_name && admin.organization_name.toLowerCase().includes(searchQuery.toLowerCase()));
+        admin.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        admin.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (admin.organization_name && admin.organization_name.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (admin.custom_role_title && admin.custom_role_title.toLowerCase().includes(searchQuery.toLowerCase()));
 
       const matchesOrg =
         selectedOrgFilter === "ALL" ||
@@ -139,6 +145,7 @@ export default function SuperAdminAdminsPage() {
         email: createForm.email.trim(),
         first_name: createForm.first_name.trim() || undefined,
         last_name: createForm.last_name.trim() || undefined,
+        organization_id: createForm.organization_id ? Number(createForm.organization_id) : undefined,
       });
 
       setCreatedTempPassword(response.data.temp_password);
@@ -281,8 +288,22 @@ export default function SuperAdminAdminsPage() {
                       </span>
                     </td>
                     <td>
-                      <Badge bg="warning" text="dark" className="px-2.5 py-1 font-monospace">
-                        HR Administrator
+                      <Badge
+                        bg={
+                          admin.role === "SUPER_ADMIN"
+                            ? "dark"
+                            : admin.role === "SUB_ADMIN"
+                            ? "primary"
+                            : "warning"
+                        }
+                        text={
+                          admin.role === "SUPER_ADMIN" || admin.role === "SUB_ADMIN"
+                            ? "white"
+                            : "dark"
+                        }
+                        className="px-2.5 py-1 font-monospace"
+                      >
+                        {admin.custom_role_title || (admin.role === "SUPER_ADMIN" ? "Super Admin" : "Company Admin (HR)")}
                       </Badge>
                     </td>
                     <td>
@@ -337,7 +358,25 @@ export default function SuperAdminAdminsPage() {
             )}
 
             <Form.Group className="mb-3">
-              <Form.Label className="fw-semibold">HR Manager Email Address *</Form.Label>
+              <Form.Label className="fw-semibold small">Assign to Company Workspace</Form.Label>
+              <Form.Select
+                value={createForm.organization_id || ""}
+                onChange={(e) => setCreateForm({ ...createForm, organization_id: e.target.value })}
+              >
+                <option value="">-- Platform Global / Unassigned --</option>
+                {organizations.map((org) => (
+                  <option key={org.id} value={org.id}>
+                    {org.name} (ID: #{org.id})
+                  </option>
+                ))}
+              </Form.Select>
+              <Form.Text className="text-secondary small">
+                Designate this administrator as the primary HR manager for the selected company workspace.
+              </Form.Text>
+            </Form.Group>
+
+            <Form.Group className="mb-3">
+              <Form.Label className="fw-semibold small">HR Manager Email Address *</Form.Label>
               <Form.Control
                 type="email"
                 required

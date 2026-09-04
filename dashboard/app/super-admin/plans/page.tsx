@@ -19,7 +19,7 @@ import {
   IconTrash,
   IconCheck,
   IconX,
-  IconSparkles,
+  IconStar,
   IconCreditCard,
   IconShieldLock,
   IconRefresh,
@@ -355,7 +355,7 @@ export default function SuperAdminPlansPage() {
                 </h3>
               </div>
               <div className="bg-warning-subtle text-warning p-3 rounded-circle">
-                <IconSparkles size={24} />
+                <IconStar size={24} />
               </div>
             </div>
           </Card>

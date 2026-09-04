@@ -140,12 +140,42 @@ class OrganizationSerializer(serializers.ModelSerializer):
         return AttendanceRecord.objects.filter(employee__organization=obj, date=today, status__in=["PRESENT", "LATE", "HALF_DAY"]).count()
 
 
+from django.contrib.auth import get_user_model
+User = get_user_model()
+
+
 class AdministratorSerializer(serializers.ModelSerializer):
-    organization_name = serializers.CharField(source='organization.name', read_only=True)
+    full_name = serializers.SerializerMethodField()
+    organization_name = serializers.SerializerMethodField()
+    custom_role_title = serializers.SerializerMethodField()
 
     class Meta:
-        model = Employee
-        fields = ('id', 'full_name', 'email', 'organization_name')
+        model = User
+        fields = ('id', 'full_name', 'email', 'role', 'custom_role_title', 'organization_name', 'is_active', 'date_joined')
+
+    def get_full_name(self, obj):
+        name = obj.get_full_name()
+        return name if name else obj.email.split('@')[0]
+
+    def get_custom_role_title(self, obj):
+        if obj.role == "SUPER_ADMIN":
+            return "Super Administrator"
+        if obj.role == "HR":
+            return "Company Administrator (HR)"
+        if obj.role == "SUB_ADMIN":
+            sub = getattr(obj, "subadmin_profile", None)
+            return sub.custom_role_title if sub else "HR Sub-Admin"
+        return "Administrator"
+
+    def get_organization_name(self, obj):
+        if hasattr(obj, "subadmin_profile") and obj.subadmin_profile:
+            return obj.subadmin_profile.organization.name
+        org = getattr(obj, 'owned_organizations', None)
+        if org:
+            first_org = org.first()
+            if first_org:
+                return first_org.name
+        return "Platform Global"
 
 
 from .models import Plan

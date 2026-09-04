@@ -17,6 +17,8 @@ export interface MenuItemType {
   logout?: boolean;
   featureKey?: string;
   requiresPro?: boolean;
+  moduleKey?: string;
+  adminOnly?: boolean;
   children?: MenuItemType[];
 }
 

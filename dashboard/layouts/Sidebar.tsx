@@ -1,7 +1,7 @@
 "use client";
 //import node module libraries
 import Link from "next/link";
-import React, { Fragment, useState, useEffect } from "react";
+import React, { Fragment, useState, useEffect, useMemo } from "react";
 import {
   Accordion,
   Badge,
@@ -57,10 +57,35 @@ const formatLastLiveTime = (value?: string | null) => {
 
 const Sidebar: React.FC<SidebarProps> = ({ hideLogo = false, containerId, currentPath, isEmployee, onNavigate }) => {
   const { companyLogo, companyName } = useBranding();
-  const menuItems = isEmployee ? EmployeeDashboardMenu : DashboardMenu;
-  const [user, setUser] = useState<{ full_name: string; designation: string } | null>(null);
+  const [user, setUser] = useState<any>(null);
   const [organization, setOrganization] = useState<any>(null);
   const [adminStatus, setAdminStatus] = useState<AdminLiveStatus | null>(null);
+
+  const menuItems = useMemo(() => {
+    if (isEmployee) return EmployeeDashboardMenu;
+    const isSuperAdmin = user?.role === "SUPER_ADMIN";
+    const isPrimaryHR = user?.role === "HR";
+    const isSubAdmin = user?.role === "SUB_ADMIN";
+    const userPermissions = user?.permissions || {};
+
+    return DashboardMenu.filter((item) => {
+      if (item.grouptitle) return true;
+      if (item.adminOnly) {
+        return isSuperAdmin || isPrimaryHR;
+      }
+      if (isSubAdmin && item.moduleKey) {
+        const modPerm = userPermissions[item.moduleKey];
+        if (typeof modPerm === "object" && modPerm !== null) {
+          return Boolean(modPerm.view);
+        }
+        if (typeof modPerm === "boolean") {
+          return modPerm;
+        }
+        return false;
+      }
+      return true;
+    });
+  }, [isEmployee, user]);
 
   useEffect(() => {
     const userData = localStorage.getItem("user");

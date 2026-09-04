@@ -9,6 +9,7 @@ import { downloadPayslipPdf } from "components/payroll/payslipPdf";
 import { useBranding } from "context/BrandingContext";
 import UpcomingIncrementsWidget from "components/UpcomingIncrementsWidget";
 import PlanFeatureLockedPaywall from "components/PlanFeatureLockedPaywall";
+import DasherBreadcrumb from "components/common/DasherBreadcrumb";
 
 const BASE_URL = `${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/payroll/`;
 
@@ -332,6 +333,7 @@ const SalaryPage = () => {
 
   return (
     <Fragment>
+      <DasherBreadcrumb />
       <div className="mb-4 d-flex align-items-center justify-content-between flex-wrap gap-3">
         <div>
           <h2 className="mb-0 fw-bold">Salary Management</h2>

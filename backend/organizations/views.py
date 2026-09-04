@@ -689,16 +689,25 @@ class OrganizationViewSet(viewsets.ModelViewSet):
 
 
 class AdministratorViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = Employee.objects.filter(designation="Administrator")
+    queryset = User.objects.none()
     serializer_class = AdministratorSerializer
     permission_classes = [IsAdminUser]
 
     def get_queryset(self):
         user = self.request.user
-        queryset = Employee.objects.filter(designation="Administrator")
-        if user.is_superuser or user.role == UserRole.SUPER_ADMIN:
-            return queryset
-        return queryset.filter(organization__owner=user)
+        if not user or not user.is_authenticated:
+            return User.objects.none()
+        if user.is_superuser or getattr(user, "role", "") == UserRole.SUPER_ADMIN:
+            # Exclude superadmin users from tenant HR & company administrators directory
+            return User.objects.filter(
+                role__in=[UserRole.HR, UserRole.SUB_ADMIN],
+                is_superuser=False
+            ).exclude(role=UserRole.SUPER_ADMIN).order_by("-date_joined")
+        if getattr(user, "role", "") == UserRole.HR:
+            from accounts.models import SubAdminPermission
+            subadmin_user_ids = list(SubAdminPermission.objects.filter(organization__owner=user).values_list("user_id", flat=True))
+            return User.objects.filter(id__in=[user.id, *subadmin_user_ids]).exclude(role=UserRole.SUPER_ADMIN).order_by("-date_joined")
+        return User.objects.filter(id=user.id).exclude(role=UserRole.SUPER_ADMIN)
 
 
 from .models import Plan

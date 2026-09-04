@@ -17,7 +17,7 @@ import {
 } from "react-bootstrap";
 import {
   IconCheck,
-  IconSparkles,
+  IconShieldCheck,
   IconCreditCard,
   IconShieldLock,
   IconUsers,
@@ -38,6 +38,7 @@ import {
 import Swal from "sweetalert2";
 import { downloadPaymentInvoice } from "../../../lib/paymentInvoice";
 import styles from "./PlansWorkspace.module.scss";
+import DasherBreadcrumb from "components/common/DasherBreadcrumb";
 
 const BASE_URL = `${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1`;
 
@@ -423,6 +424,7 @@ export default function AttendStackPlansPage() {
 
   return (
     <div className={`py-3 ${styles.workspace}`}>
+      <DasherBreadcrumb />
       {/* ── Compact & Native Themed Workspace Hero ── */}
       <div className={styles.hero}>
         <div className={`d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3 ${styles.heroContent}`}>
@@ -531,7 +533,7 @@ export default function AttendStackPlansPage() {
                       </Badge>
                     ) : (
                       <Badge bg="primary-subtle" className="text-primary border border-primary-subtle px-2.5 py-1 rounded-pill d-inline-flex align-items-center gap-1">
-                        <IconSparkles size={13} /> AttendStack Direct
+                        <IconShieldCheck size={13} /> AttendStack Direct
                       </Badge>
                     )}
                   </div>
@@ -1156,7 +1158,7 @@ export default function AttendStackPlansPage() {
 
               {isPurchasedOnSimplyJob && (
                 <div className="bg-success-subtle p-2.5 rounded-3 border border-success-subtle small text-success-emphasis mb-2">
-                  ✨ <strong>Seamless Upgrade:</strong> All your active SimplyJob candidate invitations, organization ID, and employees will be preserved instantly!
+                  <strong>Seamless Upgrade:</strong> All your active SimplyJob candidate invitations, organization ID, and employees will be preserved instantly!
                 </div>
               )}
             </Modal.Body>

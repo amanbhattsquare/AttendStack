@@ -75,7 +75,7 @@ const SuperAdminLayout: React.FC<SuperAdminLayoutProps> = ({ children }) => {
           <div className="custom-container py-3 border-top bg-white">
             <div className="d-flex justify-content-between align-items-center small text-secondary">
               <span>© 2026 AttendStack Enterprise. <span className="fw-semibold text-dark">Super Admin Command Center</span></span>
-              <span>Version 3.0.0 (Production Ready)</span>
+              <span>Version - beta 2.0.0 </span>
             </div>
           </div>
         </div>

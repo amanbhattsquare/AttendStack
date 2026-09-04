@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, Badge, Spinner, Button, Row, Col, Form, Alert, InputGroup } from "react-bootstrap";
 import { IconCheck, IconX, IconSearch, IconUserCheck, IconClock, IconCircleX, IconCircleCheck } from "@tabler/icons-react";
 import Swal from 'sweetalert2';
+import DasherBreadcrumb from "components/common/DasherBreadcrumb";
 
 interface LeaveApplication {
   id: number;
@@ -160,6 +161,7 @@ const LeaveRequestsPage = () => {
 
   return (
     <div className="leave-requests-page">
+      <DasherBreadcrumb />
       <div className="mb-6">
         <h2 className="mb-0 fw-bold">Leave Requests</h2>
         <p className="text-secondary mb-0">View and manage all employee leave applications</p>

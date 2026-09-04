@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Card, Button, Badge } from "react-bootstrap";
 import {
   IconLock,
-  IconSparkles,
+  IconRocket,
   IconCheck,
   IconShieldLock,
   IconArrowRight,
@@ -99,7 +99,7 @@ export default function PlanFeatureLockedPaywall({
               variant="primary"
               className="w-100 fw-bold px-4 py-2 d-flex align-items-center justify-content-center gap-1.5 shadow-sm"
             >
-              <IconSparkles size={16} /> Upgrade Plan Now <IconArrowRight size={16} />
+              <IconRocket size={16} /> Upgrade Plan Now <IconArrowRight size={16} />
             </Button>
           </Link>
         </div>

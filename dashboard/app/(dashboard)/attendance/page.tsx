@@ -2,6 +2,8 @@ import { Fragment } from "react";
 import { Metadata } from "next";
 import { IconSearch } from "@tabler/icons-react";
 
+import DasherBreadcrumb from "components/common/DasherBreadcrumb";
+
 export const metadata: Metadata = {
   title: "Attendance | HR Management",
 };
@@ -9,6 +11,7 @@ export const metadata: Metadata = {
 const AttendancePage = () => {
   return (
     <Fragment>
+      <DasherBreadcrumb />
       <div className="mb-6">
         <h2 className="mb-0 fw-bold">Attendance Records</h2>
         <p className="text-secondary mb-0">Track and manage employee daily attendance logs.</p>

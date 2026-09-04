@@ -32,9 +32,10 @@ import {
   IconEyeOff,
   IconCreditCard,
   IconInfoCircle,
-  IconSparkles,
+  IconArrowUpRight,
   IconExternalLink,
 } from "@tabler/icons-react";
+import DasherBreadcrumb from "components/common/DasherBreadcrumb";
 
 const apiRoot = (process.env.NEXT_PUBLIC_API_ENDPOINT || "").replace(/\/$/, "");
 
@@ -878,6 +879,7 @@ const SettingsPage = () => {
 
   return (
     <div className="settings-page">
+      <DasherBreadcrumb />
       <div className="mb-6">
         <h2 className="mb-0 fw-bold">System Settings</h2>
         <p className="text-secondary mb-0">Configure your organization's attendance rules, notifications, and company settings</p>
@@ -2408,7 +2410,7 @@ const SettingsPage = () => {
                                   size="sm"
                                   className="fw-bold flex-grow-1 text-decoration-none d-inline-flex align-items-center justify-content-center"
                                 >
-                                  <IconSparkles size={16} className="me-1" />
+                                  <IconArrowUpRight size={16} className="me-1" />
                                   {organizationAccess?.is_plan_expired ? "Reactivate Subscription" : "Renew / Upgrade Plan"}
                                 </Button>
                                 {organizationAccess?.plan_source === "SIMPLYJOB" && (

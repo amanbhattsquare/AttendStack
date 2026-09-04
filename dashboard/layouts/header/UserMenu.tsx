@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Dropdown, Image } from "react-bootstrap";
 import Link from "next/link";
-import { IconLogin2, IconHome2, IconSettings, IconActivity, IconBook, IconUser, IconBuildingSkyscraper } from "@tabler/icons-react";
+import { IconLogin2, IconHome2, IconSettings, IconActivity, IconBook, IconUser, IconBuildingSkyscraper, IconShieldLock } from "@tabler/icons-react";
 import { useBranding } from "context/BrandingContext";
 import { Avatar } from "components/common/Avatar";
 import { getAssetPath } from "helper/assetPath";
@@ -81,7 +81,8 @@ const UserMenu = () => {
   };
 
   const isEmployee = user?.role === "EMPLOYEE";
-  const isCompanyUser = user?.role === "HR" || user?.role === "ADMIN" || user?.role === "SUPER_ADMIN";
+  const isSuperAdmin = user?.role === "SUPER_ADMIN";
+  const isCompanyUser = user?.role === "HR" || user?.role === "ADMIN" || isSuperAdmin;
 
   const dynamicMenuItems = isEmployee 
     ? [
@@ -114,14 +115,20 @@ const UserMenu = () => {
         {
           id: "admin-home",
           title: "Dashboard",
-          link: "/dashboard",
+          link: isSuperAdmin ? "/super-admin/dashboard" : "/dashboard",
           icon: <IconHome2 size={18} strokeWidth={1.5} className="text-secondary" />,
         },
         {
           id: "admin-employees",
           title: "Manage Employees",
-          link: "/admin/manager/employees/",
-          icon: <IconSettings size={18} strokeWidth={1.5} className="text-secondary" />,
+          link: "/employees",
+          icon: <IconUser size={18} strokeWidth={1.5} className="text-secondary" />,
+        },
+        {
+          id: "admin-subadmins",
+          title: "Roles & Sub-Admins",
+          link: "/sub-admins",
+          icon: <IconShieldLock size={18} strokeWidth={1.5} className="text-secondary" />,
         },
         {
           id: "admin-payroll",

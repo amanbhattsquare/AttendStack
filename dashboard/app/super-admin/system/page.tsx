@@ -25,6 +25,7 @@ import {
   IconBuildingSkyscraper,
 } from "@tabler/icons-react";
 import apiClient from "app/services/api";
+import DasherBreadcrumb from "components/common/DasherBreadcrumb";
 
 type AuditLog = {
   id: string;
@@ -95,7 +96,13 @@ export default function SuperAdminSystemPage() {
   }, []);
 
   return (
-    <Container fluid className="py-4 super-admin-system-page">
+    <Container fluid className="py-3 px-lg-4 super-admin-system-page">
+      <DasherBreadcrumb
+        items={[
+          { label: "Super Admin Command Center", href: "/super-admin/dashboard" },
+          { label: "System Audit Logs" },
+        ]}
+      />
       <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
         <div>
           <div className="d-flex align-items-center gap-2 mb-1">

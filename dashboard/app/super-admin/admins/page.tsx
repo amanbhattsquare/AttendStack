@@ -28,6 +28,7 @@ import {
   IconAlertTriangle,
   IconKey,
   IconDotsVertical,
+  IconCopy,
 } from "@tabler/icons-react";
 import apiClient from "app/services/api";
 import DasherBreadcrumb from "components/common/DasherBreadcrumb";
@@ -83,6 +84,9 @@ export default function SuperAdminAdminsPage() {
   // Modals
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createdTempPassword, setCreatedTempPassword] = useState<string | null>(null);
+  const [selectedAdminForView, setSelectedAdminForView] = useState<Administrator | null>(null);
+  const [copiedId, setCopiedId] = useState(false);
+  const [copiedEmail, setCopiedEmail] = useState(false);
 
   // Create form
   const [createForm, setCreateForm] = useState({
@@ -335,7 +339,7 @@ export default function SuperAdminAdminsPage() {
                           <IconDotsVertical size={16} />
                         </Dropdown.Toggle>
                         <Dropdown.Menu className="shadow border-0">
-                          <Dropdown.Item onClick={() => alert(`HR Administrator Account: ${admin.email}`)}>
+                          <Dropdown.Item onClick={() => setSelectedAdminForView(admin)}>
                             <IconShieldCheck size={15} className="me-2 text-warning" /> View Admin Details
                           </Dropdown.Item>
                         </Dropdown.Menu>
@@ -348,6 +352,148 @@ export default function SuperAdminAdminsPage() {
           )}
         </Card.Body>
       </Card>
+
+      {/* Modal: View Admin Details */}
+      <Modal
+        show={!!selectedAdminForView}
+        onHide={() => {
+          setSelectedAdminForView(null);
+          setCopiedId(false);
+          setCopiedEmail(false);
+        }}
+        centered
+      >
+        <Modal.Header closeButton className="border-0 pb-0">
+          <Modal.Title className="fw-bold d-flex align-items-center gap-2 text-dark">
+            <div className="p-2 rounded-3 bg-warning-subtle text-warning-emphasis d-flex align-items-center justify-content-center shadow-xs">
+              <IconShieldCheck size={20} />
+            </div>
+            <div>
+              <div className="fs-6 fw-bold">Administrator Profile</div>
+              <span className="text-secondary small fw-normal" style={{ fontSize: "12px" }}>Platform Access & Assignment Details</span>
+            </div>
+          </Modal.Title>
+        </Modal.Header>
+        {selectedAdminForView && (
+          <Modal.Body className="pt-3">
+            {/* Top User Header Card */}
+            <div className="p-3.5 bg-light rounded-3 mb-3 border">
+              <div className="d-flex align-items-start gap-3">
+                <div
+                  className="rounded-3 bg-warning text-dark fw-bold d-flex align-items-center justify-content-center fs-4 flex-shrink-0 shadow-xs"
+                  style={{ width: 48, height: 48 }}
+                >
+                  {(selectedAdminForView.full_name || selectedAdminForView.email).charAt(0).toUpperCase()}
+                </div>
+                <div className="min-w-0 flex-grow-1">
+                  <h5 className="fw-bold text-dark mb-0.5 text-truncate">
+                    {selectedAdminForView.full_name || selectedAdminForView.email.split("@")[0]}
+                  </h5>
+                  <div className="d-flex align-items-center gap-2 mb-1.5 flex-wrap">
+                    <span className="text-secondary small d-flex align-items-center gap-1 text-truncate" style={{ fontSize: "12.5px" }}>
+                      <IconMail size={14} className="text-muted" />
+                      {selectedAdminForView.email}
+                    </span>
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-link p-0 text-secondary border-0"
+                      onClick={() => {
+                        navigator.clipboard.writeText(selectedAdminForView.email);
+                        setCopiedEmail(true);
+                        setTimeout(() => setCopiedEmail(false), 2000);
+                      }}
+                      title="Copy Email"
+                    >
+                      {copiedEmail ? <IconCheck size={13} className="text-success" /> : <IconCopy size={13} className="text-muted" />}
+                    </button>
+                  </div>
+                  <Badge bg="warning" text="dark" className="px-2 py-0.5 font-monospace rounded-pill" style={{ fontSize: "10.5px" }}>
+                    {selectedAdminForView.custom_role_title || (selectedAdminForView.role === "SUPER_ADMIN" ? "Super Admin" : "Company Administrator (HR)")}
+                  </Badge>
+                </div>
+              </div>
+            </div>
+
+            {/* 2-Column Info Grid */}
+            <Row className="g-2.5">
+              <Col xs={12} sm={6}>
+                <div className="p-3 bg-white border rounded-3 h-100 shadow-xs">
+                  <span className="text-secondary small fw-bold text-uppercase d-block mb-1" style={{ fontSize: "10.5px", letterSpacing: "0.5px" }}>
+                    Assigned Workspace
+                  </span>
+                  <div className="d-flex align-items-center gap-1.5 text-dark fw-semibold small">
+                    <IconBuildingSkyscraper size={16} className="text-primary flex-shrink-0" />
+                    <span className="text-truncate">{selectedAdminForView.organization_name || "Platform Global"}</span>
+                  </div>
+                </div>
+              </Col>
+
+              <Col xs={12} sm={6}>
+                <div className="p-3 bg-white border rounded-3 h-100 shadow-xs">
+                  <span className="text-secondary small fw-bold text-uppercase d-block mb-1" style={{ fontSize: "10.5px", letterSpacing: "0.5px" }}>
+                    Account Status
+                  </span>
+                  <div>
+                    <Badge bg="success-subtle" text="success" className="border border-success-subtle px-2.5 py-1 rounded-pill fw-semibold" style={{ fontSize: "11px" }}>
+                      ● Active Account
+                    </Badge>
+                  </div>
+                </div>
+              </Col>
+
+              <Col xs={12} sm={6}>
+                <div className="p-3 bg-white border rounded-3 h-100 shadow-xs">
+                  <span className="text-secondary small fw-bold text-uppercase d-block mb-1" style={{ fontSize: "10.5px", letterSpacing: "0.5px" }}>
+                    Role Classification
+                  </span>
+                  <span className="text-dark fw-semibold small d-block">
+                    {selectedAdminForView.custom_role_title || "Primary Tenant Owner"}
+                  </span>
+                </div>
+              </Col>
+
+              <Col xs={12} sm={6}>
+                <div className="p-3 bg-white border rounded-3 h-100 shadow-xs">
+                  <span className="text-secondary small fw-bold text-uppercase d-block mb-1" style={{ fontSize: "10.5px", letterSpacing: "0.5px" }}>
+                    Administrator ID
+                  </span>
+                  <div className="d-flex align-items-center justify-content-between gap-1">
+                    <code className="text-dark font-monospace text-truncate small" style={{ maxWidth: 140 }}>
+                      #{selectedAdminForView.id}
+                    </code>
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-link p-0 text-secondary border-0"
+                      onClick={() => {
+                        navigator.clipboard.writeText(String(selectedAdminForView.id));
+                        setCopiedId(true);
+                        setTimeout(() => setCopiedId(false), 2000);
+                      }}
+                      title="Copy ID"
+                    >
+                      {copiedId ? <IconCheck size={13} className="text-success" /> : <IconCopy size={13} className="text-muted" />}
+                    </button>
+                  </div>
+                </div>
+              </Col>
+            </Row>
+          </Modal.Body>
+        )}
+        <Modal.Footer className="border-0 pt-2 pb-3">
+          <Button
+            variant="outline-secondary"
+            size="sm"
+            className="px-3 fw-semibold"
+            onClick={() => {
+              setSelectedAdminForView(null);
+              setCopiedId(false);
+              setCopiedEmail(false);
+            }}
+          >
+            Close
+          </Button>
+        </Modal.Footer>
+      </Modal>
 
       {/* Modal: Onboard New HR Manager */}
       <Modal show={showCreateModal} onHide={() => setShowCreateModal(false)} centered backdrop="static">

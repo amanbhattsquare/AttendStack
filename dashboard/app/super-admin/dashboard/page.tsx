@@ -359,7 +359,7 @@ export default function SuperAdminDashboardPage() {
       setOnboardName("");
       loadOverview();
     } catch {
-      alert("Failed to onboard company. Please try again.");
+      setError("Failed to onboard company. Please try again.");
     } finally {
       setOnboardLoading(false);
     }
@@ -384,7 +384,7 @@ export default function SuperAdminDashboardPage() {
       setSelectedOrgId("");
       loadOverview();
     } catch {
-      alert("Failed to create HR Administrator account. Verify details and try again.");
+      setError("Failed to create HR Administrator account. Verify details and try again.");
     } finally {
       setAdminLoading(false);
     }

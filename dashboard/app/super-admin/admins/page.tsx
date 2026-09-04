@@ -30,6 +30,7 @@ import {
   IconDotsVertical,
 } from "@tabler/icons-react";
 import apiClient from "app/services/api";
+import DasherBreadcrumb from "components/common/DasherBreadcrumb";
 
 interface ActionToggleProps {
   children?: React.ReactNode;
@@ -159,29 +160,46 @@ export default function SuperAdminAdminsPage() {
   };
 
   return (
-    <Container fluid className="py-4 super-admin-admins-page">
-      <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
-        <div>
-          <div className="d-flex align-items-center gap-2 mb-1">
-            <Badge bg="warning" text="dark" className="font-monospace px-3 py-1 rounded-pill">
-              SUPER ADMIN PANEL
-            </Badge>
-            <span className="text-secondary small">Access & Identity Management</span>
+    <Container fluid className="py-3 px-lg-4 super-admin-admins-page">
+      {/* Breadcrumb */}
+      <DasherBreadcrumb
+        items={[
+          { label: "Super Admin", href: "/super-admin/dashboard" },
+          { label: "Administrators Directory" },
+        ]}
+      />
+
+      {/* Modern SaaS Header */}
+      <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4 pb-3 border-bottom">
+        <div className="d-flex align-items-start gap-3">
+          <div className="p-2.5 rounded-3 bg-warning-subtle text-warning d-flex align-items-center justify-content-center shadow-xs flex-shrink-0" style={{ width: 44, height: 44 }}>
+            <IconShieldCheck size={24} />
           </div>
-          <h2 className="h3 mb-1 fw-bold text-dark d-flex align-items-center gap-2">
-            <IconShieldCheck className="text-warning" size={32} />
-            Administrators & HR Managers Directory
-          </h2>
-          <p className="text-secondary mb-0">Onboard new tenant HR managers, assign company permissions, and manage platform administrator access.</p>
+          <div>
+            <div className="d-flex align-items-center gap-2 mb-1 flex-wrap">
+              <h2 className="h4 mb-0 fw-bold text-dark">Administrators &amp; HR Managers</h2>
+              <Badge bg="warning-subtle" text="dark" className="px-2.5 py-1 rounded-pill fw-semibold border border-warning-subtle" style={{ fontSize: "11px", letterSpacing: "0.02em" }}>
+                Platform Control
+              </Badge>
+            </div>
+            <p className="text-secondary mb-0 small">
+              Onboard new tenant HR managers, assign company workspaces, and manage platform administrator access.
+            </p>
+          </div>
         </div>
-        <div className="d-flex align-items-center gap-2">
-          <Button variant="outline-secondary" onClick={fetchData} disabled={loading} className="d-flex align-items-center gap-1.5 shadow-sm">
-            <IconRefresh size={18} className={loading ? "spin" : ""} />
-            Refresh
+        <div className="d-flex align-items-center gap-2 flex-shrink-0">
+          <Button variant="outline-secondary" size="sm" onClick={fetchData} disabled={loading} className="d-inline-flex align-items-center gap-1.5 px-3 py-2 fw-medium shadow-xs">
+            <IconRefresh size={16} className={loading ? "spin" : ""} />
+            <span>Refresh</span>
           </Button>
-          <Button variant="warning" onClick={() => { setShowCreateModal(true); setCreatedTempPassword(null); }} className="d-flex align-items-center gap-1.5 shadow-sm px-3 fw-bold text-dark">
-            <IconPlus size={18} />
-            Onboard HR Manager
+          <Button
+            variant="warning"
+            size="sm"
+            onClick={() => { setShowCreateModal(true); setCreatedTempPassword(null); }}
+            className="d-inline-flex align-items-center gap-1.5 px-3.5 py-2 fw-semibold shadow-sm text-dark text-nowrap"
+          >
+            <IconPlus size={16} />
+            <span>Onboard HR Manager</span>
           </Button>
         </div>
       </div>

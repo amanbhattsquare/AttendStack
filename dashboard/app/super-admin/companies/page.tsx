@@ -35,6 +35,7 @@ import {
   IconDotsVertical,
 } from "@tabler/icons-react";
 import apiClient from "app/services/api";
+import DasherBreadcrumb from "components/common/DasherBreadcrumb";
 
 interface ActionToggleProps {
   children?: React.ReactNode;
@@ -314,30 +315,46 @@ export default function SuperAdminCompaniesPage() {
   };
 
   return (
-    <Container fluid className="py-4 super-admin-companies-page">
-      {/* Header Bar */}
-      <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
-        <div>
-          <div className="d-flex align-items-center gap-2 mb-1">
-            <Badge bg="warning" text="dark" className="font-monospace px-3 py-1 rounded-pill">
-              SUPER ADMIN PANEL
-            </Badge>
-            <span className="text-secondary small">Tenant Company Directory</span>
+    <Container fluid className="py-3 px-lg-4 super-admin-companies-page">
+      {/* Breadcrumb */}
+      <DasherBreadcrumb
+        items={[
+          { label: "Super Admin", href: "/super-admin/dashboard" },
+          { label: "Companies & Workspaces" },
+        ]}
+      />
+
+      {/* Modern SaaS Header */}
+      <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4 pb-3 border-bottom">
+        <div className="d-flex align-items-start gap-3">
+          <div className="p-2.5 rounded-3 bg-primary-subtle text-primary d-flex align-items-center justify-content-center shadow-xs flex-shrink-0" style={{ width: 44, height: 44 }}>
+            <IconBuildingSkyscraper size={24} />
           </div>
-          <h2 className="h3 mb-1 fw-bold text-dark d-flex align-items-center gap-2">
-            <IconBuildingSkyscraper className="text-primary" size={32} />
-            Companies & Workspaces Manager
-          </h2>
-          <p className="text-secondary mb-0">Create, manage, inspect, activate, or suspend any tenant company workspace across the platform.</p>
+          <div>
+            <div className="d-flex align-items-center gap-2 mb-1 flex-wrap">
+              <h2 className="h4 mb-0 fw-bold text-dark">Companies &amp; Workspaces</h2>
+              <Badge bg="primary-subtle" text="primary" className="px-2.5 py-1 rounded-pill fw-semibold" style={{ fontSize: "11px", letterSpacing: "0.02em" }}>
+                Tenant Directory
+              </Badge>
+            </div>
+            <p className="text-secondary mb-0 small">
+              Create, inspect, activate, or suspend any tenant company workspace across the AttendStack platform.
+            </p>
+          </div>
         </div>
-        <div className="d-flex align-items-center gap-2">
-          <Button variant="outline-secondary" onClick={loadOrganizations} disabled={loading} className="d-flex align-items-center gap-1.5 shadow-sm">
-            <IconRefresh size={18} className={loading ? "spin" : ""} />
-            Refresh
+        <div className="d-flex align-items-center gap-2 flex-shrink-0">
+          <Button variant="outline-secondary" size="sm" onClick={loadOrganizations} disabled={loading} className="d-inline-flex align-items-center gap-1.5 px-3 py-2 fw-medium shadow-xs">
+            <IconRefresh size={16} className={loading ? "spin" : ""} />
+            <span>Refresh</span>
           </Button>
-          <Button variant="primary" onClick={() => setShowCreateModal(true)} className="d-flex align-items-center gap-1.5 shadow-sm px-3 fw-semibold">
-            <IconPlus size={18} />
-            Create New Company
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => setShowCreateModal(true)}
+            className="d-inline-flex align-items-center gap-1.5 px-3.5 py-2 fw-semibold shadow-sm text-nowrap"
+          >
+            <IconPlus size={16} />
+            <span>Create New Company</span>
           </Button>
         </div>
       </div>

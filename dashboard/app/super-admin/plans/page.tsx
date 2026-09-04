@@ -28,6 +28,7 @@ import {
   IconChecklist,
 } from "@tabler/icons-react";
 import Swal from "sweetalert2";
+import DasherBreadcrumb from "components/common/DasherBreadcrumb";
 
 const BASE_URL = `${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1`;
 
@@ -283,34 +284,51 @@ export default function SuperAdminPlansPage() {
   };
 
   return (
-    <div className="py-4">
-      {/* ── Header ── */}
-      <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
-        <div>
-          <h2 className="fw-bold mb-1 d-flex align-items-center gap-2">
-            <IconCreditCard size={28} className="text-primary" />
-            Subscription Plans & Tier Architecture
-          </h2>
-          <p className="text-secondary mb-0">
-            Create, configure, and manage public AttendStack subscription plans, pricing tiers, and feature access permissions.
-          </p>
+    <div className="py-3 px-lg-4">
+      {/* Breadcrumb */}
+      <DasherBreadcrumb
+        items={[
+          { label: "Super Admin", href: "/super-admin/dashboard" },
+          { label: "Subscription Plans" },
+        ]}
+      />
+
+      {/* Modern SaaS Header */}
+      <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4 pb-3 border-bottom">
+        <div className="d-flex align-items-start gap-3">
+          <div className="p-2.5 rounded-3 bg-primary-subtle text-primary d-flex align-items-center justify-content-center shadow-xs flex-shrink-0" style={{ width: 44, height: 44 }}>
+            <IconCreditCard size={24} />
+          </div>
+          <div>
+            <div className="d-flex align-items-center gap-2 mb-1 flex-wrap">
+              <h2 className="h4 mb-0 fw-bold text-dark">Subscription Plans &amp; Tiers</h2>
+              <Badge bg="primary-subtle" text="primary" className="px-2.5 py-1 rounded-pill fw-semibold" style={{ fontSize: "11px", letterSpacing: "0.02em" }}>
+                Pricing Architecture
+              </Badge>
+            </div>
+            <p className="text-secondary mb-0 small">
+              Configure public AttendStack subscription plans, seat capacity thresholds, and granular feature flags.
+            </p>
+          </div>
         </div>
-        <div className="d-flex align-items-center gap-2 flex-wrap">
+        <div className="d-flex align-items-center gap-2 flex-shrink-0">
           <Button
             variant="outline-secondary"
             size="sm"
             onClick={handleSeedDefaults}
-            className="d-flex align-items-center gap-1.5 fw-semibold shadow-sm"
+            className="d-inline-flex align-items-center gap-1.5 px-3 py-2 fw-medium shadow-xs"
           >
-            <IconRefresh size={16} /> Restore Defaults
+            <IconRefresh size={16} />
+            <span>Restore Defaults</span>
           </Button>
           <Button
             variant="primary"
             size="sm"
             onClick={openCreateModal}
-            className="d-flex align-items-center gap-1.5 fw-bold shadow-sm"
+            className="d-inline-flex align-items-center gap-1.5 px-3.5 py-2 fw-semibold shadow-sm text-nowrap"
           >
-            <IconPlus size={18} /> Create New Plan
+            <IconPlus size={16} />
+            <span>Create New Plan</span>
           </Button>
         </div>
       </div>

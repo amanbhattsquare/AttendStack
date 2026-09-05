@@ -452,7 +452,7 @@ const SalaryPage = () => {
           <h2 className="mb-0 fw-bold">Salary Management</h2>
           <p className="text-secondary mb-0">Manage employee monthly salaries, generate payslips, and review upcoming salary increments.</p>
         </div>
-        {isAdmin && canEditPayroll && activeTab === "payroll" && (
+        {canEditPayroll && activeTab === "payroll" && (
           <button
             className="btn btn-primary d-flex align-items-center gap-2 shadow-sm"
             onClick={() => setShowGenerateModal(true)}
@@ -647,7 +647,7 @@ const SalaryPage = () => {
                           </td>
                           <td className="text-end">
                             <div className="d-flex justify-content-end gap-2 px-3">
-                              {isAdmin && p.status === "PENDING" && (
+                              {canEditPayroll && p.status === "PENDING" && (
                                 <Button
                                   variant="outline-success"
                                   size="sm"
@@ -657,7 +657,7 @@ const SalaryPage = () => {
                                   <IconCheck size={14} className="me-1" /> Pay
                                 </Button>
                               )}
-                              {isAdmin && (
+                              {canEditPayroll && (
                                 <Button
                                   variant={p.status === "PAID" ? "outline-warning" : "outline-primary"}
                                   size="sm"

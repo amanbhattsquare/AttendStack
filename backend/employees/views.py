@@ -56,6 +56,11 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         user = self.request.user
         queryset = super().get_queryset()
 
+        if getattr(user, 'role', '') == UserRole.SUB_ADMIN:
+            from accounts.permissions import check_user_module_permission
+            if not check_user_module_permission(user, "employees", "view"):
+                return queryset.none()
+
         if not user.is_superuser and getattr(user, 'role', '') != UserRole.SUPER_ADMIN:
             organization = self._organization_for_user()
             if organization is None:

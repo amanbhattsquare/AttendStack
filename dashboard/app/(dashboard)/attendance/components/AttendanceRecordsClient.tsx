@@ -168,6 +168,7 @@ const getErrorMessage = (body: unknown, fallback: string) => {
 
 const AttendanceRecordsClient = () => {
   const today = new Date();
+  const [currentUser, setCurrentUser] = useState<any>(null);
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [nameQuery, setNameQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -178,6 +179,35 @@ const AttendanceRecordsClient = () => {
   const [selectedYear, setSelectedYear] = useState(today.getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(today.getMonth() + 1);
   const [selectedDay, setSelectedDay] = useState("All");
+
+  // Permissions
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem("user");
+        if (stored) {
+          setCurrentUser(JSON.parse(stored));
+        }
+      } catch {}
+    }
+  }, []);
+
+  const isSuperAdmin = currentUser?.role === "SUPER_ADMIN";
+  const isHR = currentUser?.role === "HR";
+  const isSubAdmin = currentUser?.role === "SUB_ADMIN";
+  const attendancePerm = currentUser?.permissions?.attendance;
+
+  const canEdit = isSuperAdmin || isHR || (isSubAdmin ? (
+    typeof attendancePerm === "object" && attendancePerm !== null
+      ? Boolean(attendancePerm.edit)
+      : Boolean(attendancePerm)
+  ) : false);
+
+  const canDelete = isSuperAdmin || isHR || (isSubAdmin ? (
+    typeof attendancePerm === "object" && attendancePerm !== null
+      ? Boolean(attendancePerm.delete)
+      : false
+  ) : false);
 
   const [totalRecords, setTotalRecords] = useState(0);
 
@@ -275,6 +305,11 @@ const AttendanceRecordsClient = () => {
   }, []);
 
   const handleUpdateRecord = async (updatedRecord: AttendanceRecord) => {
+    if (!canEdit) {
+      setError("Permission denied. You do not have permission to edit attendance records.");
+      return;
+    }
+
     const result = await handleApiCall(
       `${API_URL}${updatedRecord.id}/`,
       {
@@ -301,6 +336,11 @@ const AttendanceRecordsClient = () => {
 
   const handleDeleteRecord = async () => {
     if (!deletingRecord) return;
+
+    if (!canDelete) {
+      setError("Permission denied. You do not have permission to delete attendance records.");
+      return;
+    }
 
     const result = await handleApiCall(
       `${API_URL}${deletingRecord.id}/`,
@@ -704,9 +744,11 @@ const AttendanceRecordsClient = () => {
       <Card className="border-0 shadow-sm">
         <CardHeader className="bg-white d-flex justify-content-between align-items-center">
           <h4 className="mb-0">Attendance Log</h4>
-          <Button variant="primary" onClick={() => setIsCreateOpen(true)}>
-            + Add Record
-          </Button>
+          {canEdit && (
+            <Button variant="primary" onClick={() => setIsCreateOpen(true)}>
+              + Add Record
+            </Button>
+          )}
         </CardHeader>
         <CardBody>
           {isLoading ? (
@@ -727,13 +769,13 @@ const AttendanceRecordsClient = () => {
                   <th>Check In</th>
                   <th>Check Out</th>
                   <th>Status</th>
-                  <th className="text-end">Actions</th>
+                  {(canEdit || canDelete) && <th className="text-end">Actions</th>}
                 </tr>
               </thead>
               <tbody>
                 {records.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="text-center py-4 text-secondary">
+                    <td colSpan={(canEdit || canDelete) ? 7 : 6} className="text-center py-4 text-secondary">
                       No attendance records found.
                     </td>
                   </tr>
@@ -768,14 +810,20 @@ const AttendanceRecordsClient = () => {
                       <td>
                         <Badge bg={getStatusBadge(record.status)}>{record.status_label}</Badge>
                       </td>
-                      <td className="text-end">
-                        <Button variant="white" size="sm" className="btn-icon" onClick={() => setEditingRecord(record)}>
-                          <IconPencil size={16} />
-                        </Button>
-                        <Button variant="white" size="sm" className="btn-icon" onClick={() => setDeletingRecord(record)}>
-                          <IconTrash size={16} />
-                        </Button>
-                      </td>
+                      {(canEdit || canDelete) && (
+                        <td className="text-end">
+                          {canEdit && (
+                            <Button variant="white" size="sm" className="btn-icon" onClick={() => setEditingRecord(record)}>
+                              <IconPencil size={16} />
+                            </Button>
+                          )}
+                          {canDelete && (
+                            <Button variant="white" size="sm" className="btn-icon" onClick={() => setDeletingRecord(record)}>
+                              <IconTrash size={16} />
+                            </Button>
+                          )}
+                        </td>
+                      )}
                     </tr>
                   ))
                 )}

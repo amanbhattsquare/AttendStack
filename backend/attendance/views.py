@@ -528,7 +528,13 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
         instance = self.get_object()
         user = self.request.user
 
-        if user.role not in ["SUPER_ADMIN", "HR"] and instance.employee.email != user.email:
+        if getattr(user, 'role', '') == UserRole.SUB_ADMIN:
+            if not check_user_module_permission(user, "attendance", "delete"):
+                return Response(
+                    {"detail": "You do not have permission to delete attendance records."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+        elif user.role not in ["SUPER_ADMIN", "HR"] and instance.employee.email != user.email:
             return Response(
                 {"detail": "You do not have permission to delete this record."},
                 status=status.HTTP_403_FORBIDDEN,

@@ -141,16 +141,6 @@ const UserMenu = () => {
               },
             ]
           : []),
-        ...(isSuperAdmin || isHR || Boolean(userPermissions.payroll?.view)
-          ? [
-              {
-                id: "admin-payroll",
-                title: "Salary & Payroll",
-                link: "/salary",
-                icon: <IconActivity size={18} strokeWidth={1.5} className="text-secondary" />,
-              },
-            ]
-          : []),
       ];
 
   const activePhoto = profilePhoto || (isCompanyUser ? companyLogo : null);

@@ -440,7 +440,7 @@ const AdminLeavesClient = () => {
             </div>
           ) : (
             <div className="table-responsive leave-table-responsive">
-              <Table hover className="align-middle text-nowrap mb-0 custom-leaves-table" style={{ minWidth: "850px" }}>
+              <Table hover className="align-middle text-nowrap mb-0 custom-leaves-table" style={{ minWidth: "900px" }}>
                 <thead className="table-light">
                   <tr className="small text-secondary-emphasis" style={{ fontSize: "0.78rem", textTransform: "uppercase", fontWeight: 600 }}>
                     <th className="px-4 py-3">Employee Details</th>
@@ -485,7 +485,7 @@ const AdminLeavesClient = () => {
                         <td className="py-3 text-center fw-bold text-dark-emphasis small">
                           {durationDays} {durationDays === 1 ? "day" : "days"}
                         </td>
-                        <td className="py-3 text-secondary small text-truncate" style={{ maxWidth: "200px" }} title={leave.reason}>
+                        <td className="py-3 text-secondary small text-truncate" style={{ maxWidth: "220px" }} title={leave.reason}>
                           {leave.reason}
                         </td>
                         <td className="py-3">
@@ -707,10 +707,28 @@ const AdminLeavesClient = () => {
 
       <style>{`
         .leave-requests-card {
-          overflow: visible;
+          border-radius: 16px;
         }
         .leave-table-responsive {
-          overflow: visible;
+          overflow-x: auto !important;
+          -webkit-overflow-scrolling: touch;
+          width: 100%;
+          scrollbar-width: thin;
+          scrollbar-color: #cbd5e1 #f8fafc;
+        }
+        .leave-table-responsive::-webkit-scrollbar {
+          height: 7px;
+        }
+        .leave-table-responsive::-webkit-scrollbar-track {
+          background: #f8fafc;
+          border-radius: 4px;
+        }
+        .leave-table-responsive::-webkit-scrollbar-thumb {
+          background: #cbd5e1;
+          border-radius: 4px;
+        }
+        .leave-table-responsive::-webkit-scrollbar-thumb:hover {
+          background: #94a3b8;
         }
         .leave-action-toggle {
           width: 34px;
@@ -751,10 +769,10 @@ const AdminLeavesClient = () => {
           50% { opacity: 0.6; }
           100% { opacity: 1; }
         }
-        @media (max-width: 991.98px) {
-          .leave-table-responsive {
-            overflow-x: auto;
-            padding-bottom: 180px;
+        @media (max-width: 767.98px) {
+          .leave-requests-card {
+            background: transparent !important;
+            box-shadow: none !important;
           }
         }
       `}</style>

@@ -288,7 +288,7 @@ const LeaveRequestsPage = () => {
             </div>
           ) : (
             <div className="table-responsive">
-              <table className="table table-hover align-middle mb-0">
+              <table className="table table-hover align-middle mb-0 text-nowrap" style={{ minWidth: "850px" }}>
                 <thead className="table-light">
                   <tr>
                     <th className="fw-semibold px-4">Employee</th>

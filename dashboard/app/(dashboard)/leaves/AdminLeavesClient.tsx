@@ -402,7 +402,7 @@ const AdminLeavesClient = () => {
           </Card>
         </Col>
         <Col xs={12} md={4}>
-          <Card className="border-0 shadow-sm p-3 rounded-4 bg-white border-start border-warning border-3" style={{ borderLeftStyle: "solid" }}>
+          <Card className="border-0 shadow-sm p-3 rounded-4 bg-white">
             <div className="d-flex align-items-center gap-3">
               <div className="p-3 bg-warning-subtle text-warning rounded-3">
                 <IconClock size={24} />

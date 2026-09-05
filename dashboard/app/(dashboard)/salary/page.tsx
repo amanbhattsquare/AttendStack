@@ -24,6 +24,7 @@ import UpcomingIncrementsWidget from "components/UpcomingIncrementsWidget";
 import PlanFeatureLockedPaywall from "components/PlanFeatureLockedPaywall";
 import ModuleAccessDenied from "components/ModuleAccessDeniedPaywall";
 import DasherBreadcrumb from "components/common/DasherBreadcrumb";
+import CustomPagination from "components/shared/CustomPagination";
 
 const BASE_URL = `${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/payroll/`;
 
@@ -90,6 +91,10 @@ const SalaryPage = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
+
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   // Modals States
   const [showGenerateModal, setShowGenerateModal] = useState(false);
@@ -161,6 +166,7 @@ const SalaryPage = () => {
   };
 
   useEffect(() => {
+    setCurrentPage(1);
     fetchPayrolls();
   }, [selectedMonth, selectedYear, searchTerm]);
 
@@ -444,6 +450,13 @@ const SalaryPage = () => {
     );
   }
 
+  // Pagination calculations
+  const totalRecords = payrolls.length;
+  const totalPages = Math.max(1, Math.ceil(totalRecords / pageSize));
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, totalRecords);
+  const paginatedPayrolls = payrolls.slice(startIndex, endIndex);
+
   return (
     <Fragment>
       <DasherBreadcrumb />
@@ -575,7 +588,7 @@ const SalaryPage = () => {
                       </td>
                     </tr>
                   ) : (
-                    payrolls.map((p) => {
+                    paginatedPayrolls.map((p) => {
                       const monthlySalary = Number(p.basic_salary || 0);
                       const calculatedDeductions = Number(p.deductions || 0);
                       const netSalary = Number(p.payable_salary ?? p.net_salary ?? 0);
@@ -705,6 +718,41 @@ const SalaryPage = () => {
             )}
           </div>
         </div>
+        {payrolls.length > 0 && (
+          <div className="card-footer bg-white border-top py-3 d-flex flex-column flex-md-row justify-content-between align-items-center gap-3">
+            <div className="d-flex align-items-center gap-3 flex-wrap">
+              <div className="text-muted small">
+                Showing <span className="fw-semibold text-dark">{totalRecords > 0 ? startIndex + 1 : 0}</span> to{" "}
+                <span className="fw-semibold text-dark">{endIndex}</span> of{" "}
+                <span className="fw-semibold text-dark">{totalRecords}</span> employee records
+              </div>
+              <div className="d-flex align-items-center gap-2">
+                <span className="text-muted small">Per page:</span>
+                <Form.Select
+                  size="sm"
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  style={{ width: "auto" }}
+                >
+                  <option value={10}>10</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </Form.Select>
+              </div>
+            </div>
+            {totalPages > 1 && (
+              <CustomPagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={setCurrentPage}
+              />
+            )}
+          </div>
+        )}
       </div>
       )}
 

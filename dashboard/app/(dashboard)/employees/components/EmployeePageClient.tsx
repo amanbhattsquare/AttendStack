@@ -166,6 +166,38 @@ const EmployeePageClient = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [currentUser, setCurrentUser] = useState<any>(null);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem("user");
+        if (stored) {
+          setCurrentUser(JSON.parse(stored));
+        }
+      } catch {
+        // ignore
+      }
+    }
+  }, []);
+
+  const isSuperAdmin = currentUser?.role === "SUPER_ADMIN";
+  const isHR = currentUser?.role === "HR";
+  const isSubAdmin = currentUser?.role === "SUB_ADMIN";
+  const employeesPermission = currentUser?.permissions?.employees;
+
+  const canEdit = isSuperAdmin || isHR || (isSubAdmin ? (
+    typeof employeesPermission === "object" && employeesPermission !== null
+      ? Boolean(employeesPermission.edit)
+      : Boolean(employeesPermission)
+  ) : true);
+
+  const canDelete = isSuperAdmin || isHR || (isSubAdmin ? (
+    typeof employeesPermission === "object" && employeesPermission !== null
+      ? Boolean(employeesPermission.delete)
+      : false
+  ) : false);
+
   const [actionLoadingKey, setActionLoadingKey] = useState<string | null>(null);
   const [passwordEmployee, setPasswordEmployee] = useState<Employee | null>(null);
   const [passwordAction, setPasswordAction] = useState<PasswordAction>("create-password");
@@ -335,6 +367,16 @@ const EmployeePageClient = () => {
   };
 
   const handleDelete = async (employeeId: string) => {
+    if (!canDelete) {
+      Swal.fire({
+        title: "Permission Denied",
+        text: "You do not have permission to delete employee records.",
+        icon: "error",
+        confirmButtonColor: "#dc3545",
+      });
+      return;
+    }
+
     const result = await Swal.fire({
       title: "Delete Employee?",
       text: "This permanently deletes the employee record and their linked login account. They will no longer be able to sign in.",
@@ -741,38 +783,39 @@ const EmployeePageClient = () => {
                           <Dropdown.Item onClick={() => handleRowClick(employee.id)} className="d-flex align-items-center gap-2">
                             <IconEye size={16} /> View Profile
                           </Dropdown.Item>
-                          <Dropdown.Item onClick={() => handleEdit(employee)} className="d-flex align-items-center gap-2">
-                            <IconEdit size={16} /> Edit Employee
-                          </Dropdown.Item>
-                          <Dropdown.Item onClick={() => router.push(`/employees/${employee.id}#leave-entitlement`)} className="d-flex align-items-center gap-2">
-                            <IconCalendarStats size={16} /> Manage Leave Entitlement
-                          </Dropdown.Item>
-                          <Dropdown.Item onClick={() => openStatusModal(employee)} className="d-flex align-items-center gap-2">
-                            <IconUserCheck size={16} /> Change Status
-                          </Dropdown.Item>
-                          <Dropdown.Divider />
-                          <Dropdown.Item
-                            disabled={employee.account_exists || actionLoadingKey === `${employee.id}:create-password`}
-                            onClick={() => openPasswordModal(employee, "create-password")}
-                            className="d-flex align-items-center gap-2"
-                          >
-                            <IconKey size={16} /> {actionLoadingKey === `${employee.id}:create-password` ? "Creating..." : "Create Password"}
-                          </Dropdown.Item>
-                          {/* <Dropdown.Item
-                            disabled={!employee.account_exists || actionLoadingKey === `${employee.id}:reset-password`}
-                            onClick={() => openPasswordModal(employee, "reset-password")}
-                            className="d-flex align-items-center gap-2"
-                          >
-                            <IconRefresh size={16} /> {actionLoadingKey === `${employee.id}:reset-password` ? "Resetting..." : "Reset Password"}
-                          </Dropdown.Item> */}
-                          <Dropdown.Divider />
-                          <Dropdown.Item
-                            disabled={actionLoadingKey === `${employee.id}:delete`}
-                            onClick={() => handleDelete(employee.id)}
-                            className="d-flex align-items-center gap-2 text-danger"
-                          >
-                            <IconTrash size={16} /> {actionLoadingKey === `${employee.id}:delete` ? "Deleting..." : "Delete"}
-                          </Dropdown.Item>
+                          {canEdit && (
+                            <>
+                              <Dropdown.Item onClick={() => handleEdit(employee)} className="d-flex align-items-center gap-2">
+                                <IconEdit size={16} /> Edit Employee
+                              </Dropdown.Item>
+                              <Dropdown.Item onClick={() => router.push(`/employees/${employee.id}#leave-entitlement`)} className="d-flex align-items-center gap-2">
+                                <IconCalendarStats size={16} /> Manage Leave Entitlement
+                              </Dropdown.Item>
+                              <Dropdown.Item onClick={() => openStatusModal(employee)} className="d-flex align-items-center gap-2">
+                                <IconUserCheck size={16} /> Change Status
+                              </Dropdown.Item>
+                              <Dropdown.Divider />
+                              <Dropdown.Item
+                                disabled={employee.account_exists || actionLoadingKey === `${employee.id}:create-password`}
+                                onClick={() => openPasswordModal(employee, "create-password")}
+                                className="d-flex align-items-center gap-2"
+                              >
+                                <IconKey size={16} /> {actionLoadingKey === `${employee.id}:create-password` ? "Creating..." : "Create Password"}
+                              </Dropdown.Item>
+                            </>
+                          )}
+                          {canDelete && (
+                            <>
+                              <Dropdown.Divider />
+                              <Dropdown.Item
+                                disabled={actionLoadingKey === `${employee.id}:delete`}
+                                onClick={() => handleDelete(employee.id)}
+                                className="d-flex align-items-center gap-2 text-danger"
+                              >
+                                <IconTrash size={16} /> {actionLoadingKey === `${employee.id}:delete` ? "Deleting..." : "Delete"}
+                              </Dropdown.Item>
+                            </>
+                          )}
                         </Dropdown.Menu>
                       </Dropdown>
                     </td>

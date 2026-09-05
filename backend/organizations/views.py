@@ -271,27 +271,8 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         return super().get_authenticators()
 
     def _find_user_organization(self, user):
-        if not user or not user.is_authenticated:
-            return None
-        # 1. Direct ownership
-        org = Organization.objects.filter(owner=user).first()
-        if org:
-            return org
-        # 2. Employee profile link
-        if hasattr(user, "employee_profile") and user.employee_profile and user.employee_profile.organization:
-            return user.employee_profile.organization
-        # 3. Employee record by email
-        emp = Employee.objects.filter(email__iexact=user.email, organization__isnull=False).select_related('organization').first()
-        if emp and emp.organization:
-            return emp.organization
-        # 4. Reverse relation on Organization
-        org = Organization.objects.filter(employees__email__iexact=user.email).first()
-        if org:
-            return org
-        # 5. Super Admin only fallback
-        if user.is_superuser or getattr(user, "role", "") == UserRole.SUPER_ADMIN:
-            return Organization.objects.order_by("created_at").first()
-        return None
+        from organizations.services import get_organization_for_user
+        return get_organization_for_user(user)
 
     def get_queryset(self):
         user = self.request.user
@@ -310,10 +291,11 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         if user.is_superuser or user_role == UserRole.SUPER_ADMIN:
             return Organization.objects.all().order_by("-created_at")
 
-        # Multi-tenant isolation: HR / Owner / Staff only see their own organization(s)
+        # Multi-tenant isolation: HR / Owner / Staff / Sub-Admins see their organization(s)
         user_orgs = (
             Organization.objects.filter(owner=user)
             | Organization.objects.filter(employees__email__iexact=user.email)
+            | Organization.objects.filter(subadmin_permissions__user=user)
         ).distinct()
 
         return user_orgs.order_by("-created_at")
@@ -658,6 +640,10 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         if not (user.is_superuser or user.role == UserRole.SUPER_ADMIN):
             raise PermissionDenied("Only Super Admins can access platform overview.")
 
+        import datetime
+        from django.db.models import Count
+        from accounts.models import SubAdminPermission
+
         today = timezone.localdate()
         orgs = Organization.objects.all().order_by("-created_at")
         total_companies = orgs.count()
@@ -666,10 +652,82 @@ class OrganizationViewSet(viewsets.ModelViewSet):
 
         total_users = User.objects.count()
         total_hrs = User.objects.filter(role=UserRole.HR).count()
+        total_subadmins = User.objects.filter(role=UserRole.SUB_ADMIN).count()
         total_employees = Employee.objects.count()
 
-        today_attendance = AttendanceRecord.objects.filter(date=today, status__in=["PRESENT", "LATE", "HALF_DAY"]).count()
+        today_attendance = AttendanceRecord.objects.filter(date=today, status__in=["PRESENT", "HALF_DAY"]).count()
+        today_late = AttendanceRecord.objects.filter(date=today, status="LATE").count()
+        total_checked_in = today_attendance + today_late
         total_pending_leaves = LeaveRequest.objects.filter(status="PENDING").count()
+
+        attendance_rate = 0
+        if total_employees > 0:
+            attendance_rate = round((total_checked_in / total_employees) * 100, 1)
+
+        # 1. 7-Day Attendance Trend
+        attendance_trend_7d = []
+        for i in range(6, -1, -1):
+            day = today - datetime.timedelta(days=i)
+            present_c = AttendanceRecord.objects.filter(date=day, status__in=["PRESENT", "HALF_DAY"]).count()
+            late_c = AttendanceRecord.objects.filter(date=day, status="LATE").count()
+            attendance_trend_7d.append({
+                "date": day.strftime("%Y-%m-%d"),
+                "day": day.strftime("%a"),
+                "label": day.strftime("%b %d"),
+                "present": present_c,
+                "late": late_c,
+                "total": present_c + late_c,
+            })
+
+        # 2. Plan & Tier Distribution (Unique consolidated counts)
+        plan_dict = {}
+        for org in orgs:
+            p_name = (org.plan_name or "").strip() or "Standard Plan"
+            plan_dict[p_name] = plan_dict.get(p_name, 0) + 1
+
+        plan_distribution = []
+        for p_name, c in sorted(plan_dict.items(), key=lambda x: x[1], reverse=True):
+            pct = round((c / total_companies * 100), 1) if total_companies > 0 else 0
+            plan_distribution.append({
+                "name": p_name,
+                "count": c,
+                "percentage": pct,
+            })
+
+        if not plan_distribution:
+            plan_distribution = [
+                {"name": "Standard Plan", "count": active_companies, "percentage": 100.0 if active_companies > 0 else 0},
+            ]
+
+        # 3. Recent Platform Activities
+        recent_activities = []
+        for org in orgs[:5]:
+            emp_count = org.employees.count() if hasattr(org, "employees") else 0
+            recent_activities.append({
+                "id": f"org-{org.id}",
+                "type": "COMPANY_REGISTERED",
+                "title": f"Tenant Onboarded: {org.name}",
+                "description": f"Invite Code: {org.invite_code} • {emp_count} staff",
+                "timestamp": org.created_at.isoformat() if org.created_at else None,
+                "badge": "Company",
+                "badge_color": "primary",
+            })
+
+        recent_hrs = User.objects.filter(role__in=[UserRole.HR, UserRole.SUB_ADMIN]).order_by("-date_joined")[:4]
+        for hr_u in recent_hrs:
+            recent_activities.append({
+                "id": f"user-{hr_u.id}",
+                "type": "ADMIN_CREATED",
+                "title": f"Admin Added: {hr_u.get_full_name() or hr_u.email}",
+                "description": f"Role: {hr_u.role} • {hr_u.email}",
+                "timestamp": hr_u.date_joined.isoformat() if hr_u.date_joined else None,
+                "badge": hr_u.role,
+                "badge_color": "warning" if hr_u.role == UserRole.HR else "info",
+            })
+
+        # Sort activities newest first
+        recent_activities.sort(key=lambda x: x.get("timestamp") or "", reverse=True)
+        recent_activities = recent_activities[:6]
 
         orgs_serialized = OrganizationSerializer(orgs, many=True, context={"request": request}).data
 
@@ -680,25 +738,41 @@ class OrganizationViewSet(viewsets.ModelViewSet):
                 "inactive_companies": inactive_companies,
                 "total_users": total_users,
                 "total_hrs": total_hrs,
+                "total_subadmins": total_subadmins,
                 "total_employees": total_employees,
                 "today_attendance": today_attendance,
+                "today_late": today_late,
+                "today_checked_in": total_checked_in,
+                "attendance_rate": attendance_rate,
                 "pending_leaves": total_pending_leaves,
             },
+            "attendance_trend_7d": attendance_trend_7d,
+            "plan_distribution": plan_distribution,
+            "recent_activities": recent_activities,
             "organizations": orgs_serialized,
         })
 
 
 class AdministratorViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = Employee.objects.filter(designation="Administrator")
+    queryset = User.objects.none()
     serializer_class = AdministratorSerializer
     permission_classes = [IsAdminUser]
 
     def get_queryset(self):
         user = self.request.user
-        queryset = Employee.objects.filter(designation="Administrator")
-        if user.is_superuser or user.role == UserRole.SUPER_ADMIN:
-            return queryset
-        return queryset.filter(organization__owner=user)
+        if not user or not user.is_authenticated:
+            return User.objects.none()
+        if user.is_superuser or getattr(user, "role", "") == UserRole.SUPER_ADMIN:
+            # Exclude superadmin users from tenant HR & company administrators directory
+            return User.objects.filter(
+                role__in=[UserRole.HR, UserRole.SUB_ADMIN],
+                is_superuser=False
+            ).exclude(role=UserRole.SUPER_ADMIN).order_by("-date_joined")
+        if getattr(user, "role", "") == UserRole.HR:
+            from accounts.models import SubAdminPermission
+            subadmin_user_ids = list(SubAdminPermission.objects.filter(organization__owner=user).values_list("user_id", flat=True))
+            return User.objects.filter(id__in=[user.id, *subadmin_user_ids]).exclude(role=UserRole.SUPER_ADMIN).order_by("-date_joined")
+        return User.objects.filter(id=user.id).exclude(role=UserRole.SUPER_ADMIN)
 
 
 from .models import Plan

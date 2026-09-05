@@ -48,7 +48,7 @@ const leaveTotal = (summary: any, paymentType: "paid" | "unpaid") =>
   );
 
 const MySalaryClient = () => {
-  const { companyLogo, companyName } = useBranding();
+  const branding = useBranding();
   const [payrolls, setPayrolls] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
@@ -94,7 +94,7 @@ const MySalaryClient = () => {
 
   const handleDownloadPdf = async () => {
     if (!payslipData) return;
-    await downloadPayslipPdf(payslipData, { companyLogo, companyName });
+    await downloadPayslipPdf(payslipData, branding);
   };
 
   const annualSalary = payrolls[0]?.employee_details?.annual_salary || 0;

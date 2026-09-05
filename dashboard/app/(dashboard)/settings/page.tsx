@@ -32,9 +32,10 @@ import {
   IconEyeOff,
   IconCreditCard,
   IconInfoCircle,
-  IconSparkles,
+  IconArrowUpRight,
   IconExternalLink,
 } from "@tabler/icons-react";
+import DasherBreadcrumb from "components/common/DasherBreadcrumb";
 
 const apiRoot = (process.env.NEXT_PUBLIC_API_ENDPOINT || "").replace(/\/$/, "");
 
@@ -85,6 +86,11 @@ interface CompanySettings {
   companySize: string;
   registrationNumber: string;
   taxId: string;
+  companyBankName: string;
+  companyBankAccountNo: string;
+  companyBankIfsc: string;
+  companyBankBranch: string;
+  companyUpiId: string;
   timezone: string;
   currency: string;
   dateFormat: string;
@@ -111,11 +117,12 @@ interface OrganizationAccess {
 }
 
 const SettingsPage = () => {
-  const [activeTab, setActiveTab] = useState("attendance");
-  const { companyLogo, setCompanyLogo } = useBranding();
+  const [activeTab, setActiveTab] = useState("company");
+  const { companyLogo, setCompanyLogo, refreshBranding } = useBranding();
   const [logo, setLogo] = useState<{ file: File | null; preview: string | null }>({ file: null, preview: null });
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSyncingSimplyJob, setIsSyncingSimplyJob] = useState(false);
   const [isDetectingLocation, setIsDetectingLocation] = useState(false);
   const [myIpInfo, setMyIpInfo] = useState<{ client_ip: string; is_currently_allowed: boolean | null } | null>(null);
   const [isFetchingIp, setIsFetchingIp] = useState(false);
@@ -181,6 +188,71 @@ const SettingsPage = () => {
       alert("Failed to fetch your IP address. Please try again.");
     } finally {
       setIsFetchingIp(false);
+    }
+  };
+
+  // Sync / Extract Company Profile from SimplyJob
+  const handleSyncFromSimplyJob = async (silent = false) => {
+    setIsSyncingSimplyJob(true);
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_ENDPOINT;
+      const res = await fetch(`${API_URL}/api/v1/settings/sync-simplyjob/`, {
+        method: "POST",
+        headers: authHeaders(),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.data) {
+          const s = data.data;
+          setCompanySettings((prev) => ({
+            ...prev,
+            companyName: s.company_name || prev.companyName,
+            companyAddress: s.company_address || prev.companyAddress,
+            companyEmail: s.company_email || prev.companyEmail,
+            companyPhone: s.company_phone || prev.companyPhone,
+            companyWebsite: s.company_website || prev.companyWebsite,
+            industry: s.industry || prev.industry,
+            companySize: s.company_size || prev.companySize,
+            taxId: s.tax_id || prev.taxId,
+            registrationNumber: s.registration_number || prev.registrationNumber,
+            companyBankName: s.company_bank_name || prev.companyBankName,
+            companyBankAccountNo: s.company_bank_account_no || prev.companyBankAccountNo,
+            companyBankIfsc: s.company_bank_ifsc || prev.companyBankIfsc,
+            companyBankBranch: s.company_bank_branch || prev.companyBankBranch,
+            companyUpiId: s.company_upi_id || prev.companyUpiId,
+          }));
+        }
+        if (refreshBranding) {
+          await refreshBranding();
+        }
+        if (!silent) {
+          Swal.fire({
+            icon: "success",
+            title: "Synced from SimplyJob!",
+            text: data.message || "Company information extracted successfully.",
+            timer: 2500,
+            showConfirmButton: false,
+          });
+        }
+      } else {
+        if (!silent) {
+          Swal.fire({
+            icon: "info",
+            title: "SimplyJob Sync",
+            text: "No external SimplyJob profile data found to sync.",
+          });
+        }
+      }
+    } catch (err) {
+      if (!silent) {
+        Swal.fire({
+          icon: "error",
+          title: "Sync Failed",
+          text: "Could not connect to SimplyJob database.",
+        });
+      }
+    } finally {
+      setIsSyncingSimplyJob(false);
     }
   };
 
@@ -255,6 +327,11 @@ const SettingsPage = () => {
               companySize: data.company_size || "",
               registrationNumber: data.registration_number || "",
               taxId: data.tax_id || "",
+              companyBankName: data.company_bank_name || "",
+              companyBankAccountNo: data.company_bank_account_no || "",
+              companyBankIfsc: data.company_bank_ifsc || "",
+              companyBankBranch: data.company_bank_branch || "",
+              companyUpiId: data.company_upi_id || "",
               timezone: data.timezone,
               currency: data.currency,
               dateFormat: data.date_format,
@@ -390,6 +467,11 @@ const SettingsPage = () => {
     companySize: "",
     registrationNumber: "",
     taxId: "",
+    companyBankName: "",
+    companyBankAccountNo: "",
+    companyBankIfsc: "",
+    companyBankBranch: "",
+    companyUpiId: "",
     timezone: "Asia/Kolkata",
     currency: "INR",
     dateFormat: "DD/MM/YYYY",
@@ -707,6 +789,11 @@ const SettingsPage = () => {
         company_size: companySettings.companySize,
         registration_number: companySettings.registrationNumber,
         tax_id: companySettings.taxId,
+        company_bank_name: companySettings.companyBankName,
+        company_bank_account_no: companySettings.companyBankAccountNo,
+        company_bank_ifsc: companySettings.companyBankIfsc,
+        company_bank_branch: companySettings.companyBankBranch,
+        company_upi_id: companySettings.companyUpiId,
         timezone: companySettings.timezone,
         currency: companySettings.currency,
         date_format: companySettings.dateFormat,
@@ -730,6 +817,10 @@ const SettingsPage = () => {
         throw new Error("Failed to update settings");
       }
       
+      if (refreshBranding) {
+        await refreshBranding();
+      }
+
       Swal.fire({
         icon: 'success',
         title: 'Settings Saved!',
@@ -788,6 +879,7 @@ const SettingsPage = () => {
 
   return (
     <div className="settings-page">
+      <DasherBreadcrumb />
       <div className="mb-6">
         <h2 className="mb-0 fw-bold">System Settings</h2>
         <p className="text-secondary mb-0">Configure your organization's attendance rules, notifications, and company settings</p>
@@ -799,10 +891,392 @@ const SettingsPage = () => {
             <Card.Body className="p-0">
               <Tabs
                 activeKey={activeTab}
-                onSelect={(k) => setActiveTab(k || "attendance")}
+                onSelect={(k) => setActiveTab(k || "company")}
                 className="border-0 p-0"
               >
-                {/* Attendance Rules Tab */}
+                {/* 1. Company Profile & Identity Tab (FIRST TAB) */}
+                <Tab
+                  eventKey="company"
+                  title={
+                    <span className="d-flex align-items-center gap-2 py-2">
+                      <IconBuildingBank size={18} />
+                      Company Profile
+                    </span>
+                  }
+                >
+                  <div className="p-4 border-top">
+                    {/* SimplyJob Integration / Auto-Extract Banner */}
+                    <div className="p-3 mb-4 rounded-3 border bg-light d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
+                      <div>
+                        <div className="d-flex align-items-center gap-2 mb-1">
+                          <span className="badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-1">
+                            {organizationAccess?.is_simplyjob_linked ? "SimplyJob Connected" : "SimplyJob Ecosystem"}
+                          </span>
+                          <span className="fw-semibold text-dark">SimplyJob Company Sync</span>
+                        </div>
+                        <p className="text-muted small mb-0">
+                          {organizationAccess?.is_simplyjob_linked
+                            ? `Connected to SimplyJob Workspace (${organizationAccess.name || "Company"}). Automatically sync legal name, GSTIN, and company contact.`
+                            : "Auto-extract company legal name, GSTIN, registered address, and official contact directly from SimplyJob."}
+                        </p>
+                      </div>
+                      <div className="d-flex gap-2 align-items-center flex-shrink-0">
+                        <Button
+                          variant="outline-primary"
+                          size="sm"
+                          className="d-flex align-items-center gap-2"
+                          onClick={() => handleSyncFromSimplyJob(false)}
+                          disabled={isSyncingSimplyJob}
+                        >
+                          {isSyncingSimplyJob ? (
+                            <>
+                              <Spinner size="sm" animation="border" />
+                              <span>Extracting...</span>
+                            </>
+                          ) : (
+                            <>
+                              <IconRefresh size={16} />
+                              <span>Extract from SimplyJob</span>
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+
+                    <Row className="g-4">
+                      {/* Left Column: Brand Identity & Legal Profile */}
+                      <Col lg={7}>
+                        <Card className="border shadow-sm h-100">
+                          <Card.Header className="bg-transparent py-3">
+                            <h5 className="fw-bold mb-0 text-dark">Brand Identity & Legal Profile</h5>
+                            <small className="text-muted">Primary company information used across payslips, documents, and notifications.</small>
+                          </Card.Header>
+                          <Card.Body>
+                            <Row className="g-3">
+                              {/* Logo Upload */}
+                              <Col md={12}>
+                                <Form.Group>
+                                  <Form.Label className="fw-semibold">Company Logo</Form.Label>
+                                  <div className="d-flex align-items-center gap-3 p-3 rounded-2 border bg-light-subtle">
+                                    {(logo.preview || companyLogo) ? (
+                                      <img
+                                        src={(logo.preview || companyLogo) ?? undefined}
+                                        alt="Company Logo"
+                                        style={{ width: "56px", height: "56px", objectFit: "contain", borderRadius: "6px", border: "1px solid #dee2e6", background: "#fff" }}
+                                      />
+                                    ) : (
+                                      <div
+                                        style={{ width: "56px", height: "56px", borderRadius: "6px", background: "#0f172a", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "bold", fontSize: "20px" }}
+                                      >
+                                        {(companySettings.companyName || "A").slice(0, 1)}
+                                      </div>
+                                    )}
+                                    <div className="flex-grow-1">
+                                      <Form.Control type="file" accept="image/*" size="sm" onChange={handleLogoChange} />
+                                      <Form.Text className="text-muted">Recommended: Square PNG, JPG, or SVG (Max 2MB)</Form.Text>
+                                    </div>
+                                    <Button variant="primary" size="sm" onClick={handleSaveLogo} disabled={!logo.file}>
+                                      Save Logo
+                                    </Button>
+                                  </div>
+                                </Form.Group>
+                              </Col>
+
+                              {/* Legal Name */}
+                              <Col md={12}>
+                                <Form.Group>
+                                  <Form.Label className="fw-semibold">Legal Company Name <span className="text-danger">*</span></Form.Label>
+                                  <Form.Control
+                                    type="text"
+                                    placeholder="e.g. Bhatt Square Pvt. Ltd."
+                                    value={companySettings.companyName}
+                                    onChange={(e) => setCompanySettings({ ...companySettings, companyName: e.target.value })}
+                                  />
+                                </Form.Group>
+                              </Col>
+
+                              {/* Registered Address */}
+                              <Col md={12}>
+                                <Form.Group>
+                                  <Form.Label className="fw-semibold">Registered Office Address <span className="text-danger">*</span></Form.Label>
+                                  <Form.Control
+                                    as="textarea"
+                                    rows={2}
+                                    placeholder="e.g. Bhatt Square, 1/4 Vishesh Khand, Gomti Nagar, Lucknow, UP 226010"
+                                    value={companySettings.companyAddress}
+                                    onChange={(e) => setCompanySettings({ ...companySettings, companyAddress: e.target.value })}
+                                  />
+                                  <Form.Text className="text-muted">This address appears on payslips, employment letters, and statutory documents.</Form.Text>
+                                </Form.Group>
+                              </Col>
+
+                              {/* Official Email */}
+                              <Col md={6}>
+                                <Form.Group>
+                                  <Form.Label className="fw-semibold">Official HR / Admin Email</Form.Label>
+                                  <Form.Control
+                                    type="email"
+                                    placeholder="admin@company.com"
+                                    value={companySettings.companyEmail}
+                                    onChange={(e) => setCompanySettings({ ...companySettings, companyEmail: e.target.value })}
+                                  />
+                                </Form.Group>
+                              </Col>
+
+                              {/* Phone */}
+                              <Col md={6}>
+                                <Form.Group>
+                                  <Form.Label className="fw-semibold">Official Phone Number</Form.Label>
+                                  <Form.Control
+                                    type="tel"
+                                    placeholder="+91 92059 83996"
+                                    value={companySettings.companyPhone}
+                                    onChange={(e) => setCompanySettings({ ...companySettings, companyPhone: e.target.value })}
+                                  />
+                                </Form.Group>
+                              </Col>
+
+                              {/* Website */}
+                              <Col md={12}>
+                                <Form.Group>
+                                  <Form.Label className="fw-semibold">Company Website</Form.Label>
+                                  <Form.Control
+                                    type="url"
+                                    placeholder="https://bhattsquare.com"
+                                    value={companySettings.companyWebsite}
+                                    onChange={(e) => setCompanySettings({ ...companySettings, companyWebsite: e.target.value })}
+                                  />
+                                </Form.Group>
+                              </Col>
+                            </Row>
+                          </Card.Body>
+                        </Card>
+                      </Col>
+
+                      {/* Right Column: Statutory & Corporate Identifiers */}
+                      <Col lg={5}>
+                        <Card className="border shadow-sm mb-4">
+                          <Card.Header className="bg-transparent py-3">
+                            <h5 className="fw-bold mb-0 text-dark">Statutory & Corporate Identifiers</h5>
+                            <small className="text-muted">Required for tax compliance, GST invoicing, and formal payslips.</small>
+                          </Card.Header>
+                          <Card.Body>
+                            <Row className="g-3">
+                              <Col md={12}>
+                                <Form.Group>
+                                  <Form.Label className="fw-semibold">GSTIN / Tax ID</Form.Label>
+                                  <Form.Control
+                                    type="text"
+                                    placeholder="e.g. 09AALCB7260P1ZX"
+                                    value={companySettings.taxId}
+                                    onChange={(e) => setCompanySettings({ ...companySettings, taxId: e.target.value.toUpperCase() })}
+                                  />
+                                  <Form.Text className="text-muted">Printed on salary vouchers and statutory payroll exports.</Form.Text>
+                                </Form.Group>
+                              </Col>
+
+                              <Col md={12}>
+                                <Form.Group>
+                                  <Form.Label className="fw-semibold">Company CIN / Registration No.</Form.Label>
+                                  <Form.Control
+                                    type="text"
+                                    placeholder="e.g. U72900MH2023PTC123456"
+                                    value={companySettings.registrationNumber}
+                                    onChange={(e) => setCompanySettings({ ...companySettings, registrationNumber: e.target.value })}
+                                  />
+                                </Form.Group>
+                              </Col>
+
+                              <Col md={6}>
+                                <Form.Group>
+                                  <Form.Label className="fw-semibold">Industry</Form.Label>
+                                  <Form.Select
+                                    value={companySettings.industry}
+                                    onChange={(e) => setCompanySettings({ ...companySettings, industry: e.target.value })}
+                                  >
+                                    <option value="">Select industry</option>
+                                    <option value="Technology">Technology & Software</option>
+                                    <option value="Professional Services">Professional Services</option>
+                                    <option value="Manufacturing">Manufacturing</option>
+                                    <option value="Retail & Commerce">Retail & Commerce</option>
+                                    <option value="Healthcare">Healthcare</option>
+                                    <option value="Education">Education</option>
+                                    <option value="Construction & Real Estate">Real Estate</option>
+                                    <option value="Other">Other</option>
+                                  </Form.Select>
+                                </Form.Group>
+                              </Col>
+
+                              <Col md={6}>
+                                <Form.Group>
+                                  <Form.Label className="fw-semibold">Company Size</Form.Label>
+                                  <Form.Select
+                                    value={companySettings.companySize}
+                                    onChange={(e) => setCompanySettings({ ...companySettings, companySize: e.target.value })}
+                                  >
+                                    <option value="">Select size</option>
+                                    <option value="1-10">1–10 employees</option>
+                                    <option value="11-50">11–50 employees</option>
+                                    <option value="51-200">51–200 employees</option>
+                                    <option value="201-500">201–500 employees</option>
+                                    <option value="501+">501+ employees</option>
+                                  </Form.Select>
+                                </Form.Group>
+                              </Col>
+                            </Row>
+                          </Card.Body>
+                        </Card>
+
+                        {/* Localization Settings */}
+                        <Card className="border shadow-sm">
+                          <Card.Header className="bg-transparent py-3">
+                            <h5 className="fw-bold mb-0 text-dark">Localization & Currency</h5>
+                          </Card.Header>
+                          <Card.Body>
+                            <Row className="g-3">
+                              <Col md={6}>
+                                <Form.Group>
+                                  <Form.Label className="fw-semibold">Timezone</Form.Label>
+                                  <Form.Select
+                                    value={companySettings.timezone}
+                                    onChange={(e) => setCompanySettings({ ...companySettings, timezone: e.target.value })}
+                                  >
+                                    <option value="Asia/Kolkata">Asia/Kolkata (IST)</option>
+                                    <option value="America/New_York">America/New_York (EST)</option>
+                                    <option value="Europe/London">Europe/London (GMT)</option>
+                                    <option value="Asia/Dubai">Asia/Dubai (GST)</option>
+                                  </Form.Select>
+                                </Form.Group>
+                              </Col>
+
+                              <Col md={6}>
+                                <Form.Group>
+                                  <Form.Label className="fw-semibold">Currency</Form.Label>
+                                  <Form.Select
+                                    value={companySettings.currency}
+                                    onChange={(e) => setCompanySettings({ ...companySettings, currency: e.target.value })}
+                                  >
+                                    <option value="INR">Indian Rupee (₹)</option>
+                                    <option value="USD">US Dollar ($)</option>
+                                    <option value="EUR">Euro (€)</option>
+                                    <option value="GBP">British Pound (£)</option>
+                                    <option value="AED">UAE Dirham (AED)</option>
+                                  </Form.Select>
+                                </Form.Group>
+                              </Col>
+                            </Row>
+                          </Card.Body>
+                        </Card>
+                      </Col>
+
+                      {/* Full-Width Row: Company Banking & Statutory Account Details */}
+                      <Col md={12}>
+                        <Card className="border shadow-sm">
+                          <Card.Header className="bg-transparent py-3">
+                            <h5 className="fw-bold mb-0 text-dark">Company Bank & Statutory Account Details</h5>
+                            <small className="text-muted">Primary corporate bank account credentials for salary disbursement records, vendor payments, and billing.</small>
+                          </Card.Header>
+                          <Card.Body>
+                            <Row className="g-3">
+                              <Col md={4}>
+                                <Form.Group>
+                                  <Form.Label className="fw-semibold">Company Bank Name</Form.Label>
+                                  <Form.Control
+                                    type="text"
+                                    placeholder="e.g. HDFC Bank, ICICI Bank, State Bank of India"
+                                    value={companySettings.companyBankName}
+                                    onChange={(e) => setCompanySettings({ ...companySettings, companyBankName: e.target.value })}
+                                  />
+                                </Form.Group>
+                              </Col>
+
+                              <Col md={4}>
+                                <Form.Group>
+                                  <Form.Label className="fw-semibold">Bank Account Number</Form.Label>
+                                  <Form.Control
+                                    type="text"
+                                    placeholder="e.g. 50200012345678"
+                                    value={companySettings.companyBankAccountNo}
+                                    onChange={(e) => setCompanySettings({ ...companySettings, companyBankAccountNo: e.target.value })}
+                                  />
+                                </Form.Group>
+                              </Col>
+
+                              <Col md={4}>
+                                <Form.Group>
+                                  <Form.Label className="fw-semibold">IFSC Code</Form.Label>
+                                  <Form.Control
+                                    type="text"
+                                    placeholder="e.g. HDFC0001234"
+                                    value={companySettings.companyBankIfsc}
+                                    onChange={(e) => setCompanySettings({ ...companySettings, companyBankIfsc: e.target.value.toUpperCase() })}
+                                  />
+                                </Form.Group>
+                              </Col>
+
+                              <Col md={6}>
+                                <Form.Group>
+                                  <Form.Label className="fw-semibold">Bank Branch Name</Form.Label>
+                                  <Form.Control
+                                    type="text"
+                                    placeholder="e.g. Gomti Nagar Branch, Lucknow"
+                                    value={companySettings.companyBankBranch}
+                                    onChange={(e) => setCompanySettings({ ...companySettings, companyBankBranch: e.target.value })}
+                                  />
+                                </Form.Group>
+                              </Col>
+
+                              <Col md={6}>
+                                <Form.Group>
+                                  <Form.Label className="fw-semibold">Company UPI ID / VPA</Form.Label>
+                                  <Form.Control
+                                    type="text"
+                                    placeholder="e.g. bhattsquare@okhdfcbank"
+                                    value={companySettings.companyUpiId}
+                                    onChange={(e) => setCompanySettings({ ...companySettings, companyUpiId: e.target.value.toLowerCase() })}
+                                  />
+                                </Form.Group>
+                              </Col>
+                            </Row>
+                          </Card.Body>
+                        </Card>
+                      </Col>
+
+                      {/* Full-Width Row: Working Days */}
+                      <Col md={12}>
+                        <Card className="border shadow-sm">
+                          <Card.Header className="bg-transparent py-3">
+                            <h5 className="fw-bold mb-0 text-dark">Company Working Days</h5>
+                            <small className="text-muted">Select active business days for attendance processing and payroll calculation.</small>
+                          </Card.Header>
+                          <Card.Body>
+                            <div className="d-flex flex-wrap gap-2">
+                              {workingDaysOptions.map((day) => {
+                                const isSelected = companySettings.workingDays.includes(day.value);
+                                return (
+                                  <Badge
+                                    key={day.value}
+                                    bg={isSelected ? "primary" : "secondary"}
+                                    className="p-2 cursor-pointer fs-6"
+                                    style={{ cursor: "pointer", userSelect: "none" }}
+                                    onClick={() => handleWorkingDayToggle(day.value)}
+                                  >
+                                    {isSelected ? "✓ " : ""}{day.label}
+                                  </Badge>
+                                );
+                              })}
+                            </div>
+                            <Form.Text className="text-muted mt-2 d-block">
+                              Click any day to toggle on/off. Blue badges represent active company working days.
+                            </Form.Text>
+                          </Card.Body>
+                        </Card>
+                      </Col>
+                    </Row>
+                  </div>
+                </Tab>
+
+                {/* 2. Attendance Rules Tab */}
                 <Tab
                   eventKey="attendance"
                   title={
@@ -1505,208 +1979,6 @@ const SettingsPage = () => {
                   </div>
                 </Tab>
 
-                {/* Company Settings Tab */}
-                <Tab
-                  eventKey="company"
-                  title={
-                    <span className="d-flex align-items-center gap-2 py-2">
-                      <IconBuildingBank size={18} />
-                      Company
-                    </span>
-                  }
-                >
-                  <div className="p-4 border-top">
-                    <h4 className="fw-bold mb-4">Company Information</h4>
-                    <Row>
-                      <Col md={8}>
-                        <Card className="border bg-light-subtle">
-                          <Card.Body>
-                            <Row className="g-3">
-                              <Col md={12}>
-                                <Form.Group>
-                                  <Form.Label>Company Logo</Form.Label>
-                                  <div className="d-flex align-items-center">
-                                    {(logo.preview || companyLogo) && <img src={(logo.preview || companyLogo) ?? undefined} alt="logo" className="avatar avatar-lg me-3" />}                                    <Form.Control type="file" onChange={handleLogoChange} />
-                                    <Button variant="primary" onClick={handleSaveLogo} className="ms-2" disabled={!logo.file}>Save Logo</Button>
-                                  </div>
-                                </Form.Group>
-                              </Col>
-                              <Col md={12}>
-                                <Form.Group>
-                                  <Form.Label>Company Name</Form.Label>
-                                  <Form.Control
-                                    type="text"
-                                    value={companySettings.companyName}
-                                    onChange={(e) =>
-                                      setCompanySettings({ ...companySettings, companyName: e.target.value })
-                                    }
-                                  />
-                                </Form.Group>
-                              </Col>
-                              <Col md={12}>
-                                <Form.Group>
-                                  <Form.Label>Company Address</Form.Label>
-                                  <Form.Control
-                                    as="textarea"
-                                    rows={2}
-                                    value={companySettings.companyAddress}
-                                    onChange={(e) =>
-                                      setCompanySettings({ ...companySettings, companyAddress: e.target.value })
-                                    }
-                                  />
-                                </Form.Group>
-                              </Col>
-                              <Col md={6}>
-                                <Form.Group>
-                                  <Form.Label>Company Email</Form.Label>
-                                  <Form.Control
-                                    type="email"
-                                    value={companySettings.companyEmail}
-                                    onChange={(e) =>
-                                      setCompanySettings({ ...companySettings, companyEmail: e.target.value })
-                                    }
-                                  />
-                                </Form.Group>
-                              </Col>
-                              <Col md={6}>
-                                <Form.Group>
-                                  <Form.Label>Company Phone</Form.Label>
-                                  <Form.Control
-                                    type="tel"
-                                    value={companySettings.companyPhone}
-                                    onChange={(e) =>
-                                      setCompanySettings({ ...companySettings, companyPhone: e.target.value })
-                                    }
-                                  />
-                                </Form.Group>
-                              </Col>
-                              <Col md={12}>
-                                <hr className="my-2" />
-                                <h5 className="h6 fw-semibold mb-1">Business profile</h5>
-                                <Form.Text className="text-secondary">These details help identify your company in employee-facing records and documents.</Form.Text>
-                              </Col>
-                              <Col md={6}>
-                                <Form.Group>
-                                  <Form.Label>Company Website <span className="text-secondary fw-normal">(optional)</span></Form.Label>
-                                  <Form.Control
-                                    type="url"
-                                    placeholder="https://example.com"
-                                    value={companySettings.companyWebsite}
-                                    onChange={(e) => setCompanySettings({ ...companySettings, companyWebsite: e.target.value })}
-                                  />
-                                </Form.Group>
-                              </Col>
-                              <Col md={6}>
-                                <Form.Group>
-                                  <Form.Label>Industry <span className="text-secondary fw-normal">(optional)</span></Form.Label>
-                                  <Form.Select value={companySettings.industry} onChange={(e) => setCompanySettings({ ...companySettings, industry: e.target.value })}>
-                                    <option value="">Select industry</option>
-                                    <option value="Technology">Technology</option>
-                                    <option value="Professional Services">Professional Services</option>
-                                    <option value="Manufacturing">Manufacturing</option>
-                                    <option value="Retail & Commerce">Retail & Commerce</option>
-                                    <option value="Healthcare">Healthcare</option>
-                                    <option value="Education">Education</option>
-                                    <option value="Construction & Real Estate">Construction & Real Estate</option>
-                                    <option value="Other">Other</option>
-                                  </Form.Select>
-                                </Form.Group>
-                              </Col>
-                              <Col md={4}>
-                                <Form.Group>
-                                  <Form.Label>Company Size <span className="text-secondary fw-normal">(optional)</span></Form.Label>
-                                  <Form.Select value={companySettings.companySize} onChange={(e) => setCompanySettings({ ...companySettings, companySize: e.target.value })}>
-                                    <option value="">Select size</option>
-                                    <option value="1-10">1–10 employees</option>
-                                    <option value="11-50">11–50 employees</option>
-                                    <option value="51-200">51–200 employees</option>
-                                    <option value="201-500">201–500 employees</option>
-                                    <option value="501+">501+ employees</option>
-                                  </Form.Select>
-                                </Form.Group>
-                              </Col>
-                              <Col md={4}>
-                                <Form.Group>
-                                  <Form.Label>Registration Number <span className="text-secondary fw-normal">(optional)</span></Form.Label>
-                                  <Form.Control value={companySettings.registrationNumber} onChange={(e) => setCompanySettings({ ...companySettings, registrationNumber: e.target.value })} />
-                                </Form.Group>
-                              </Col>
-                              <Col md={4}>
-                                <Form.Group>
-                                  <Form.Label>Tax ID / GSTIN <span className="text-secondary fw-normal">(optional)</span></Form.Label>
-                                  <Form.Control value={companySettings.taxId} onChange={(e) => setCompanySettings({ ...companySettings, taxId: e.target.value.toUpperCase() })} />
-                                </Form.Group>
-                              </Col>
-                              <Col md={4}>
-                                <Form.Group>
-                                  <Form.Label>Timezone</Form.Label>
-                                  <Form.Select
-                                    value={companySettings.timezone}
-                                    onChange={(e) =>
-                                      setCompanySettings({ ...companySettings, timezone: e.target.value })
-                                    }
-                                  >
-                                    <option value="Asia/Kolkata">Asia/Kolkata (IST)</option>
-                                    <option value="America/New_York">America/New_York (EST)</option>
-                                  </Form.Select>
-                                </Form.Group>
-                              </Col>
-                              <Col md={4}>
-                                <Form.Group>
-                                  <Form.Label>Currency</Form.Label>
-                                  <Form.Select
-                                    value={companySettings.currency}
-                                    onChange={(e) =>
-                                      setCompanySettings({ ...companySettings, currency: e.target.value })
-                                    }
-                                  >
-                                    <option value="INR">Indian Rupee (₹)</option>
-                                    <option value="USD">US Dollar ($)</option>
-                                  </Form.Select>
-                                </Form.Group>
-                              </Col>
-                              <Col md={4}>
-                                <Form.Group>
-                                  <Form.Label>Date Format</Form.Label>
-                                  <Form.Select
-                                    value={companySettings.dateFormat}
-                                    onChange={(e) =>
-                                      setCompanySettings({ ...companySettings, dateFormat: e.target.value })
-                                    }
-                                  >
-                                    <option value="DD/MM/YYYY">DD/MM/YYYY</option>
-                                    <option value="MM/DD/YYYY">MM/DD/YYYY</option>
-                                  </Form.Select>
-                                </Form.Group>
-                              </Col>
-                            </Row>
-
-                            <hr className="my-4" />
-
-                            <h5 className="fw-semibold mb-3">Working Days</h5>
-                            <div className="d-flex flex-wrap gap-2">
-                              {workingDaysOptions.map((day) => (
-                                <Badge
-                                  key={day.value}
-                                  bg={companySettings.workingDays.includes(day.value) ? "primary" : "secondary"}
-                                  className="p-2 cursor-pointer"
-                                  style={{ cursor: "pointer" }}
-                                  onClick={() => handleWorkingDayToggle(day.value)}
-                                >
-                                  {day.label}
-                                </Badge>
-                              ))}
-                            </div>
-                            <Form.Text className="text-muted mt-2 d-block">
-                              Click to toggle working days. Selected days are highlighted.
-                            </Form.Text>
-                          </Card.Body>
-                        </Card>
-                      </Col>
-                    </Row>
-                  </div>
-                </Tab>
-
                 {/* Security Tab */}
                 <Tab
                   eventKey="security"
@@ -2138,7 +2410,7 @@ const SettingsPage = () => {
                                   size="sm"
                                   className="fw-bold flex-grow-1 text-decoration-none d-inline-flex align-items-center justify-content-center"
                                 >
-                                  <IconSparkles size={16} className="me-1" />
+                                  <IconArrowUpRight size={16} className="me-1" />
                                   {organizationAccess?.is_plan_expired ? "Reactivate Subscription" : "Renew / Upgrade Plan"}
                                 </Button>
                                 {organizationAccess?.plan_source === "SIMPLYJOB" && (

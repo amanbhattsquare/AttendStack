@@ -6,6 +6,7 @@ from employees.models import Employee
 class EmployeeMiniSerializer(serializers.ModelSerializer):
     profile_photo_url = serializers.SerializerMethodField()
     status_display = serializers.CharField(source="get_status_display", read_only=True)
+    employment_type_display = serializers.CharField(source="get_employment_type_display", read_only=True)
 
     class Meta:
         model = Employee
@@ -18,6 +19,18 @@ class EmployeeMiniSerializer(serializers.ModelSerializer):
             "designation",
             "status",
             "status_display",
+            "employment_type",
+            "employment_type_display",
+            "joining_date",
+            "bank_name",
+            "bank_account_number",
+            "ifsc_code",
+            "aadhaar_number",
+            "pan_number",
+            "pf_number",
+            "uan_number",
+            "esic_number",
+            "tax_id",
             "annual_salary",
             "profile_photo_url",
         ]
@@ -40,6 +53,8 @@ class PayrollSerializer(serializers.ModelSerializer):
     month_name = serializers.SerializerMethodField()
     payable_salary = serializers.SerializerMethodField()
     attendance_summary = serializers.SerializerMethodField()
+    company_details = serializers.SerializerMethodField()
+    modified_by_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Payroll
@@ -47,6 +62,7 @@ class PayrollSerializer(serializers.ModelSerializer):
             "id",
             "employee_id",
             "employee_details",
+            "company_details",
             "month",
             "year",
             "month_name",
@@ -59,9 +75,137 @@ class PayrollSerializer(serializers.ModelSerializer):
             "attendance_summary",
             "status",
             "paid_on",
+            "modification_reason",
+            "modified_by",
+            "modified_by_name",
+            "is_modified_after_payment",
+            "modification_history",
             "created_at",
             "updated_at"
         ]
+        read_only_fields = [
+            "id",
+            "net_salary",
+            "paid_on",
+            "modified_by",
+            "modified_by_name",
+            "is_modified_after_payment",
+            "modification_history",
+            "created_at",
+            "updated_at"
+        ]
+
+    def get_modified_by_name(self, obj):
+        if obj.modified_by:
+            return obj.modified_by.get_full_name() or obj.modified_by.username or obj.modified_by.email
+        return None
+
+    def validate(self, attrs):
+        instance = getattr(self, "instance", None)
+        if instance and instance.status == "PAID":
+            # Check if any financial amount or status is being altered
+            from decimal import Decimal
+            new_basic = attrs.get("basic_salary", instance.basic_salary)
+            new_allowances = attrs.get("allowances", instance.allowances)
+            new_deductions = attrs.get("deductions", instance.deductions)
+            new_status = attrs.get("status", instance.status)
+
+            has_changed = (
+                Decimal(str(new_basic)) != Decimal(str(instance.basic_salary)) or
+                Decimal(str(new_allowances)) != Decimal(str(instance.allowances)) or
+                Decimal(str(new_deductions)) != Decimal(str(instance.deductions)) or
+                new_status != instance.status
+            )
+
+            if has_changed:
+                reason = (attrs.get("modification_reason") or self.initial_data.get("modification_reason", "")).strip()
+                if not reason or len(reason) < 5:
+                    raise serializers.ValidationError({
+                        "modification_reason": "This salary has already been disbursed as PAID. Altering paid payroll figures requires a mandatory audit remark (minimum 5 characters)."
+                    })
+                attrs["modification_reason"] = reason
+
+        return attrs
+
+    def update(self, instance, validated_data):
+        from decimal import Decimal
+        from django.utils import timezone
+
+        if instance.status == "PAID":
+            new_basic = validated_data.get("basic_salary", instance.basic_salary)
+            new_allowances = validated_data.get("allowances", instance.allowances)
+            new_deductions = validated_data.get("deductions", instance.deductions)
+            new_status = validated_data.get("status", instance.status)
+
+            has_changed = (
+                Decimal(str(new_basic)) != Decimal(str(instance.basic_salary)) or
+                Decimal(str(new_allowances)) != Decimal(str(instance.allowances)) or
+                Decimal(str(new_deductions)) != Decimal(str(instance.deductions)) or
+                new_status != instance.status
+            )
+
+            if has_changed:
+                request = self.context.get("request")
+                user = request.user if request and getattr(request.user, "is_authenticated", False) else None
+                user_id_str = str(user.id) if user and getattr(user, "id", None) else None
+                user_name_str = (user.get_full_name() or user.username or "Administrator") if user else "System Administrator"
+                user_email_str = str(user.email) if user and getattr(user, "email", None) else ""
+                reason = validated_data.get("modification_reason") or instance.modification_reason
+
+                history_entry = {
+                    "modified_at": timezone.now().isoformat(),
+                    "modified_by_id": user_id_str,
+                    "modified_by_name": user_name_str,
+                    "modified_by_email": user_email_str,
+                    "reason": str(reason),
+                    "old_values": {
+                        "basic_salary": str(instance.basic_salary),
+                        "allowances": str(instance.allowances),
+                        "deductions": str(instance.deductions),
+                        "net_salary": str(instance.net_salary),
+                        "status": str(instance.status),
+                    },
+                    "new_values": {
+                        "basic_salary": str(new_basic),
+                        "allowances": str(new_allowances),
+                        "deductions": str(new_deductions),
+                        "status": str(new_status),
+                    }
+                }
+                history = list(instance.modification_history or [])
+                history.insert(0, history_entry)
+                instance.modification_history = history
+                instance.is_modified_after_payment = True
+                instance.modified_by = user
+                instance.modification_reason = reason
+
+        return super().update(instance, validated_data)
+
+    def get_company_details(self, obj):
+        try:
+            settings = SystemSettings.get_settings()
+            logo_url = None
+            if settings.company_logo:
+                request = self.context.get("request")
+                logo_url = request.build_absolute_uri(settings.company_logo.url) if request else settings.company_logo.url
+            return {
+                "company_name": settings.company_name or "AttendStack",
+                "company_address": settings.company_address or "",
+                "company_email": settings.company_email or "",
+                "company_phone": settings.company_phone or "",
+                "company_website": settings.company_website or "",
+                "registration_number": settings.registration_number or "",
+                "tax_id": settings.tax_id or "",
+                "company_bank_name": settings.company_bank_name or "",
+                "company_bank_account_no": settings.company_bank_account_no or "",
+                "company_bank_ifsc": settings.company_bank_ifsc or "",
+                "company_bank_branch": settings.company_bank_branch or "",
+                "company_upi_id": settings.company_upi_id or "",
+                "company_logo": logo_url,
+                "currency": settings.currency or "INR",
+            }
+        except Exception:
+            return {}
 
     def get_month_name(self, obj):
         import calendar

@@ -28,8 +28,10 @@ import {
   IconAlertTriangle,
   IconKey,
   IconDotsVertical,
+  IconCopy,
 } from "@tabler/icons-react";
 import apiClient from "app/services/api";
+import DasherBreadcrumb from "components/common/DasherBreadcrumb";
 
 interface ActionToggleProps {
   children?: React.ReactNode;
@@ -59,6 +61,7 @@ type Administrator = {
   full_name: string;
   email: string;
   role?: string;
+  custom_role_title?: string;
   organization_name?: string;
   is_active?: boolean;
   date_joined?: string;
@@ -81,12 +84,16 @@ export default function SuperAdminAdminsPage() {
   // Modals
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createdTempPassword, setCreatedTempPassword] = useState<string | null>(null);
+  const [selectedAdminForView, setSelectedAdminForView] = useState<Administrator | null>(null);
+  const [copiedId, setCopiedId] = useState(false);
+  const [copiedEmail, setCopiedEmail] = useState(false);
 
   // Create form
   const [createForm, setCreateForm] = useState({
     email: "",
     first_name: "",
     last_name: "",
+    organization_id: "",
   });
   const [submitting, setSubmitting] = useState(false);
 
@@ -113,10 +120,14 @@ export default function SuperAdminAdminsPage() {
 
   const filteredAdmins = useMemo(() => {
     return administrators.filter((admin) => {
+      // Exclude superadmin users from directory
+      if (admin.role === "SUPER_ADMIN" || admin.role === "Super Admin") return false;
+
       const matchesSearch =
-        admin.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        admin.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (admin.organization_name && admin.organization_name.toLowerCase().includes(searchQuery.toLowerCase()));
+        admin.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        admin.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (admin.organization_name && admin.organization_name.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (admin.custom_role_title && admin.custom_role_title.toLowerCase().includes(searchQuery.toLowerCase()));
 
       const matchesOrg =
         selectedOrgFilter === "ALL" ||
@@ -139,6 +150,7 @@ export default function SuperAdminAdminsPage() {
         email: createForm.email.trim(),
         first_name: createForm.first_name.trim() || undefined,
         last_name: createForm.last_name.trim() || undefined,
+        organization_id: createForm.organization_id ? Number(createForm.organization_id) : undefined,
       });
 
       setCreatedTempPassword(response.data.temp_password);
@@ -152,29 +164,46 @@ export default function SuperAdminAdminsPage() {
   };
 
   return (
-    <Container fluid className="py-4 super-admin-admins-page">
-      <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
-        <div>
-          <div className="d-flex align-items-center gap-2 mb-1">
-            <Badge bg="warning" text="dark" className="font-monospace px-3 py-1 rounded-pill">
-              SUPER ADMIN PANEL
-            </Badge>
-            <span className="text-secondary small">Access & Identity Management</span>
+    <Container fluid className="py-3 px-lg-4 super-admin-admins-page">
+      {/* Breadcrumb */}
+      <DasherBreadcrumb
+        items={[
+          { label: "Super Admin", href: "/super-admin/dashboard" },
+          { label: "Administrators Directory" },
+        ]}
+      />
+
+      {/* Modern SaaS Header */}
+      <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4 pb-3 border-bottom">
+        <div className="d-flex align-items-start gap-3">
+          <div className="p-2.5 rounded-3 bg-warning-subtle text-warning d-flex align-items-center justify-content-center shadow-xs flex-shrink-0" style={{ width: 44, height: 44 }}>
+            <IconShieldCheck size={24} />
           </div>
-          <h2 className="h3 mb-1 fw-bold text-dark d-flex align-items-center gap-2">
-            <IconShieldCheck className="text-warning" size={32} />
-            Administrators & HR Managers Directory
-          </h2>
-          <p className="text-secondary mb-0">Onboard new tenant HR managers, assign company permissions, and manage platform administrator access.</p>
+          <div>
+            <div className="d-flex align-items-center gap-2 mb-1 flex-wrap">
+              <h2 className="h4 mb-0 fw-bold text-dark">Administrators &amp; HR Managers</h2>
+              <Badge bg="warning-subtle" text="dark" className="px-2.5 py-1 rounded-pill fw-semibold border border-warning-subtle" style={{ fontSize: "11px", letterSpacing: "0.02em" }}>
+                Platform Control
+              </Badge>
+            </div>
+            <p className="text-secondary mb-0 small">
+              Onboard new tenant HR managers, assign company workspaces, and manage platform administrator access.
+            </p>
+          </div>
         </div>
-        <div className="d-flex align-items-center gap-2">
-          <Button variant="outline-secondary" onClick={fetchData} disabled={loading} className="d-flex align-items-center gap-1.5 shadow-sm">
-            <IconRefresh size={18} className={loading ? "spin" : ""} />
-            Refresh
+        <div className="d-flex align-items-center gap-2 flex-shrink-0">
+          <Button variant="outline-secondary" size="sm" onClick={fetchData} disabled={loading} className="d-inline-flex align-items-center gap-1.5 px-3 py-2 fw-medium shadow-xs">
+            <IconRefresh size={16} className={loading ? "spin" : ""} />
+            <span>Refresh</span>
           </Button>
-          <Button variant="warning" onClick={() => { setShowCreateModal(true); setCreatedTempPassword(null); }} className="d-flex align-items-center gap-1.5 shadow-sm px-3 fw-bold text-dark">
-            <IconPlus size={18} />
-            Onboard HR Manager
+          <Button
+            variant="warning"
+            size="sm"
+            onClick={() => { setShowCreateModal(true); setCreatedTempPassword(null); }}
+            className="d-inline-flex align-items-center gap-1.5 px-3.5 py-2 fw-semibold shadow-sm text-dark text-nowrap"
+          >
+            <IconPlus size={16} />
+            <span>Onboard HR Manager</span>
           </Button>
         </div>
       </div>
@@ -281,8 +310,22 @@ export default function SuperAdminAdminsPage() {
                       </span>
                     </td>
                     <td>
-                      <Badge bg="warning" text="dark" className="px-2.5 py-1 font-monospace">
-                        HR Administrator
+                      <Badge
+                        bg={
+                          admin.role === "SUPER_ADMIN"
+                            ? "dark"
+                            : admin.role === "SUB_ADMIN"
+                            ? "primary"
+                            : "warning"
+                        }
+                        text={
+                          admin.role === "SUPER_ADMIN" || admin.role === "SUB_ADMIN"
+                            ? "white"
+                            : "dark"
+                        }
+                        className="px-2.5 py-1 font-monospace"
+                      >
+                        {admin.custom_role_title || (admin.role === "SUPER_ADMIN" ? "Super Admin" : "Company Admin (HR)")}
                       </Badge>
                     </td>
                     <td>
@@ -296,7 +339,7 @@ export default function SuperAdminAdminsPage() {
                           <IconDotsVertical size={16} />
                         </Dropdown.Toggle>
                         <Dropdown.Menu className="shadow border-0">
-                          <Dropdown.Item onClick={() => alert(`HR Administrator Account: ${admin.email}`)}>
+                          <Dropdown.Item onClick={() => setSelectedAdminForView(admin)}>
                             <IconShieldCheck size={15} className="me-2 text-warning" /> View Admin Details
                           </Dropdown.Item>
                         </Dropdown.Menu>
@@ -309,6 +352,148 @@ export default function SuperAdminAdminsPage() {
           )}
         </Card.Body>
       </Card>
+
+      {/* Modal: View Admin Details */}
+      <Modal
+        show={!!selectedAdminForView}
+        onHide={() => {
+          setSelectedAdminForView(null);
+          setCopiedId(false);
+          setCopiedEmail(false);
+        }}
+        centered
+      >
+        <Modal.Header closeButton className="border-0 pb-0">
+          <Modal.Title className="fw-bold d-flex align-items-center gap-2 text-dark">
+            <div className="p-2 rounded-3 bg-warning-subtle text-warning-emphasis d-flex align-items-center justify-content-center shadow-xs">
+              <IconShieldCheck size={20} />
+            </div>
+            <div>
+              <div className="fs-6 fw-bold">Administrator Profile</div>
+              <span className="text-secondary small fw-normal" style={{ fontSize: "12px" }}>Platform Access & Assignment Details</span>
+            </div>
+          </Modal.Title>
+        </Modal.Header>
+        {selectedAdminForView && (
+          <Modal.Body className="pt-3">
+            {/* Top User Header Card */}
+            <div className="p-3.5 bg-light rounded-3 mb-3 border">
+              <div className="d-flex align-items-start gap-3">
+                <div
+                  className="rounded-3 bg-warning text-dark fw-bold d-flex align-items-center justify-content-center fs-4 flex-shrink-0 shadow-xs"
+                  style={{ width: 48, height: 48 }}
+                >
+                  {(selectedAdminForView.full_name || selectedAdminForView.email).charAt(0).toUpperCase()}
+                </div>
+                <div className="min-w-0 flex-grow-1">
+                  <h5 className="fw-bold text-dark mb-0.5 text-truncate">
+                    {selectedAdminForView.full_name || selectedAdminForView.email.split("@")[0]}
+                  </h5>
+                  <div className="d-flex align-items-center gap-2 mb-1.5 flex-wrap">
+                    <span className="text-secondary small d-flex align-items-center gap-1 text-truncate" style={{ fontSize: "12.5px" }}>
+                      <IconMail size={14} className="text-muted" />
+                      {selectedAdminForView.email}
+                    </span>
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-link p-0 text-secondary border-0"
+                      onClick={() => {
+                        navigator.clipboard.writeText(selectedAdminForView.email);
+                        setCopiedEmail(true);
+                        setTimeout(() => setCopiedEmail(false), 2000);
+                      }}
+                      title="Copy Email"
+                    >
+                      {copiedEmail ? <IconCheck size={13} className="text-success" /> : <IconCopy size={13} className="text-muted" />}
+                    </button>
+                  </div>
+                  <Badge bg="warning" text="dark" className="px-2 py-0.5 font-monospace rounded-pill" style={{ fontSize: "10.5px" }}>
+                    {selectedAdminForView.custom_role_title || (selectedAdminForView.role === "SUPER_ADMIN" ? "Super Admin" : "Company Administrator (HR)")}
+                  </Badge>
+                </div>
+              </div>
+            </div>
+
+            {/* 2-Column Info Grid */}
+            <Row className="g-2.5">
+              <Col xs={12} sm={6}>
+                <div className="p-3 bg-white border rounded-3 h-100 shadow-xs">
+                  <span className="text-secondary small fw-bold text-uppercase d-block mb-1" style={{ fontSize: "10.5px", letterSpacing: "0.5px" }}>
+                    Assigned Workspace
+                  </span>
+                  <div className="d-flex align-items-center gap-1.5 text-dark fw-semibold small">
+                    <IconBuildingSkyscraper size={16} className="text-primary flex-shrink-0" />
+                    <span className="text-truncate">{selectedAdminForView.organization_name || "Platform Global"}</span>
+                  </div>
+                </div>
+              </Col>
+
+              <Col xs={12} sm={6}>
+                <div className="p-3 bg-white border rounded-3 h-100 shadow-xs">
+                  <span className="text-secondary small fw-bold text-uppercase d-block mb-1" style={{ fontSize: "10.5px", letterSpacing: "0.5px" }}>
+                    Account Status
+                  </span>
+                  <div>
+                    <Badge bg="success-subtle" text="success" className="border border-success-subtle px-2.5 py-1 rounded-pill fw-semibold" style={{ fontSize: "11px" }}>
+                      ● Active Account
+                    </Badge>
+                  </div>
+                </div>
+              </Col>
+
+              <Col xs={12} sm={6}>
+                <div className="p-3 bg-white border rounded-3 h-100 shadow-xs">
+                  <span className="text-secondary small fw-bold text-uppercase d-block mb-1" style={{ fontSize: "10.5px", letterSpacing: "0.5px" }}>
+                    Role Classification
+                  </span>
+                  <span className="text-dark fw-semibold small d-block">
+                    {selectedAdminForView.custom_role_title || "Primary Tenant Owner"}
+                  </span>
+                </div>
+              </Col>
+
+              <Col xs={12} sm={6}>
+                <div className="p-3 bg-white border rounded-3 h-100 shadow-xs">
+                  <span className="text-secondary small fw-bold text-uppercase d-block mb-1" style={{ fontSize: "10.5px", letterSpacing: "0.5px" }}>
+                    Administrator ID
+                  </span>
+                  <div className="d-flex align-items-center justify-content-between gap-1">
+                    <code className="text-dark font-monospace text-truncate small" style={{ maxWidth: 140 }}>
+                      #{selectedAdminForView.id}
+                    </code>
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-link p-0 text-secondary border-0"
+                      onClick={() => {
+                        navigator.clipboard.writeText(String(selectedAdminForView.id));
+                        setCopiedId(true);
+                        setTimeout(() => setCopiedId(false), 2000);
+                      }}
+                      title="Copy ID"
+                    >
+                      {copiedId ? <IconCheck size={13} className="text-success" /> : <IconCopy size={13} className="text-muted" />}
+                    </button>
+                  </div>
+                </div>
+              </Col>
+            </Row>
+          </Modal.Body>
+        )}
+        <Modal.Footer className="border-0 pt-2 pb-3">
+          <Button
+            variant="outline-secondary"
+            size="sm"
+            className="px-3 fw-semibold"
+            onClick={() => {
+              setSelectedAdminForView(null);
+              setCopiedId(false);
+              setCopiedEmail(false);
+            }}
+          >
+            Close
+          </Button>
+        </Modal.Footer>
+      </Modal>
 
       {/* Modal: Onboard New HR Manager */}
       <Modal show={showCreateModal} onHide={() => setShowCreateModal(false)} centered backdrop="static">
@@ -337,7 +522,25 @@ export default function SuperAdminAdminsPage() {
             )}
 
             <Form.Group className="mb-3">
-              <Form.Label className="fw-semibold">HR Manager Email Address *</Form.Label>
+              <Form.Label className="fw-semibold small">Assign to Company Workspace</Form.Label>
+              <Form.Select
+                value={createForm.organization_id || ""}
+                onChange={(e) => setCreateForm({ ...createForm, organization_id: e.target.value })}
+              >
+                <option value="">-- Platform Global / Unassigned --</option>
+                {organizations.map((org) => (
+                  <option key={org.id} value={org.id}>
+                    {org.name} (ID: #{org.id})
+                  </option>
+                ))}
+              </Form.Select>
+              <Form.Text className="text-secondary small">
+                Designate this administrator as the primary HR manager for the selected company workspace.
+              </Form.Text>
+            </Form.Group>
+
+            <Form.Group className="mb-3">
+              <Form.Label className="fw-semibold small">HR Manager Email Address *</Form.Label>
               <Form.Control
                 type="email"
                 required

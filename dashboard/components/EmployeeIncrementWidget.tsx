@@ -10,7 +10,6 @@ import {
   IconCircleCheck,
   IconClock,
   IconArrowUpRight,
-  IconSparkles,
   IconHistory,
   IconShieldCheck,
 } from "@tabler/icons-react";
@@ -190,7 +189,7 @@ const EmployeeIncrementWidget: React.FC = () => {
                 fontSize: "12px",
               }}
             >
-              <IconSparkles size={14} />
+              <IconAward size={14} />
               {data.increment_cycle_months}-Month Appraisal Cycle
             </span>
           </div>

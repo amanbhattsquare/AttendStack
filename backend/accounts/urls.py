@@ -1,9 +1,6 @@
-"""
-accounts – URLs
-"""
 from django.urls import path
+from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
-
 from .views import (
     AdminLiveStatusView,
     ChangePasswordView,
@@ -17,11 +14,15 @@ from .views import (
     ResetPasswordWithOTPView,
     SimplyJobEmployeeOnboardingView,
     SSOLoginView,
+    SubAdminViewSet,
     UserProfileView,
     VerifyRegistrationTokenView,
 )
 
 app_name = "accounts"
+
+router = DefaultRouter()
+router.register(r"sub-admins", SubAdminViewSet, basename="sub_admins")
 
 urlpatterns = [
     # Auth
@@ -56,3 +57,5 @@ urlpatterns = [
     # Health Check
     path("", HealthCheckView.as_view(), name="health_check"),
 ]
+
+urlpatterns += router.urls

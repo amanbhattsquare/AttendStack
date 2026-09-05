@@ -27,30 +27,9 @@ def get_user_organization(user):
     """
     Industry-ready multi-tenant helper:
     Resolves the exact Organization instance associated with a given User.
-    Resolution priority:
-    1. Employee profile matching user email with an active organization.
-    2. Owned organization where user is the registered owner/creator.
-    3. Organization linked via employee reverse relation.
     """
-    if not user or not user.is_authenticated:
-        return None
-
-    # 1. Employee record with organization
-    emp = Employee.objects.filter(email__iexact=user.email, organization__isnull=False).select_related('organization').first()
-    if emp and emp.organization:
-        return emp.organization
-
-    # 2. Owned Organization
-    owned_org = Organization.objects.filter(owner=user).first()
-    if owned_org:
-        return owned_org
-
-    # 3. Reverse employee relation on Organization
-    org = Organization.objects.filter(employees__email__iexact=user.email).first()
-    if org:
-        return org
-
-    return None
+    from organizations.services import get_organization_for_user
+    return get_organization_for_user(user)
 
 
 class MessagePagination(PageNumberPagination):

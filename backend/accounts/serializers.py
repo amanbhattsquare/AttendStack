@@ -10,6 +10,7 @@ from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 import re
 
+from accounts.models import UserRole
 User = get_user_model()
 
 MB = 1024 * 1024
@@ -27,7 +28,7 @@ def _split_full_name(full_name):
 # JWT – enriched token payload
 # ──────────────────────────────────────────────────────────────────────────────
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
-    """Inject role, name, and employee_id into the JWT payload."""
+    """Inject role, name, and employee_id into the JWT payload and return full profile."""
 
     @classmethod
     def get_token(cls, user):
@@ -40,33 +41,14 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 
     def validate(self, attrs):
         data = super().validate(attrs)
-        # Append user meta to the response body as well
-        data["user"] = {
-            "id":          str(self.user.id),
-            "email":       self.user.email,
-            "full_name":   self.user.get_full_name(),
-            "role":        self.user.role,
-            "employee_id": self.user.employee_id,
-            "avatar":      self.user.avatar.url if self.user.avatar else None,
-        }
+        # Append full user profile with granular RBAC permissions to the response body
+        user_profile = UserProfileSerializer(self.user, context=self.context).data
+        data["user"] = user_profile
 
         # Resolve and append organization meta
         try:
-            from organizations.models import Organization
-            from employees.models import Employee
-
-            org = Organization.objects.filter(owner=self.user).first()
-            if not org and hasattr(self.user, "employee_profile") and self.user.employee_profile and self.user.employee_profile.organization:
-                org = self.user.employee_profile.organization
-            if not org:
-                emp = Employee.objects.filter(email__iexact=self.user.email, organization__isnull=False).select_related('organization').first()
-                if emp and emp.organization:
-                    org = emp.organization
-            if not org:
-                org = Organization.objects.filter(employees__email__iexact=self.user.email).first()
-            if not org and (self.user.is_superuser or getattr(self.user, 'role', '') == 'SUPER_ADMIN'):
-                org = Organization.objects.order_by("created_at").first()
-
+            from organizations.services import get_organization_for_user
+            org = get_organization_for_user(self.user)
             if org:
                 data["organization"] = {
                     "id": org.id,
@@ -98,21 +80,68 @@ class UserMiniSerializer(serializers.ModelSerializer):
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
-    """Full user profile – safe for GET requests."""
+    """Full user profile with organization and granular RBAC permissions."""
 
     full_name = serializers.SerializerMethodField()
+    permissions = serializers.SerializerMethodField()
+    custom_role_title = serializers.SerializerMethodField()
+    organization = serializers.SerializerMethodField()
 
     class Meta:
         model  = User
         fields = [
             "id", "email", "first_name", "last_name", "full_name",
             "role", "phone", "avatar", "employee_id",
+            "permissions", "custom_role_title", "organization",
             "is_active", "date_joined", "last_login",
         ]
         read_only_fields = ["id", "email", "role", "employee_id", "date_joined", "last_login"]
 
     def get_full_name(self, obj):
         return obj.get_full_name()
+
+    def get_custom_role_title(self, obj):
+        if obj.role == UserRole.SUPER_ADMIN:
+            return "Super Administrator"
+        if obj.role == UserRole.HR:
+            return "Company Administrator (HR)"
+        if obj.role == UserRole.SUB_ADMIN:
+            sub = getattr(obj, "subadmin_profile", None)
+            if not sub:
+                from accounts.models import SubAdminPermission
+                sub = SubAdminPermission.objects.filter(user=obj).first()
+            return sub.custom_role_title if sub else "HR Sub-Admin"
+        return "Employee"
+
+    def get_permissions(self, obj):
+        if obj.role in (UserRole.SUPER_ADMIN, UserRole.HR):
+            # Full unrestricted access for Super Admins and Primary HR
+            all_modules = ["dashboard", "employees", "attendance", "leaves", "holidays", "payroll", "tasks", "chat", "settings", "subadmins"]
+            return {mod: {"view": True, "edit": True, "delete": True} for mod in all_modules}
+        if obj.role == UserRole.SUB_ADMIN:
+            sub = getattr(obj, "subadmin_profile", None)
+            if not sub:
+                from accounts.models import SubAdminPermission
+                sub = SubAdminPermission.objects.filter(user=obj).first()
+            if sub and sub.permissions:
+                return sub.permissions
+            from accounts.models import SubAdminPermission
+            return SubAdminPermission.get_default_permissions()
+        return {}
+
+    def get_organization(self, obj):
+        try:
+            from organizations.services import get_organization_for_user
+            org = get_organization_for_user(obj)
+            if org:
+                return {
+                    "id": org.id,
+                    "name": org.name,
+                    "invite_code": org.invite_code,
+                }
+        except Exception:
+            pass
+        return None
 
 
 class UserUpdateSerializer(serializers.ModelSerializer):
@@ -124,10 +153,12 @@ class UserUpdateSerializer(serializers.ModelSerializer):
 
 
 class ChangePasswordSerializer(serializers.Serializer):
-    """Self-service password change."""
+    """Authenticated user changes their own password."""
 
     old_password = serializers.CharField(write_only=True)
-    new_password = serializers.CharField(write_only=True, validators=[validate_password])
+    new_password = serializers.CharField(
+        write_only=True, validators=[validate_password]
+    )
     confirm_password = serializers.CharField(write_only=True)
 
     def validate(self, attrs):
@@ -151,7 +182,7 @@ class ChangePasswordSerializer(serializers.Serializer):
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Admin – Create HR/Employee user
+# Admin – Create HR/Employee/SubAdmin users & RBAC
 # ──────────────────────────────────────────────────────────────────────────────
 class RequestPasswordResetOTPSerializer(serializers.Serializer):
     """Request a password-reset verification code."""
@@ -180,25 +211,97 @@ class ResetPasswordWithOTPSerializer(serializers.Serializer):
 
 
 class CreateHRSerializer(serializers.ModelSerializer):
-    """Super Admin creates a new HR manager account."""
+    """Super Admin creates a new HR manager / Company Admin account."""
 
     password = serializers.CharField(
         write_only=True, required=False, help_text="Leave blank to auto-generate."
     )
+    organization_id = serializers.IntegerField(
+        write_only=True, required=False, allow_null=True
+    )
 
     class Meta:
         model  = User
-        fields = ["email", "first_name", "last_name", "phone", "password"]
+        fields = ["email", "first_name", "last_name", "phone", "password", "organization_id"]
 
     def create(self, validated_data):
         from accounts.utils import generate_temp_password
+        from organizations.models import Organization
+
         password = validated_data.pop("password", None) or generate_temp_password()
-        user = User.objects.create_hr(**validated_data)
-        user.set_password(password)
-        user.save()
-        # Attach the raw password so the view can return / email it
+        org_id = validated_data.pop("organization_id", None)
+        email = validated_data.pop("email")
+
+        user = User.objects.create_hr(email=email, password=password, **validated_data)
         user._raw_password = password
+
+        if org_id:
+            org = Organization.objects.filter(id=org_id).first()
+            if org and not org.owner:
+                org.owner = user
+                org.save(update_fields=["owner"])
+
         return user
+
+
+class SubAdminPermissionSerializer(serializers.ModelSerializer):
+    """Serializes a Sub-Admin permission record with full user details."""
+    email = serializers.EmailField(source="user.email", read_only=True)
+    first_name = serializers.CharField(source="user.first_name", read_only=True)
+    last_name = serializers.CharField(source="user.last_name", read_only=True)
+    full_name = serializers.CharField(source="user.get_full_name", read_only=True)
+    phone = serializers.CharField(source="user.phone", read_only=True)
+    is_active = serializers.BooleanField(source="user.is_active", read_only=True)
+    organization_name = serializers.CharField(source="organization.name", read_only=True)
+
+    class Meta:
+        from accounts.models import SubAdminPermission
+        model = SubAdminPermission
+        fields = [
+            "id",
+            "user_id",
+            "email",
+            "first_name",
+            "last_name",
+            "full_name",
+            "phone",
+            "is_active",
+            "organization",
+            "organization_name",
+            "custom_role_title",
+            "permissions",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+
+class CreateSubAdminSerializer(serializers.Serializer):
+    """Company Admin creates a new Sub-Admin with custom granular permissions."""
+    email = serializers.EmailField()
+    first_name = serializers.CharField(max_length=100, required=False, allow_blank=True)
+    last_name = serializers.CharField(max_length=100, required=False, allow_blank=True)
+    phone = serializers.CharField(max_length=20, required=False, allow_blank=True)
+    custom_role_title = serializers.CharField(max_length=120, default="HR Manager", required=False)
+    permissions = serializers.DictField(required=False, default=dict)
+    password = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    organization_id = serializers.IntegerField(required=False, allow_null=True)
+
+    def validate_email(self, value):
+        email = value.strip().lower()
+        if User.objects.filter(email__iexact=email).exists():
+            raise serializers.ValidationError("A user with this email address already exists.")
+        return email
+
+
+class UpdateSubAdminSerializer(serializers.Serializer):
+    """Company Admin updates an existing Sub-Admin's role title, active status, or permissions."""
+    first_name = serializers.CharField(max_length=100, required=False, allow_blank=True)
+    last_name = serializers.CharField(max_length=100, required=False, allow_blank=True)
+    phone = serializers.CharField(max_length=20, required=False, allow_blank=True)
+    custom_role_title = serializers.CharField(max_length=120, required=False)
+    permissions = serializers.DictField(required=False)
+    is_active = serializers.BooleanField(required=False)
 
 
 class SimplyJobEmployeeOnboardingSerializer(serializers.Serializer):

@@ -12,7 +12,8 @@ from django.utils import timezone
 
 class UserRole(models.TextChoices):
     SUPER_ADMIN = "SUPER_ADMIN", "Super Admin"
-    HR          = "HR",          "HR Manager"
+    HR          = "HR",          "HR Manager / Company Admin"
+    SUB_ADMIN   = "SUB_ADMIN",   "Sub-Admin / Limited Access"
     EMPLOYEE    = "EMPLOYEE",    "Employee"
 
 
@@ -39,6 +40,11 @@ class UserManager(BaseUserManager):
         extra_fields["role"] = UserRole.HR
         return self._create_user(email, password, **extra_fields)
 
+    def create_sub_admin(self, email, password=None, **extra_fields):
+        extra_fields.setdefault("is_staff", True)
+        extra_fields["role"] = UserRole.SUB_ADMIN
+        return self._create_user(email, password, **extra_fields)
+
     def create_superuser(self, email, password=None, **extra_fields):
         extra_fields.setdefault("is_staff", True)
         extra_fields.setdefault("is_superuser", True)
@@ -49,7 +55,7 @@ class UserManager(BaseUserManager):
 class User(AbstractBaseUser, PermissionsMixin):
     """
     AttendStack custom user model.
-    Three roles: SUPER_ADMIN, HR, EMPLOYEE
+    Roles: SUPER_ADMIN, HR, SUB_ADMIN, EMPLOYEE
     """
 
     id         = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -99,8 +105,78 @@ class User(AbstractBaseUser, PermissionsMixin):
         return self.role == UserRole.HR
 
     @property
+    def is_company_admin(self):
+        return self.role == UserRole.HR
+
+    @property
+    def is_sub_admin(self):
+        return self.role == UserRole.SUB_ADMIN
+
+    @property
     def is_employee(self):
         return self.role == UserRole.EMPLOYEE
+
+
+class SubAdminPermission(models.Model):
+    """
+    Multi-tenant Granular Role-Based Access Control (RBAC) permissions.
+    Assigned to a SUB_ADMIN User for a specific Organization workspace.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="subadmin_profile",
+    )
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.CASCADE,
+        related_name="subadmin_permissions",
+    )
+    custom_role_title = models.CharField(
+        max_length=120,
+        default="HR Manager",
+        help_text="Display title e.g. HR Manager, Attendance Supervisor, Payroll Officer"
+    )
+    permissions = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = "Sub-Admin Permission"
+        verbose_name_plural = "Sub-Admin Permissions"
+
+    def __str__(self):
+        return f"{self.user.email} - {self.custom_role_title} ({self.organization.name})"
+
+    @classmethod
+    def get_default_permissions(cls):
+        return {
+            "dashboard": {"view": True, "edit": False, "delete": False},
+            "employees": {"view": True, "edit": True, "delete": False},
+            "attendance": {"view": True, "edit": True, "delete": False},
+            "leaves": {"view": True, "edit": True, "delete": False},
+            "holidays": {"view": True, "edit": True, "delete": False},
+            "payroll": {"view": False, "edit": False, "delete": False},
+            "increments": {"view": False, "edit": False, "delete": False},
+            "tasks": {"view": True, "edit": True, "delete": False},
+            "chat": {"view": True, "edit": True, "delete": False},
+            "settings": {"view": False, "edit": False, "delete": False},
+        }
+
+    def save(self, *args, **kwargs):
+        if not self.permissions:
+            self.permissions = self.get_default_permissions()
+        super().save(*args, **kwargs)
+
+    def has_permission(self, module: str, action: str = "view") -> bool:
+        if not self.permissions or not isinstance(self.permissions, dict):
+            return False
+        mod_perms = self.permissions.get(module, {})
+        if isinstance(mod_perms, dict):
+            return bool(mod_perms.get(action, False))
+        return bool(mod_perms)
 
 
 class PasswordResetOTP(models.Model):

@@ -46,6 +46,14 @@ class SystemSettings(models.Model):
     registration_number = models.CharField(max_length=100, blank=True, default="")
     tax_id = models.CharField(max_length=50, blank=True, default="")
     company_logo = models.ImageField(upload_to='logos/', null=True, blank=True)
+    
+    # Company Bank & Payment Details
+    company_bank_name = models.CharField(max_length=150, blank=True, default="", help_text="Company primary bank name.")
+    company_bank_account_no = models.CharField(max_length=50, blank=True, default="", help_text="Company bank account number.")
+    company_bank_ifsc = models.CharField(max_length=30, blank=True, default="", help_text="Company bank IFSC code.")
+    company_bank_branch = models.CharField(max_length=150, blank=True, default="", help_text="Company bank branch name.")
+    company_upi_id = models.CharField(max_length=100, blank=True, default="", help_text="Company UPI ID for payments.")
+
     attendance_rules = models.TextField(blank=True, null=True)
     timezone = models.CharField(max_length=50, default="Asia/Kolkata")
     currency = models.CharField(max_length=10, default="INR")

@@ -24,7 +24,7 @@ import {
   IconEyeOff,
   IconKey,
   IconShieldCheck,
-  IconSparkles,
+  IconBuildingSkyscraper,
 } from "@tabler/icons-react";
 
 const apiRoot = (process.env.NEXT_PUBLIC_API_ENDPOINT || "").replace(/\/$/, "");
@@ -213,7 +213,7 @@ function OrganizationRegistrationContent() {
                     className="p-2 rounded-circle bg-white text-primary shadow-sm flex-shrink-0"
                     style={{ color: "#4F46E5" }}
                   >
-                    <IconSparkles size={22} />
+                    <IconBuildingSkyscraper size={22} />
                   </div>
                   <div className="flex-grow-1">
                     <div className="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-1">

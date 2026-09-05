@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, Badge, Spinner, Button, Row, Col, Form, Alert, InputGroup } from "react-bootstrap";
 import { IconCheck, IconX, IconSearch, IconUserCheck, IconClock, IconCircleX, IconCircleCheck } from "@tabler/icons-react";
 import Swal from 'sweetalert2';
+import DasherBreadcrumb from "components/common/DasherBreadcrumb";
 
 interface LeaveApplication {
   id: number;
@@ -70,6 +71,19 @@ const LeaveRequestsPage = () => {
   }, []);
 
   const handleApprove = async (leaveId: number) => {
+    const result = await Swal.fire({
+      title: "Approve Leave Request?",
+      text: "Are you sure you want to approve this leave request?",
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonText: "Yes, Approve",
+      cancelButtonText: "Cancel",
+      confirmButtonColor: "#198754",
+      cancelButtonColor: "#6c757d",
+    });
+
+    if (!result.isConfirmed) return;
+
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/attendance/leaves/${leaveId}/`, {
         method: "PATCH",
@@ -79,7 +93,13 @@ const LeaveRequestsPage = () => {
 
       if (!response.ok) throw new Error("Failed to approve");
       
-      setSuccessMsg("Leave request approved successfully!");
+      Swal.fire({
+        title: "Leave Approved!",
+        text: "The leave request has been approved successfully.",
+        icon: "success",
+        timer: 2000,
+        showConfirmButton: false,
+      });
       fetchLeaveApplications();
     } catch (err) {
       Swal.fire("Error", "Could not approve the leave request.", "error");
@@ -91,24 +111,31 @@ const LeaveRequestsPage = () => {
       title: "Reject Leave",
       input: "textarea",
       inputLabel: "Reason for rejection",
-      inputPlaceholder: "Enter your reason here...",
+      inputPlaceholder: "Enter reason for rejection (optional)...",
       showCancelButton: true,
-      confirmButtonText: "Reject",
+      confirmButtonText: "Yes, Reject",
       cancelButtonText: "Cancel",
-      confirmButtonColor: "#d33"
+      confirmButtonColor: "#dc3545",
+      cancelButtonColor: "#6c757d",
     });
 
-    if (reason) {
+    if (reason !== undefined) {
       try {
         const response = await fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/attendance/leaves/${leaveId}/`, {
           method: "PATCH",
           headers: authHeaders(),
-          body: JSON.stringify({ status: "REJECTED", admin_notes: reason })
+          body: JSON.stringify({ status: "REJECTED", admin_notes: reason || "Rejected by administrator" })
         });
 
         if (!response.ok) throw new Error("Failed to reject");
         
-        setSuccessMsg("Leave request rejected!");
+        Swal.fire({
+          title: "Leave Rejected",
+          text: "The leave request has been rejected.",
+          icon: "info",
+          timer: 2000,
+          showConfirmButton: false,
+        });
         fetchLeaveApplications();
       } catch (err) {
         Swal.fire("Error", "Could not reject the leave request.", "error");
@@ -160,6 +187,7 @@ const LeaveRequestsPage = () => {
 
   return (
     <div className="leave-requests-page">
+      <DasherBreadcrumb />
       <div className="mb-6">
         <h2 className="mb-0 fw-bold">Leave Requests</h2>
         <p className="text-secondary mb-0">View and manage all employee leave applications</p>
@@ -260,7 +288,7 @@ const LeaveRequestsPage = () => {
             </div>
           ) : (
             <div className="table-responsive">
-              <table className="table table-hover align-middle mb-0">
+              <table className="table table-hover align-middle mb-0 text-nowrap" style={{ minWidth: "850px" }}>
                 <thead className="table-light">
                   <tr>
                     <th className="fw-semibold px-4">Employee</th>

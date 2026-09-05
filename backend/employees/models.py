@@ -183,6 +183,10 @@ class Employee(models.Model):
         validators=[RegexValidator(r"^$|^[A-Z]{4}0[A-Z0-9]{6}$", "Enter a valid 11-character IFSC code.")],
     )
     tax_id = models.CharField(max_length=20, blank=True)
+    pan_number = models.CharField(max_length=20, blank=True, help_text="Permanent Account Number (PAN)")
+    pf_number = models.CharField(max_length=50, blank=True, help_text="Provident Fund (PF) Account Number")
+    uan_number = models.CharField(max_length=20, blank=True, help_text="Universal Account Number (UAN)")
+    esic_number = models.CharField(max_length=30, blank=True, help_text="ESIC Insurance Number")
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import { Card, Row, Col, Badge, ButtonGroup, Button, Spinner, Alert } from "react-bootstrap";
-import { IconTrendingUp, IconCalendarTime, IconCurrencyRupee, IconUserCheck, IconSparkles } from "@tabler/icons-react";
+import { IconTrendingUp, IconCalendarTime, IconCurrencyRupee, IconUserCheck, IconArrowUpRight } from "@tabler/icons-react";
 import dynamic from "next/dynamic";
 import { ApexOptions } from "apexcharts";
 
@@ -295,7 +295,7 @@ const UpcomingIncrementsChartWidget: React.FC = () => {
               <div className="mt-3.5 p-3 rounded-3 border border-emerald-200" style={{ backgroundColor: "#f0fdf4" }}>
                 <div className="d-flex align-items-center justify-content-between flex-wrap gap-2">
                   <div className="d-flex align-items-center gap-2">
-                    <IconSparkles size={18} className="text-success" />
+                    <IconArrowUpRight size={18} className="text-success" />
                     <strong className="text-dark small">
                       Employees with Next Month Increments ({data.next_month.label}):
                     </strong>

@@ -238,6 +238,10 @@ class EmployeeSerializer(serializers.ModelSerializer):
             "bank_account_number",
             "ifsc_code",
             "tax_id",
+            "pan_number",
+            "pf_number",
+            "uan_number",
+            "esic_number",
             "created_at",
             "updated_at",
         ]

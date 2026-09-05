@@ -16,7 +16,6 @@ import {
   IconFolder,
   IconCalendarTime,
   IconAlertCircle,
-  IconSparkles,
   IconUser,
 } from "@tabler/icons-react";
 

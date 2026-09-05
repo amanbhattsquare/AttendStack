@@ -284,13 +284,29 @@ const EmployeeLeavesClient = () => {
         throw new Error(apiError(errData, "Unable to submit leave request."));
       }
 
-      setSuccessMsg(editingLeave ? "Your leave request has been updated successfully!" : "Your leave request has been submitted successfully for HR review!");
+      const isEdit = Boolean(editingLeave);
+      setSuccessMsg(isEdit ? "Your leave request has been updated successfully!" : "Your leave request has been submitted successfully for HR review!");
       resetFormAndCloseModal();
       
+      Swal.fire({
+        title: isEdit ? "Application Updated!" : "Application Submitted!",
+        text: isEdit ? "Your leave application changes have been saved." : "Your leave application has been submitted and sent for manager review.",
+        icon: "success",
+        timer: 2500,
+        showConfirmButton: false,
+      });
+
       await fetchLeaves();
       await fetchLeaveBalance();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error submitting request.");
+      const msg = err instanceof Error ? err.message : "Error submitting request.";
+      setError(msg);
+      Swal.fire({
+        title: "Submission Failed",
+        text: msg,
+        icon: "error",
+        confirmButtonColor: "#dc3545",
+      });
     } finally {
       setIsSubmitting(false);
     }

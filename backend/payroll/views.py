@@ -14,17 +14,14 @@ class PayrollViewSet(viewsets.ModelViewSet):
     queryset = Payroll.objects.select_related("employee").all()
     serializer_class = PayrollSerializer
     permission_classes = [IsAdminOrReadOnly]
+    permission_module = "payroll"
 
     def _organization_for_user(self):
         user = self.request.user
         if not user.is_authenticated or user.is_superuser or getattr(user, 'role', '') == "SUPER_ADMIN":
             return None
-        org = Organization.objects.filter(owner=user).first()
-        if not org:
-            emp = Employee.objects.filter(email__iexact=user.email).first()
-            if emp:
-                org = emp.organization
-        return org
+        from organizations.services import get_organization_for_user
+        return get_organization_for_user(user)
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -41,7 +38,7 @@ class PayrollViewSet(viewsets.ModelViewSet):
 
         # Enforce secure employee data isolation
         user = self.request.user
-        if user.is_authenticated and getattr(user, 'role', '') not in ["SUPER_ADMIN", "HR"] and not user.is_staff:
+        if user.is_authenticated and getattr(user, 'role', '') not in ["SUPER_ADMIN", "HR", "SUB_ADMIN"] and not user.is_staff:
             try:
                 employee = Employee.objects.get(email=user.email)
                 queryset = queryset.filter(employee=employee)
@@ -190,6 +187,7 @@ class EmployeeIncrementViewSet(viewsets.ModelViewSet):
     queryset = EmployeeIncrement.objects.select_related("employee", "action_by").all()
     serializer_class = EmployeeIncrementSerializer
     permission_classes = [IsAdminOrReadOnly]
+    permission_module = "payroll"
 
     def get_queryset(self):
         # Trigger auto-sync for active employees on listing

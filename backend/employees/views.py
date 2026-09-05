@@ -33,6 +33,7 @@ class EmployeeViewSet(viewsets.ModelViewSet):
     serializer_class = EmployeeSerializer
     parser_classes = (MultiPartParser, FormParser, JSONParser)
     permission_classes = [IsAdminOrHR]
+    permission_module = "employees"
     queryset = Employee.objects.all()
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["full_name", "email", "employee_id", "department", "designation"]
@@ -48,16 +49,17 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         user = self.request.user
         if not user.is_authenticated or user.is_superuser or getattr(user, 'role', '') == UserRole.SUPER_ADMIN:
             return None
-        org = Organization.objects.filter(owner=user).first()
-        if not org:
-            emp = Employee.objects.filter(email__iexact=user.email).first()
-            if emp:
-                org = emp.organization
-        return org
+        from organizations.services import get_organization_for_user
+        return get_organization_for_user(user)
 
     def get_queryset(self):
         user = self.request.user
         queryset = super().get_queryset()
+
+        if getattr(user, 'role', '') == UserRole.SUB_ADMIN:
+            from accounts.permissions import check_user_module_permission
+            if not check_user_module_permission(user, "employees", "view"):
+                return queryset.none()
 
         if not user.is_superuser and getattr(user, 'role', '') != UserRole.SUPER_ADMIN:
             organization = self._organization_for_user()

@@ -2,7 +2,8 @@
 
 import React, { useEffect, useState } from "react";
 import { Card, Button, Table, Badge, Modal, Form, Row, Col, Alert, Spinner, InputGroup, Dropdown } from "react-bootstrap";
-import { IconSearch, IconCalendarEvent, IconMessage, IconInfoCircle, IconClock, IconCircleCheck, IconCircleX, IconDotsVertical, IconEye, IconSettings, IconTrash, IconPaperclip, IconDownload } from "@tabler/icons-react";
+import { IconSearch, IconCalendarEvent, IconMessage, IconInfoCircle, IconClock, IconCircleCheck, IconCircleX, IconDotsVertical, IconEye, IconSettings, IconTrash, IconPaperclip, IconDownload, IconCheck, IconX } from "@tabler/icons-react";
+import Swal from "sweetalert2";
 import { Avatar } from "components/common/Avatar";
 import { getAssetPath } from "helper/assetPath";
 import { resolveMediaUrl, triggerFileDownload, getDownloadProxyUrl } from "../../../helper/mediaUrl";
@@ -34,6 +35,37 @@ const AdminLeavesClient = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
+  const [currentUser, setCurrentUser] = useState<any>(null);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem("user");
+        if (stored) {
+          setCurrentUser(JSON.parse(stored));
+        }
+      } catch {
+        // ignore
+      }
+    }
+  }, []);
+
+  const isSuperAdmin = currentUser?.role === "SUPER_ADMIN";
+  const isHR = currentUser?.role === "HR";
+  const isSubAdmin = currentUser?.role === "SUB_ADMIN";
+  const leavesPermission = currentUser?.permissions?.leaves;
+
+  const canEdit = isSuperAdmin || isHR || (isSubAdmin ? (
+    typeof leavesPermission === "object" && leavesPermission !== null
+      ? Boolean(leavesPermission.edit)
+      : Boolean(leavesPermission)
+  ) : false);
+
+  const canDelete = isSuperAdmin || isHR || (isSubAdmin ? (
+    typeof leavesPermission === "object" && leavesPermission !== null
+      ? Boolean(leavesPermission.delete)
+      : false
+  ) : false);
 
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState("");
@@ -47,10 +79,40 @@ const AdminLeavesClient = () => {
   const [adminNotes, setAdminNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleDelete = async (id: number) => {
-    if (!window.confirm('Are you sure you want to delete this leave request?')) return;
+  const handleDelete = async (id: number, employeeName?: string) => {
+    if (!canDelete) {
+      Swal.fire({
+        title: "Permission Denied",
+        text: "You do not have permission to delete leave requests.",
+        icon: "error",
+        confirmButtonColor: "#dc3545",
+      });
+      return;
+    }
+
+    const result = await Swal.fire({
+      title: "Delete Leave Request?",
+      text: `Are you sure you want to permanently delete the leave request for ${employeeName || "this employee"}?`,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#dc3545",
+      cancelButtonColor: "#6c757d",
+      confirmButtonText: "Yes, Delete",
+      cancelButtonText: "Cancel",
+    });
+
+    if (!result.isConfirmed) return;
+
     const token = localStorage.getItem('authToken');
-    if (!token) { setError('Session expired. Please sign in again.'); return; }
+    if (!token) {
+      Swal.fire({
+        title: "Authentication Required",
+        text: "Session expired. Please sign in again.",
+        icon: "error",
+      });
+      return;
+    }
+
     try {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/attendance/leaves/${id}/`, {
         method: 'DELETE',
@@ -60,10 +122,88 @@ const AdminLeavesClient = () => {
         const errData = await res.json();
         throw new Error(errData.detail || 'Failed to delete leave request');
       }
-      setSuccessMsg('Leave request deleted successfully');
+      Swal.fire({
+        title: "Deleted!",
+        text: "The leave application record has been removed.",
+        icon: "success",
+        timer: 1800,
+        showConfirmButton: false,
+      });
       await fetchLeaves();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error deleting leave request');
+      Swal.fire({
+        title: "Delete Failed",
+        text: err instanceof Error ? err.message : 'Error deleting leave request',
+        icon: "error",
+        confirmButtonColor: "#dc3545",
+      });
+    }
+  };
+
+  const handleQuickStatusUpdate = async (leave: LeaveRequest, newStatus: "APPROVED" | "REJECTED") => {
+    if (!canEdit) {
+      Swal.fire({
+        title: "Permission Denied",
+        text: "You do not have permission to modify leave requests.",
+        icon: "error",
+        confirmButtonColor: "#dc3545",
+      });
+      return;
+    }
+
+    const isApprove = newStatus === "APPROVED";
+    const result = await Swal.fire({
+      title: isApprove ? "Approve Leave Request?" : "Reject Leave Request?",
+      text: `${isApprove ? "Confirm approval of" : "Reject"} leave application for ${leave.employee_name}?`,
+      icon: isApprove ? "question" : "warning",
+      input: isApprove ? undefined : "textarea",
+      inputPlaceholder: isApprove ? undefined : "Reason for rejection (optional)...",
+      showCancelButton: true,
+      confirmButtonColor: isApprove ? "#198754" : "#dc3545",
+      cancelButtonColor: "#6c757d",
+      confirmButtonText: isApprove ? "Yes, Approve" : "Yes, Reject",
+      cancelButtonText: "Cancel",
+    });
+
+    if (!result.isConfirmed) return;
+
+    const token = localStorage.getItem("authToken");
+    if (!token) return;
+
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/attendance/leaves/${leave.id}/`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          status: newStatus,
+          admin_notes: isApprove ? (leave.admin_notes || "") : (result.value || "Rejected by administrator"),
+        }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.detail || `Unable to ${newStatus.toLowerCase()} leave.`);
+      }
+
+      Swal.fire({
+        title: isApprove ? "Leave Approved!" : "Leave Rejected",
+        text: `Leave request for ${leave.employee_name} marked as ${newStatus}.`,
+        icon: isApprove ? "success" : "info",
+        timer: 2000,
+        showConfirmButton: false,
+      });
+
+      await fetchLeaves();
+    } catch (err) {
+      Swal.fire({
+        title: "Action Failed",
+        text: err instanceof Error ? err.message : "Error processing review.",
+        icon: "error",
+        confirmButtonColor: "#dc3545",
+      });
     }
   };
 
@@ -101,7 +241,7 @@ const AdminLeavesClient = () => {
     setSelectedLeave(leave);
     setReviewStatus(leave.status);
     setAdminNotes(leave.admin_notes || "");
-    setIsEditing(editing);
+    setIsEditing(editing && canEdit);
     setShowModal(true);
   };
 
@@ -109,11 +249,25 @@ const AdminLeavesClient = () => {
     e.preventDefault();
     if (!selectedLeave) return;
 
+    if (!canEdit) {
+      Swal.fire({
+        title: "Permission Denied",
+        text: "You do not have permission to modify leave requests.",
+        icon: "error",
+        confirmButtonColor: "#dc3545",
+      });
+      return;
+    }
+
     setError("");
     setSuccessMsg("");
     const token = localStorage.getItem("authToken");
     if (!token) {
-      setError("Authorization credentials missing.");
+      Swal.fire({
+        title: "Session Expired",
+        text: "Authorization credentials missing. Please log in again.",
+        icon: "warning",
+      });
       return;
     }
 
@@ -136,12 +290,24 @@ const AdminLeavesClient = () => {
         throw new Error(errData.detail || "Unable to update leave request status.");
       }
 
-      setSuccessMsg(`Leave request for ${selectedLeave.employee_name} has been reviewed and updated successfully.`);
       setShowModal(false);
+      Swal.fire({
+        title: "Leave Status Updated!",
+        text: `Leave request for ${selectedLeave.employee_name} has been set to ${reviewStatus}.`,
+        icon: "success",
+        timer: 2000,
+        showConfirmButton: false,
+      });
+
       setSelectedLeave(null);
       await fetchLeaves();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error processing review.");
+      Swal.fire({
+        title: "Update Failed",
+        text: err instanceof Error ? err.message : "Error processing review.",
+        icon: "error",
+        confirmButtonColor: "#dc3545",
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -336,7 +502,7 @@ const AdminLeavesClient = () => {
             </div>
           ) : (
             <div className="table-responsive leave-table-responsive">
-              <Table hover className="align-middle text-nowrap mb-0 custom-leaves-table" style={{ minWidth: "850px" }}>
+              <Table hover className="align-middle text-nowrap mb-0 custom-leaves-table" style={{ minWidth: "900px" }}>
                 <thead className="table-light">
                   <tr className="small text-secondary-emphasis" style={{ fontSize: "0.78rem", textTransform: "uppercase", fontWeight: 600 }}>
                     <th className="px-4 py-3">Employee Details</th>
@@ -381,7 +547,7 @@ const AdminLeavesClient = () => {
                         <td className="py-3 text-center fw-bold text-dark-emphasis small">
                           {durationDays} {durationDays === 1 ? "day" : "days"}
                         </td>
-                        <td className="py-3 text-secondary small text-truncate" style={{ maxWidth: "200px" }} title={leave.reason}>
+                        <td className="py-3 text-secondary small text-truncate" style={{ maxWidth: "220px" }} title={leave.reason}>
                           {leave.reason}
                         </td>
                         <td className="py-3">
@@ -397,20 +563,43 @@ const AdminLeavesClient = () => {
                             >
                               <IconDotsVertical size={20} />
                             </Dropdown.Toggle>
-                            <Dropdown.Menu className="leave-action-menu shadow border-0">
+                            <Dropdown.Menu
+                              className="leave-action-menu shadow border-0"
+                              popperConfig={{ strategy: "fixed" }}
+                              style={{ zIndex: 1080 }}
+                            >
+                              {leave.status === "PENDING" && canEdit && (
+                                <>
+                                  <Dropdown.Item onClick={() => handleQuickStatusUpdate(leave, "APPROVED")} className="d-flex align-items-center gap-2 text-success fw-semibold">
+                                    <IconCheck size={16} />
+                                    Quick Approve
+                                  </Dropdown.Item>
+                                  <Dropdown.Item onClick={() => handleQuickStatusUpdate(leave, "REJECTED")} className="d-flex align-items-center gap-2 text-danger">
+                                    <IconX size={16} />
+                                    Quick Reject
+                                  </Dropdown.Item>
+                                  <Dropdown.Divider />
+                                </>
+                              )}
                               <Dropdown.Item onClick={() => handleOpenLeaveModal(leave, false)} className="d-flex align-items-center gap-2">
                                 <IconEye size={16} />
                                 View Details
                               </Dropdown.Item>
-                              <Dropdown.Item onClick={() => handleOpenLeaveModal(leave, true)} className="d-flex align-items-center gap-2">
-                                <IconSettings size={16} />
-                                Edit Status
-                              </Dropdown.Item>
-                              <Dropdown.Divider />
-                              <Dropdown.Item onClick={() => handleDelete(leave.id)} className="d-flex align-items-center gap-2 text-danger">
-                                <IconTrash size={16} />
-                                Delete
-                              </Dropdown.Item>
+                              {canEdit && (
+                                <Dropdown.Item onClick={() => handleOpenLeaveModal(leave, true)} className="d-flex align-items-center gap-2">
+                                  <IconSettings size={16} />
+                                  Change Status / Notes
+                                </Dropdown.Item>
+                              )}
+                              {canDelete && (
+                                <>
+                                  <Dropdown.Divider />
+                                  <Dropdown.Item onClick={() => handleDelete(leave.id, leave.employee_name)} className="d-flex align-items-center gap-2 text-danger">
+                                    <IconTrash size={16} />
+                                    Delete
+                                  </Dropdown.Item>
+                                </>
+                              )}
                             </Dropdown.Menu>
                           </Dropdown>
                         </td>
@@ -595,10 +784,28 @@ const AdminLeavesClient = () => {
 
       <style>{`
         .leave-requests-card {
-          overflow: visible;
+          border-radius: 16px;
         }
         .leave-table-responsive {
-          overflow: visible;
+          overflow-x: auto !important;
+          -webkit-overflow-scrolling: touch;
+          width: 100%;
+          scrollbar-width: thin;
+          scrollbar-color: #cbd5e1 #f8fafc;
+        }
+        .leave-table-responsive::-webkit-scrollbar {
+          height: 7px;
+        }
+        .leave-table-responsive::-webkit-scrollbar-track {
+          background: #f8fafc;
+          border-radius: 4px;
+        }
+        .leave-table-responsive::-webkit-scrollbar-thumb {
+          background: #cbd5e1;
+          border-radius: 4px;
+        }
+        .leave-table-responsive::-webkit-scrollbar-thumb:hover {
+          background: #94a3b8;
         }
         .leave-action-toggle {
           width: 34px;
@@ -639,10 +846,10 @@ const AdminLeavesClient = () => {
           50% { opacity: 0.6; }
           100% { opacity: 1; }
         }
-        @media (max-width: 991.98px) {
-          .leave-table-responsive {
-            overflow-x: auto;
-            padding-bottom: 180px;
+        @media (max-width: 767.98px) {
+          .leave-requests-card {
+            background: transparent !important;
+            box-shadow: none !important;
           }
         }
       `}</style>

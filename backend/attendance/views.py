@@ -15,7 +15,8 @@ from rest_framework.response import Response
 from ipware import get_client_ip
 from geopy.distance import geodesic
 
-from accounts.permissions import IsAdminOrHR
+from accounts.permissions import IsAdminOrHR, check_user_module_permission
+from accounts.models import UserRole
 from organizations.models import Organization
 from employees.models import (
     ATTENDANCE_ELIGIBLE_STATUSES,
@@ -80,6 +81,7 @@ class StandardResultsSetPagination(PageNumberPagination):
 class AttendanceRecordViewSet(viewsets.ModelViewSet):
     serializer_class = AttendanceRecordSerializer
     permission_classes = [IsAdminOrReadOnly]
+    permission_module = "attendance"
     queryset = AttendanceRecord.objects.select_related("employee").all()
     pagination_class = StandardResultsSetPagination
 
@@ -89,28 +91,8 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
         return super().get_permissions()
 
     def _organization_for_user(self):
-        user = self.request.user
-        if not user or not user.is_authenticated:
-            return None
-        # 1. Direct ownership
-        org = Organization.objects.filter(owner=user).first()
-        if org:
-            return org
-        # 2. Employee profile
-        if hasattr(user, "employee_profile") and user.employee_profile and user.employee_profile.organization:
-            return user.employee_profile.organization
-        # 3. Employee record by email
-        emp = Employee.objects.filter(email__iexact=user.email, organization__isnull=False).select_related('organization').first()
-        if emp and emp.organization:
-            return emp.organization
-        # 4. Reverse employee relation on Organization
-        org = Organization.objects.filter(employees__email__iexact=user.email).first()
-        if org:
-            return org
-        # 5. Super Admin only fallback
-        if user.is_superuser or getattr(user, 'role', '') == "SUPER_ADMIN":
-            return Organization.objects.order_by("created_at").first()
-        return None
+        from organizations.services import get_organization_for_user
+        return get_organization_for_user(self.request.user)
 
     def get_queryset(self):
         queryset = attendance_eligible_records(super().get_queryset())
@@ -546,7 +528,13 @@ class AttendanceRecordViewSet(viewsets.ModelViewSet):
         instance = self.get_object()
         user = self.request.user
 
-        if user.role not in ["SUPER_ADMIN", "HR"] and instance.employee.email != user.email:
+        if getattr(user, 'role', '') == UserRole.SUB_ADMIN:
+            if not check_user_module_permission(user, "attendance", "delete"):
+                return Response(
+                    {"detail": "You do not have permission to delete attendance records."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+        elif user.role not in ["SUPER_ADMIN", "HR"] and instance.employee.email != user.email:
             return Response(
                 {"detail": "You do not have permission to delete this record."},
                 status=status.HTTP_403_FORBIDDEN,
@@ -581,10 +569,11 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
     queryset = LeaveRequest.objects.select_related("employee").all()
     serializer_class = LeaveRequestSerializer
     permission_classes = [IsAuthenticated]
+    permission_module = "leaves"
     pagination_class = StandardResultsSetPagination
 
     def _is_admin_or_hr(self, user):
-        return user.role in ["SUPER_ADMIN", "HR"] or user.is_staff
+        return user.role in ["SUPER_ADMIN", "HR", "SUB_ADMIN"] or user.is_staff
 
     def _current_employee(self):
         employee = Employee.objects.filter(email__iexact=self.request.user.email).first()
@@ -758,11 +747,11 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
                 Q(employee__email__iexact=user.email) | Q(employee__employee_id=user.employee_id)
             )
         elif user.is_authenticated and not (user.is_superuser or getattr(user, 'role', '') == "SUPER_ADMIN"):
-            org = Organization.objects.filter(owner=user).first()
-            if not org:
-                emp = Employee.objects.filter(email__iexact=user.email).first()
-                if emp:
-                    org = emp.organization
+            if getattr(user, 'role', '') == UserRole.SUB_ADMIN:
+                if not check_user_module_permission(user, "leaves", "view"):
+                    return queryset.none()
+            from organizations.services import get_organization_for_user
+            org = get_organization_for_user(user)
             if org:
                 queryset = queryset.filter(employee__organization=org)
             else:
@@ -860,6 +849,10 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         user = self.request.user
+        if user.is_authenticated and getattr(user, "role", "") == UserRole.SUB_ADMIN:
+            if not check_user_module_permission(user, "leaves", "edit"):
+                raise PermissionDenied("You do not have permission to create leave requests.")
+
         employee = (
             self._current_employee()
             if not self._is_admin_or_hr(user)
@@ -893,6 +886,9 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         user = self.request.user
+        if user.is_authenticated and getattr(user, "role", "") == UserRole.SUB_ADMIN:
+            if not check_user_module_permission(user, "leaves", "edit"):
+                raise PermissionDenied("You do not have permission to modify leave requests.")
         
         with transaction.atomic():
             # Store original values before saving to detect critical changes
@@ -935,7 +931,10 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
 
     def perform_destroy(self, instance):
         user = self.request.user
-        if not self._is_admin_or_hr(user):
+        if user.is_authenticated and getattr(user, "role", "") == UserRole.SUB_ADMIN:
+            if not check_user_module_permission(user, "leaves", "delete"):
+                raise PermissionDenied("You do not have permission to delete leave requests.")
+        elif not self._is_admin_or_hr(user):
             employee = self._current_employee()
             self._ensure_leave_eligible(employee)
             if instance.employee_id != employee.id:

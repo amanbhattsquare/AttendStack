@@ -101,3 +101,64 @@ def sync_invite_code_to_simplyjob(organization) -> dict:
     results["ok"] = bool(results["db_updated"] or results["webhook_sent"])
     results["attendstack_invite_code"] = attendstack_invite_code
     return results
+
+
+def get_organization_for_user(user):
+    """
+    Standardized multi-tenant organization resolver supporting:
+    1. Sub-Admins via subadmin_profile / SubAdminPermission mapping
+    2. Primary HR / Owners via Organization.owner
+    3. Linked Employees via Employee.organization or employee_profile
+    4. Reverse relation on Organization
+    5. Super Admin default organization fallback
+    """
+    if not user or not getattr(user, "is_authenticated", False):
+        return None
+
+    from organizations.models import Organization
+    from employees.models import Employee
+
+    # 1. Sub-Admin Profile or SubAdminPermission mapping
+    if getattr(user, "role", "") == "SUB_ADMIN" or hasattr(user, "subadmin_profile"):
+        sub = getattr(user, "subadmin_profile", None)
+        if sub and getattr(sub, "organization", None):
+            return sub.organization
+        from accounts.models import SubAdminPermission
+        sub_perm = SubAdminPermission.objects.filter(user=user).select_related("organization").first()
+        if sub_perm and sub_perm.organization:
+            return sub_perm.organization
+
+    # 2. Direct Ownership (Primary HR / Workspace Owner)
+    org = Organization.objects.filter(owner=user).first()
+    if org:
+        return org
+
+    # 3. Employee Profile on user model
+    if hasattr(user, "employee_profile") and user.employee_profile and user.employee_profile.organization:
+        return user.employee_profile.organization
+
+    # 4. Employee record lookup by email
+    emp = Employee.objects.filter(email__iexact=user.email, organization__isnull=False).select_related("organization").first()
+    if emp and emp.organization:
+        return emp.organization
+
+    # 5. Reverse employee relation on Organization
+    org = Organization.objects.filter(employees__email__iexact=user.email).first()
+    if org:
+        return org
+
+    # 6. Fallback SubAdmin check in case role wasn't explicitly SUB_ADMIN
+    try:
+        from accounts.models import SubAdminPermission
+        sub_perm = SubAdminPermission.objects.filter(user=user).select_related("organization").first()
+        if sub_perm and sub_perm.organization:
+            return sub_perm.organization
+    except Exception:
+        pass
+
+    # 7. Super Admin fallback
+    if getattr(user, "is_superuser", False) or getattr(user, "role", "") == "SUPER_ADMIN":
+        return Organization.objects.order_by("created_at").first()
+
+    return None
+

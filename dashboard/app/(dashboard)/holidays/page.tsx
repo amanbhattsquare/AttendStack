@@ -10,6 +10,7 @@ import { useHolidays } from "./useHolidays";
 import { flexRender } from "@tanstack/react-table";
 import Pagination from "./Pagination";
 import { Spinner, Button, Alert, Form } from "react-bootstrap";
+import DasherBreadcrumb from "components/common/DasherBreadcrumb";
 
 const BASE_URL = `${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/holidays/`;
 
@@ -23,7 +24,7 @@ const authHeaders = (): HeadersInit => {
 
 const HolidaysPage = () => {
   const [holidays, setHolidays] = useState<Holiday[]>([]);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [currentUser, setCurrentUser] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
   const [totalHolidaysCount, setTotalHolidaysCount] = useState(0);
@@ -37,32 +38,62 @@ const HolidaysPage = () => {
     pageSize: 10,
   });
 
-  // Determine user role
+  // Determine user permissions
   useEffect(() => {
-    const userData = localStorage.getItem("user");
-    if (userData) {
+    if (typeof window !== "undefined") {
       try {
-        const parsed = JSON.parse(userData);
-        setIsAdmin(parsed.role === "SUPER_ADMIN" || parsed.role === "HR");
-      } catch (err) {
-        console.error("Failed to parse user data.", err);
-      }
+        const stored = localStorage.getItem("user");
+        if (stored) {
+          setCurrentUser(JSON.parse(stored));
+        }
+      } catch {}
     }
   }, []);
 
+  const isSuperAdmin = currentUser?.role === "SUPER_ADMIN";
+  const isHR = currentUser?.role === "HR";
+  const isSubAdmin = currentUser?.role === "SUB_ADMIN";
+  const holidaysPerm = currentUser?.permissions?.holidays;
+
+  const canEdit = isSuperAdmin || isHR || (isSubAdmin ? (
+    typeof holidaysPerm === "object" && holidaysPerm !== null
+      ? Boolean(holidaysPerm.edit)
+      : Boolean(holidaysPerm)
+  ) : false);
+
+  const canDelete = isSuperAdmin || isHR || (isSubAdmin ? (
+    typeof holidaysPerm === "object" && holidaysPerm !== null
+      ? Boolean(holidaysPerm.delete)
+      : false
+  ) : false);
+
+  const hasActionCol = canEdit || canDelete;
+
+  const { table } = useHolidays(holidays, hasActionCol, Math.ceil(totalHolidaysCount / (pagination.pageSize || 10)) || 1);
+
   // Fetch holidays from Django API
-  const fetchHolidays = async (pageIndex: number, pageSize: number) => {
+  const fetchHolidays = async (page = 0, size = 10) => {
     setIsLoading(true);
     setError("");
     try {
-      const url = `${BASE_URL}?page=${pageIndex + 1}&page_size=${pageSize}`;
-      const res = await fetch(url, { headers: authHeaders() });
-      if (!res.ok) throw new Error("Failed to load company holidays.");
+      const offset = page * size;
+      const res = await fetch(`${BASE_URL}?limit=${size}&offset=${offset}`, {
+        headers: authHeaders(),
+      });
+      if (!res.ok) throw new Error("Failed to load holiday records.");
       const data = await res.json();
-      setHolidays(data.results || []);
-      setTotalHolidaysCount(data.count || 0);
+      if (Array.isArray(data)) {
+        setHolidays(data);
+        setTotalHolidaysCount(data.length);
+      } else if (data && Array.isArray(data.results)) {
+        setHolidays(data.results);
+        setTotalHolidaysCount(data.count || data.results.length);
+      } else {
+        setHolidays([]);
+        setTotalHolidaysCount(0);
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load holidays.");
+      setError(err instanceof Error ? err.message : "Error fetching holidays.");
     } finally {
       setIsLoading(false);
     }
@@ -72,19 +103,30 @@ const HolidaysPage = () => {
     fetchHolidays(pagination.pageIndex, pagination.pageSize);
   }, [pagination.pageIndex, pagination.pageSize]);
 
-  // Table setup
-  const pageCount = Math.ceil(totalHolidaysCount / pagination.pageSize);
-  const { table } = useHolidays(holidays, isAdmin, pageCount);
-
-  // Sync pagination state from table to local state
-  useEffect(() => {
-    setPagination(table.getState().pagination);
-  }, [table.getState().pagination]);
-
-  const handleShowAddModal = () => setShowAddModal(true);
+  const handleShowAddModal = () => {
+    if (!canEdit) {
+      Swal.fire({
+        title: "Permission Denied",
+        text: "You do not have permission to add holidays.",
+        icon: "error",
+        confirmButtonColor: "#dc3545",
+      });
+      return;
+    }
+    setShowAddModal(true);
+  };
   const handleCloseAddModal = () => setShowAddModal(false);
 
   const handleShowEditModal = (holiday: Holiday) => {
+    if (!canEdit) {
+      Swal.fire({
+        title: "Permission Denied",
+        text: "You do not have permission to edit holidays.",
+        icon: "error",
+        confirmButtonColor: "#dc3545",
+      });
+      return;
+    }
     setSelectedHoliday(holiday);
     setShowEditModal(true);
   };
@@ -95,6 +137,15 @@ const HolidaysPage = () => {
 
   // API Mutators
   const addHoliday = async (newHoliday: { name: string; date: string; type: string }) => {
+    if (!canEdit) {
+      Swal.fire({
+        title: "Permission Denied",
+        text: "You do not have permission to add holidays.",
+        icon: "error",
+        confirmButtonColor: "#dc3545",
+      });
+      return;
+    }
     try {
       const res = await fetch(BASE_URL, {
         method: "POST",
@@ -103,7 +154,7 @@ const HolidaysPage = () => {
       });
       if (!res.ok) {
         const errorData = await res.json();
-        throw new Error(errorData.detail || errorData.date?.[0] || "Failed to create holiday.");
+        throw new Error(errorData.detail || errorData.date?.[0] || "Failed to create holiday record.");
       }
       await fetchHolidays(pagination.pageIndex, pagination.pageSize);
     } catch (err) {
@@ -118,15 +169,20 @@ const HolidaysPage = () => {
   };
 
   const updateHoliday = async (updatedHoliday: Holiday) => {
+    if (!canEdit) {
+      Swal.fire({
+        title: "Permission Denied",
+        text: "You do not have permission to edit holidays.",
+        icon: "error",
+        confirmButtonColor: "#dc3545",
+      });
+      return;
+    }
     try {
       const res = await fetch(`${BASE_URL}${updatedHoliday.id}/`, {
         method: "PUT",
         headers: authHeaders(),
-        body: JSON.stringify({
-          name: updatedHoliday.name,
-          date: updatedHoliday.date,
-          type: updatedHoliday.type,
-        }),
+        body: JSON.stringify(updatedHoliday),
       });
       if (!res.ok) {
         const errorData = await res.json();
@@ -145,6 +201,15 @@ const HolidaysPage = () => {
   };
 
   const handleDelete = async (id: number) => {
+    if (!canDelete) {
+      Swal.fire({
+        title: "Permission Denied",
+        text: "You do not have permission to delete holidays.",
+        icon: "error",
+        confirmButtonColor: "#dc3545",
+      });
+      return;
+    }
     const result = await Swal.fire({
       title: "Delete Holiday?",
       text: "Are you sure you want to permanently delete this holiday record?",
@@ -165,15 +230,14 @@ const HolidaysPage = () => {
       await fetchHolidays(pagination.pageIndex, pagination.pageSize);
       Swal.fire({
         title: "Deleted!",
-        text: "The holiday record has been deleted successfully.",
+        text: "Holiday has been removed successfully.",
         icon: "success",
-        timer: 1500,
-        showConfirmButton: false,
+        confirmButtonColor: "#198754",
       });
     } catch (err) {
       Swal.fire({
         title: "Delete Failed",
-        text: err instanceof Error ? err.message : "Failed to delete holiday.",
+        text: err instanceof Error ? err.message : "Error deleting holiday.",
         icon: "error",
         confirmButtonColor: "#dc3545",
       });
@@ -182,6 +246,7 @@ const HolidaysPage = () => {
 
   return (
     <Fragment>
+      <DasherBreadcrumb />
       <div className="mb-6 d-flex align-items-center justify-content-between">
         <div>
           <h2 className="mb-0 fw-bold">Company Holidays</h2>
@@ -193,7 +258,7 @@ const HolidaysPage = () => {
           <Button variant="outline-secondary" size="sm" onClick={() => fetchHolidays(pagination.pageIndex, pagination.pageSize)} className="d-flex align-items-center gap-2">
             <IconRefresh size={16} /> Sync
           </Button>
-          {isAdmin && (
+          {canEdit && (
             <button
               className="btn btn-primary d-flex align-items-center gap-2 shadow-sm"
               onClick={handleShowAddModal}
@@ -282,7 +347,7 @@ const HolidaysPage = () => {
                   <tbody>
                     {table.getRowModel().rows.length === 0 ? (
                       <tr>
-                        <td colSpan={isAdmin ? 6 : 5} className="text-center py-5 text-secondary">
+                        <td colSpan={hasActionCol ? 6 : 5} className="text-center py-5 text-secondary">
                           No company holidays registered.
                         </td>
                       </tr>
@@ -293,7 +358,8 @@ const HolidaysPage = () => {
                           row={row}
                           handleDelete={handleDelete}
                           handleEdit={handleShowEditModal}
-                          isAdmin={isAdmin}
+                          canEdit={canEdit}
+                          canDelete={canDelete}
                         />
                       ))
                     )}

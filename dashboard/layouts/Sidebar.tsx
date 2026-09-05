@@ -1,7 +1,7 @@
 "use client";
 //import node module libraries
 import Link from "next/link";
-import React, { Fragment, useState, useEffect } from "react";
+import React, { Fragment, useState, useEffect, useMemo } from "react";
 import {
   Accordion,
   Badge,
@@ -33,6 +33,7 @@ interface SidebarProps {
   containerId?: string;
   currentPath: string;
   onNavigate?: () => void;
+  user?: any;
 }
 
 type AdminLiveStatus = {
@@ -55,24 +56,111 @@ const formatLastLiveTime = (value?: string | null) => {
   }).format(new Date(value));
 };
 
-const Sidebar: React.FC<SidebarProps> = ({ hideLogo = false, containerId, currentPath, isEmployee, onNavigate }) => {
+const Sidebar: React.FC<SidebarProps> = ({ hideLogo = false, containerId, currentPath, isEmployee, onNavigate, user: propUser }) => {
   const { companyLogo, companyName } = useBranding();
-  const menuItems = isEmployee ? EmployeeDashboardMenu : DashboardMenu;
-  const [user, setUser] = useState<{ full_name: string; designation: string } | null>(null);
+  const [isMounted, setIsMounted] = useState(false);
+  const [localUser, setLocalUser] = useState<any>(null);
   const [organization, setOrganization] = useState<any>(null);
   const [adminStatus, setAdminStatus] = useState<AdminLiveStatus | null>(null);
 
+  const currentUser = propUser || localUser;
+
+  const menuItems = useMemo(() => {
+    if (!isMounted) return [];
+    if (isEmployee) return EmployeeDashboardMenu;
+
+    const isSuperAdmin = currentUser?.role === "SUPER_ADMIN";
+    const isPrimaryHR = currentUser?.role === "HR";
+    const isSubAdmin = currentUser?.role === "SUB_ADMIN";
+    const userPermissions = currentUser?.permissions || {};
+
+    const filtered = DashboardMenu.filter((item) => {
+      if (item.grouptitle) return true;
+      if (item.adminOnly) {
+        return isSuperAdmin || isPrimaryHR;
+      }
+      if (isSubAdmin) {
+        if (item.link === "/dashboard" || item.logout) return true;
+        if (item.moduleKey) {
+          if (item.moduleKey === "dashboard") return true;
+          if (item.moduleKey === "payroll") {
+            const pView = typeof userPermissions.payroll === "object" && userPermissions.payroll !== null
+              ? Boolean(userPermissions.payroll.view)
+              : Boolean(userPermissions.payroll);
+            const iView = typeof userPermissions.increments === "object" && userPermissions.increments !== null
+              ? Boolean(userPermissions.increments.view)
+              : Boolean(userPermissions.increments);
+            return pView || iView;
+          }
+          const modPerm = userPermissions[item.moduleKey];
+          if (typeof modPerm === "object" && modPerm !== null) {
+            return Boolean(modPerm.view);
+          }
+          if (typeof modPerm === "boolean") {
+            return modPerm;
+          }
+          return false;
+        }
+        return false;
+      }
+      return true;
+    });
+
+    // Remove empty group titles (e.g. HR MANAGEMENT or SYSTEM if no visible children)
+    const result: MenuItemType[] = [];
+    for (let i = 0; i < filtered.length; i++) {
+      const current = filtered[i];
+      if (current.grouptitle) {
+        let hasChildren = false;
+        for (let j = i + 1; j < filtered.length; j++) {
+          if (filtered[j].grouptitle) break;
+          hasChildren = true;
+          break;
+        }
+        if (hasChildren) {
+          result.push(current);
+        }
+      } else {
+        result.push(current);
+      }
+    }
+    return result;
+  }, [isMounted, isEmployee, currentUser]);
+
   useEffect(() => {
+    setIsMounted(true);
     const userData = localStorage.getItem("user");
     if (userData) {
-      const parsedUser = JSON.parse(userData);
-      setUser(parsedUser);
+      try {
+        const parsedUser = JSON.parse(userData);
+        setLocalUser(parsedUser);
+      } catch {}
     }
     const orgData = localStorage.getItem("organization");
     if (orgData) {
       try {
         setOrganization(JSON.parse(orgData));
       } catch {}
+    }
+
+    // Refresh profile in background to immediately reflect real-time RBAC permission updates
+    const token = localStorage.getItem("authToken");
+    if (token) {
+      fetch(`${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/accounts/profile/`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((profile) => {
+          if (profile && profile.id) {
+            setLocalUser(profile);
+            localStorage.setItem("user", JSON.stringify(profile));
+            if (profile.organization) {
+              setOrganization(profile.organization);
+              localStorage.setItem("organization", JSON.stringify(profile.organization));
+            }
+          }
+        })
+        .catch(() => {});
     }
   }, []);
 
@@ -377,9 +465,9 @@ const Sidebar: React.FC<SidebarProps> = ({ hideLogo = false, containerId, curren
                   )}
                 </div>
                 <div className='my-3'>
-                  <h5 className='mb-1 fs-6'>{companyName || 'AttendStack'}</h5>
-                  <span className='d-block text-secondary'>{user ? user.full_name : 'Jitu Chauhan'}</span>
-                  <span className='text-secondary'>{user ? user.designation : 'HR Administrator'}</span>
+                  <h5 className='mb-1 fs-6'>{isMounted ? (companyName || 'AttendStack') : 'AttendStack'}</h5>
+                  <span className='d-block text-secondary'>{isMounted && currentUser ? (currentUser.full_name || currentUser.name || currentUser.username) : 'HR Administrator'}</span>
+                  <span className='text-secondary'>{isMounted && currentUser ? (currentUser.designation || currentUser.role_display || currentUser.role) : 'Administrator'}</span>
                 </div>
               </div>
             </div>

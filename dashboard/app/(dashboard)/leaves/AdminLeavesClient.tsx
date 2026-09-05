@@ -34,6 +34,37 @@ const AdminLeavesClient = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
+  const [currentUser, setCurrentUser] = useState<any>(null);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem("user");
+        if (stored) {
+          setCurrentUser(JSON.parse(stored));
+        }
+      } catch {
+        // ignore
+      }
+    }
+  }, []);
+
+  const isSuperAdmin = currentUser?.role === "SUPER_ADMIN";
+  const isHR = currentUser?.role === "HR";
+  const isSubAdmin = currentUser?.role === "SUB_ADMIN";
+  const leavesPermission = currentUser?.permissions?.leaves;
+
+  const canEdit = isSuperAdmin || isHR || (isSubAdmin ? (
+    typeof leavesPermission === "object" && leavesPermission !== null
+      ? Boolean(leavesPermission.edit)
+      : Boolean(leavesPermission)
+  ) : false);
+
+  const canDelete = isSuperAdmin || isHR || (isSubAdmin ? (
+    typeof leavesPermission === "object" && leavesPermission !== null
+      ? Boolean(leavesPermission.delete)
+      : false
+  ) : false);
 
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState("");
@@ -48,6 +79,16 @@ const AdminLeavesClient = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleDelete = async (id: number, employeeName?: string) => {
+    if (!canDelete) {
+      Swal.fire({
+        title: "Permission Denied",
+        text: "You do not have permission to delete leave requests.",
+        icon: "error",
+        confirmButtonColor: "#dc3545",
+      });
+      return;
+    }
+
     const result = await Swal.fire({
       title: "Delete Leave Request?",
       text: `Are you sure you want to permanently delete the leave request for ${employeeName || "this employee"}?`,
@@ -99,6 +140,16 @@ const AdminLeavesClient = () => {
   };
 
   const handleQuickStatusUpdate = async (leave: LeaveRequest, newStatus: "APPROVED" | "REJECTED") => {
+    if (!canEdit) {
+      Swal.fire({
+        title: "Permission Denied",
+        text: "You do not have permission to modify leave requests.",
+        icon: "error",
+        confirmButtonColor: "#dc3545",
+      });
+      return;
+    }
+
     const isApprove = newStatus === "APPROVED";
     const result = await Swal.fire({
       title: isApprove ? "Approve Leave Request?" : "Reject Leave Request?",
@@ -189,13 +240,23 @@ const AdminLeavesClient = () => {
     setSelectedLeave(leave);
     setReviewStatus(leave.status);
     setAdminNotes(leave.admin_notes || "");
-    setIsEditing(editing);
+    setIsEditing(editing && canEdit);
     setShowModal(true);
   };
 
   const handleReviewSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedLeave) return;
+
+    if (!canEdit) {
+      Swal.fire({
+        title: "Permission Denied",
+        text: "You do not have permission to modify leave requests.",
+        icon: "error",
+        confirmButtonColor: "#dc3545",
+      });
+      return;
+    }
 
     setError("");
     setSuccessMsg("");
@@ -501,8 +562,12 @@ const AdminLeavesClient = () => {
                             >
                               <IconDotsVertical size={20} />
                             </Dropdown.Toggle>
-                            <Dropdown.Menu className="leave-action-menu shadow border-0">
-                              {leave.status === "PENDING" && (
+                            <Dropdown.Menu
+                              className="leave-action-menu shadow border-0"
+                              popperConfig={{ strategy: "fixed" }}
+                              style={{ zIndex: 1080 }}
+                            >
+                              {leave.status === "PENDING" && canEdit && (
                                 <>
                                   <Dropdown.Item onClick={() => handleQuickStatusUpdate(leave, "APPROVED")} className="d-flex align-items-center gap-2 text-success fw-semibold">
                                     <IconCheck size={16} />
@@ -519,15 +584,21 @@ const AdminLeavesClient = () => {
                                 <IconEye size={16} />
                                 View Details
                               </Dropdown.Item>
-                              <Dropdown.Item onClick={() => handleOpenLeaveModal(leave, true)} className="d-flex align-items-center gap-2">
-                                <IconSettings size={16} />
-                                Change Status / Notes
-                              </Dropdown.Item>
-                              <Dropdown.Divider />
-                              <Dropdown.Item onClick={() => handleDelete(leave.id, leave.employee_name)} className="d-flex align-items-center gap-2 text-danger">
-                                <IconTrash size={16} />
-                                Delete
-                              </Dropdown.Item>
+                              {canEdit && (
+                                <Dropdown.Item onClick={() => handleOpenLeaveModal(leave, true)} className="d-flex align-items-center gap-2">
+                                  <IconSettings size={16} />
+                                  Change Status / Notes
+                                </Dropdown.Item>
+                              )}
+                              {canDelete && (
+                                <>
+                                  <Dropdown.Divider />
+                                  <Dropdown.Item onClick={() => handleDelete(leave.id, leave.employee_name)} className="d-flex align-items-center gap-2 text-danger">
+                                    <IconTrash size={16} />
+                                    Delete
+                                  </Dropdown.Item>
+                                </>
+                              )}
                             </Dropdown.Menu>
                           </Dropdown>
                         </td>

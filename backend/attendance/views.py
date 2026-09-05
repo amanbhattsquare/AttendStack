@@ -15,7 +15,8 @@ from rest_framework.response import Response
 from ipware import get_client_ip
 from geopy.distance import geodesic
 
-from accounts.permissions import IsAdminOrHR
+from accounts.permissions import IsAdminOrHR, check_user_module_permission
+from accounts.models import UserRole
 from organizations.models import Organization
 from employees.models import (
     ATTENDANCE_ELIGIBLE_STATUSES,
@@ -740,6 +741,9 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
                 Q(employee__email__iexact=user.email) | Q(employee__employee_id=user.employee_id)
             )
         elif user.is_authenticated and not (user.is_superuser or getattr(user, 'role', '') == "SUPER_ADMIN"):
+            if getattr(user, 'role', '') == UserRole.SUB_ADMIN:
+                if not check_user_module_permission(user, "leaves", "view"):
+                    return queryset.none()
             from organizations.services import get_organization_for_user
             org = get_organization_for_user(user)
             if org:
@@ -839,6 +843,10 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         user = self.request.user
+        if user.is_authenticated and getattr(user, "role", "") == UserRole.SUB_ADMIN:
+            if not check_user_module_permission(user, "leaves", "edit"):
+                raise PermissionDenied("You do not have permission to create leave requests.")
+
         employee = (
             self._current_employee()
             if not self._is_admin_or_hr(user)
@@ -872,6 +880,9 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         user = self.request.user
+        if user.is_authenticated and getattr(user, "role", "") == UserRole.SUB_ADMIN:
+            if not check_user_module_permission(user, "leaves", "edit"):
+                raise PermissionDenied("You do not have permission to modify leave requests.")
         
         with transaction.atomic():
             # Store original values before saving to detect critical changes
@@ -914,7 +925,10 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
 
     def perform_destroy(self, instance):
         user = self.request.user
-        if not self._is_admin_or_hr(user):
+        if user.is_authenticated and getattr(user, "role", "") == UserRole.SUB_ADMIN:
+            if not check_user_module_permission(user, "leaves", "delete"):
+                raise PermissionDenied("You do not have permission to delete leave requests.")
+        elif not self._is_admin_or_hr(user):
             employee = self._current_employee()
             self._ensure_leave_eligible(employee)
             if instance.employee_id != employee.id:

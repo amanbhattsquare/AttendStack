@@ -522,7 +522,6 @@ const ProjectDeliveryOverviewWidget: React.FC = () => {
                       minHeight: "92px",
                       background: "#ffffff",
                       border: "1px solid #e2e8f0",
-                      borderTop: `3px solid ${metric.accentColor}`,
                       borderRadius: "10px",
                       padding: "12px 14px",
                       position: "relative",
@@ -539,7 +538,6 @@ const ProjectDeliveryOverviewWidget: React.FC = () => {
                       e.currentTarget.style.transform = "translateY(0)";
                       e.currentTarget.style.boxShadow = "0 1px 3px rgba(15, 23, 42, 0.03)";
                       e.currentTarget.style.border = "1px solid #e2e8f0";
-                      e.currentTarget.style.borderTop = `3px solid ${metric.accentColor}`;
                     }}
                   >
                     <div className="d-flex justify-content-between align-items-center mb-1">

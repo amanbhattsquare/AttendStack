@@ -134,3 +134,73 @@ class PayrollCalculationTests(TestCase):
 
         self.assertEqual(payroll["eligible_days"], 0)
         self.assertEqual(payroll["basic_salary"], Decimal("0.00"))
+
+
+from .models import Payroll, PayrollStatus
+from .serializers import PayrollSerializer
+
+
+class PaidPayrollModificationTests(TestCase):
+    def setUp(self):
+        self.employee = create_employee()
+        self.paid_payroll = Payroll.objects.create(
+            employee=self.employee,
+            month=5,
+            year=2026,
+            basic_salary=Decimal("10000.00"),
+            allowances=Decimal("2000.00"),
+            deductions=Decimal("1000.00"),
+            status=PayrollStatus.PAID,
+        )
+
+    def test_modifying_paid_payroll_without_reason_fails_validation(self):
+        serializer = PayrollSerializer(
+            instance=self.paid_payroll,
+            data={"basic_salary": "11000.00", "allowances": "2000.00", "deductions": "1000.00", "status": "PAID"},
+            partial=True
+        )
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("modification_reason", serializer.errors)
+
+    def test_modifying_paid_payroll_with_valid_reason_records_audit_trail(self):
+        serializer = PayrollSerializer(
+            instance=self.paid_payroll,
+            data={
+                "basic_salary": "11000.00",
+                "allowances": "2500.00",
+                "deductions": "1000.00",
+                "status": "PAID",
+                "modification_reason": "Retroactive incentive bonus adjustment",
+            },
+            partial=True
+        )
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        updated = serializer.save()
+        self.assertEqual(updated.basic_salary, Decimal("11000.00"))
+        self.assertEqual(updated.allowances, Decimal("2500.00"))
+        self.assertTrue(updated.is_modified_after_payment)
+        self.assertEqual(len(updated.modification_history), 1)
+        self.assertEqual(updated.modification_history[0]["reason"], "Retroactive incentive bonus adjustment")
+        self.assertEqual(updated.modification_history[0]["old_values"]["basic_salary"], "10000.00")
+        self.assertEqual(updated.modification_history[0]["new_values"]["basic_salary"], "11000.00")
+
+    def test_modifying_pending_payroll_does_not_require_reason(self):
+        pending_payroll = Payroll.objects.create(
+            employee=self.employee,
+            month=6,
+            year=2026,
+            basic_salary=Decimal("10000.00"),
+            allowances=Decimal("2000.00"),
+            deductions=Decimal("1000.00"),
+            status=PayrollStatus.PENDING,
+        )
+        serializer = PayrollSerializer(
+            instance=pending_payroll,
+            data={"basic_salary": "11000.00", "allowances": "2000.00", "deductions": "1000.00", "status": "PENDING"},
+            partial=True
+        )
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        updated = serializer.save()
+        self.assertEqual(updated.basic_salary, Decimal("11000.00"))
+        self.assertFalse(updated.is_modified_after_payment)
+

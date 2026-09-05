@@ -345,6 +345,11 @@ const PayslipPreview = ({ payroll }: PayslipPreviewProps) => {
 
       {/* ─── 7. STATUTORY DISCLAIMER FOOTER ─── */}
       <div className="formal-footer">
+        {payroll.is_modified_after_payment && payroll.modification_reason && (
+          <p className="footer-note" style={{ color: "#b45309", fontWeight: 600 }}>
+            * Post-Disbursement Audit Remark: {payroll.modification_reason}
+          </p>
+        )}
         <p className="footer-note">
           * Note: This document is an official electronically generated salary voucher issued by {companyName}. It is valid for all statutory, banking, visa, and income tax declaration purposes.
         </p>

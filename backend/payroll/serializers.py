@@ -54,6 +54,7 @@ class PayrollSerializer(serializers.ModelSerializer):
     payable_salary = serializers.SerializerMethodField()
     attendance_summary = serializers.SerializerMethodField()
     company_details = serializers.SerializerMethodField()
+    modified_by_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Payroll
@@ -74,9 +75,108 @@ class PayrollSerializer(serializers.ModelSerializer):
             "attendance_summary",
             "status",
             "paid_on",
+            "modification_reason",
+            "modified_by",
+            "modified_by_name",
+            "is_modified_after_payment",
+            "modification_history",
             "created_at",
             "updated_at"
         ]
+        read_only_fields = [
+            "id",
+            "net_salary",
+            "paid_on",
+            "modified_by",
+            "modified_by_name",
+            "is_modified_after_payment",
+            "modification_history",
+            "created_at",
+            "updated_at"
+        ]
+
+    def get_modified_by_name(self, obj):
+        if obj.modified_by:
+            return obj.modified_by.get_full_name() or obj.modified_by.username or obj.modified_by.email
+        return None
+
+    def validate(self, attrs):
+        instance = getattr(self, "instance", None)
+        if instance and instance.status == "PAID":
+            # Check if any financial amount or status is being altered
+            from decimal import Decimal
+            new_basic = attrs.get("basic_salary", instance.basic_salary)
+            new_allowances = attrs.get("allowances", instance.allowances)
+            new_deductions = attrs.get("deductions", instance.deductions)
+            new_status = attrs.get("status", instance.status)
+
+            has_changed = (
+                Decimal(str(new_basic)) != Decimal(str(instance.basic_salary)) or
+                Decimal(str(new_allowances)) != Decimal(str(instance.allowances)) or
+                Decimal(str(new_deductions)) != Decimal(str(instance.deductions)) or
+                new_status != instance.status
+            )
+
+            if has_changed:
+                reason = (attrs.get("modification_reason") or self.initial_data.get("modification_reason", "")).strip()
+                if not reason or len(reason) < 5:
+                    raise serializers.ValidationError({
+                        "modification_reason": "This salary has already been disbursed as PAID. Altering paid payroll figures requires a mandatory audit remark (minimum 5 characters)."
+                    })
+                attrs["modification_reason"] = reason
+
+        return attrs
+
+    def update(self, instance, validated_data):
+        from decimal import Decimal
+        from django.utils import timezone
+
+        if instance.status == "PAID":
+            new_basic = validated_data.get("basic_salary", instance.basic_salary)
+            new_allowances = validated_data.get("allowances", instance.allowances)
+            new_deductions = validated_data.get("deductions", instance.deductions)
+            new_status = validated_data.get("status", instance.status)
+
+            has_changed = (
+                Decimal(str(new_basic)) != Decimal(str(instance.basic_salary)) or
+                Decimal(str(new_allowances)) != Decimal(str(instance.allowances)) or
+                Decimal(str(new_deductions)) != Decimal(str(instance.deductions)) or
+                new_status != instance.status
+            )
+
+            if has_changed:
+                request = self.context.get("request")
+                user = request.user if request and getattr(request.user, "is_authenticated", False) else None
+                reason = validated_data.get("modification_reason") or instance.modification_reason
+
+                history_entry = {
+                    "modified_at": timezone.now().isoformat(),
+                    "modified_by_id": user.id if user else None,
+                    "modified_by_name": user.get_full_name() or user.username or "Administrator" if user else "System Administrator",
+                    "modified_by_email": user.email if user else "",
+                    "reason": reason,
+                    "old_values": {
+                        "basic_salary": str(instance.basic_salary),
+                        "allowances": str(instance.allowances),
+                        "deductions": str(instance.deductions),
+                        "net_salary": str(instance.net_salary),
+                        "status": instance.status,
+                    },
+                    "new_values": {
+                        "basic_salary": str(new_basic),
+                        "allowances": str(new_allowances),
+                        "deductions": str(new_deductions),
+                        "status": new_status,
+                    }
+                }
+                history = list(instance.modification_history or [])
+                history.insert(0, history_entry)
+                instance.modification_history = history
+                instance.is_modified_after_payment = True
+                instance.modified_by = user
+                instance.modification_reason = reason
+
+        return super().update(instance, validated_data)
 
     def get_company_details(self, obj):
         try:

@@ -1,7 +1,20 @@
 "use client";
 
 import { Fragment, useState, useEffect } from "react";
-import { IconDownload, IconSearch, IconPlus, IconPencil, IconCheck, IconInfoCircle, IconCurrencyRupee, IconTrendingUp } from "@tabler/icons-react";
+import {
+  IconDownload,
+  IconSearch,
+  IconPlus,
+  IconPencil,
+  IconCheck,
+  IconInfoCircle,
+  IconCurrencyRupee,
+  IconTrendingUp,
+  IconLock,
+  IconHistory,
+  IconAlertTriangle,
+  IconShieldCheck,
+} from "@tabler/icons-react";
 import { Spinner, Alert, Modal, Button, Form, Badge, Table, Nav } from "react-bootstrap";
 import Swal from "sweetalert2";
 import PayslipPreview from "components/payroll/PayslipPreview";
@@ -89,7 +102,12 @@ const SalaryPage = () => {
   const [editAllowances, setEditAllowances] = useState("");
   const [editDeductions, setEditDeductions] = useState("");
   const [editStatus, setEditStatus] = useState("PENDING");
+  const [editReason, setEditReason] = useState("");
+  const [reasonError, setReasonError] = useState("");
   const [isUpdating, setIsUpdating] = useState(false);
+
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [historyPayroll, setHistoryPayroll] = useState<any | null>(null);
 
   const [showPayslipModal, setShowPayslipModal] = useState(false);
   const [payslipData, setPayslipData] = useState<any | null>(null);
@@ -200,6 +218,8 @@ const SalaryPage = () => {
     setEditAllowances(p.allowances);
     setEditDeductions(p.deductions);
     setEditStatus(p.status);
+    setEditReason(p.modification_reason || "");
+    setReasonError("");
     setShowEditModal(true);
   };
 
@@ -207,6 +227,22 @@ const SalaryPage = () => {
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedPayroll) return;
+
+    const isAlreadyPaid = selectedPayroll.status === "PAID";
+    const hasChanged =
+      Number(editBasic) !== Number(selectedPayroll.basic_salary) ||
+      Number(editAllowances) !== Number(selectedPayroll.allowances) ||
+      Number(editDeductions) !== Number(selectedPayroll.deductions) ||
+      editStatus !== selectedPayroll.status;
+
+    if (isAlreadyPaid && hasChanged) {
+      if (!editReason || editReason.trim().length < 5) {
+        setReasonError("A valid reason for modification (minimum 5 characters) is required for already paid salary records.");
+        return;
+      }
+    }
+
+    setReasonError("");
     setIsUpdating(true);
     try {
       const res = await fetch(`${BASE_URL}${selectedPayroll.id}/`, {
@@ -220,14 +256,30 @@ const SalaryPage = () => {
           allowances: Number(editAllowances),
           deductions: Number(editDeductions),
           status: editStatus,
+          modification_reason: editReason.trim(),
         }),
       });
       if (!res.ok) {
         const errData = await res.json();
-        throw new Error(errData.detail || "Failed to update payroll details.");
+        const errorMsg =
+          typeof errData.modification_reason === "string"
+            ? errData.modification_reason
+            : Array.isArray(errData.modification_reason)
+            ? errData.modification_reason[0]
+            : errData.detail || "Failed to update payroll details.";
+        throw new Error(errorMsg);
       }
       setShowEditModal(false);
       fetchPayrolls();
+      Swal.fire({
+        title: "Salary Record Updated",
+        text: isAlreadyPaid && hasChanged
+          ? "Adjustment successfully saved and logged to the statutory audit trail."
+          : "Payroll details updated successfully.",
+        icon: "success",
+        timer: 2000,
+        showConfirmButton: false,
+      });
     } catch (err) {
       Swal.fire({
         title: "Update Failed",
@@ -504,9 +556,31 @@ const SalaryPage = () => {
                             <small className="text-danger">Unpaid days: {Number(p.attendance_summary?.unpaid_days || 0)}</small>
                           </td>
                           <td>
-                            <Badge bg={p.status === "PAID" ? "success" : "warning"}>
-                              {p.status}
-                            </Badge>
+                            {p.status === "PAID" ? (
+                              <div className="d-flex flex-column align-items-start gap-1">
+                                <Badge bg="success" className="d-inline-flex align-items-center gap-1 px-2 py-1">
+                                  <IconLock size={12} /> PAID
+                                </Badge>
+                                {p.is_modified_after_payment && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setHistoryPayroll(p);
+                                      setShowHistoryModal(true);
+                                    }}
+                                    className="badge bg-light text-primary border border-primary-subtle d-inline-flex align-items-center gap-1 px-1.5 py-0.5"
+                                    title="Click to view change audit trail"
+                                    style={{ fontSize: "10px", cursor: "pointer" }}
+                                  >
+                                    <IconHistory size={11} /> Adjusted
+                                  </button>
+                                )}
+                              </div>
+                            ) : (
+                              <Badge bg="warning" className="px-2 py-1">
+                                PENDING
+                              </Badge>
+                            )}
                           </td>
                           <td className="text-end">
                             <div className="d-flex justify-content-end gap-2 px-3">
@@ -522,12 +596,28 @@ const SalaryPage = () => {
                               )}
                               {isAdmin && (
                                 <Button
-                                  variant="outline-primary"
+                                  variant={p.status === "PAID" ? "outline-warning" : "outline-primary"}
                                   size="sm"
                                   onClick={() => openEditModal(p)}
-                                  className="px-2 py-1"
+                                  className="px-2 py-1 d-flex align-items-center gap-1"
+                                  title={p.status === "PAID" ? "Modify paid salary (requires audit justification)" : "Edit payroll"}
                                 >
-                                  <IconPencil size={14} /> Edit
+                                  {p.status === "PAID" ? <IconLock size={13} /> : <IconPencil size={13} />}
+                                  {p.status === "PAID" ? "Adjust" : "Edit"}
+                                </Button>
+                              )}
+                              {p.is_modified_after_payment && (
+                                <Button
+                                  variant="outline-info"
+                                  size="sm"
+                                  onClick={() => {
+                                    setHistoryPayroll(p);
+                                    setShowHistoryModal(true);
+                                  }}
+                                  className="px-2 py-1 d-flex align-items-center gap-1"
+                                  title="View modification audit history"
+                                >
+                                  <IconHistory size={13} /> Audit
                                 </Button>
                               )}
                               <Button
@@ -613,81 +703,255 @@ const SalaryPage = () => {
       </Modal>
 
       {/* Edit Payroll Modal */}
-      <Modal show={showEditModal} onHide={() => setShowEditModal(false)} centered>
+      <Modal show={showEditModal} onHide={() => setShowEditModal(false)} centered size="lg">
         <Modal.Header closeButton>
-          <Modal.Title className="fw-bold">Adjust Payroll Details</Modal.Title>
+          <Modal.Title className="fw-bold fs-6 d-flex align-items-center gap-2">
+            {selectedPayroll?.status === "PAID" ? (
+              <>
+                <IconShieldCheck size={20} className="text-warning" />
+                Adjust Paid Payroll Record
+              </>
+            ) : (
+              <>
+                <IconPencil size={18} className="text-primary" />
+                Adjust Payroll Details
+              </>
+            )}
+          </Modal.Title>
         </Modal.Header>
         <Form onSubmit={handleUpdate}>
           {selectedPayroll && (
             <Modal.Body>
-              <div className="mb-4 border-bottom pb-3">
-                <h6 className="mb-0 fw-bold">{selectedPayroll.employee_details.full_name}</h6>
-                <small className="text-secondary">
-                  Payroll Period: {selectedPayroll.month_name} {selectedPayroll.year}
-                </small>
+              <div className="mb-3 border-bottom pb-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div>
+                  <h6 className="mb-0 fw-bold">{selectedPayroll.employee_details.full_name}</h6>
+                  <small className="text-secondary">
+                    Payroll Period: {selectedPayroll.month_name} {selectedPayroll.year} • {selectedPayroll.employee_details.department}
+                  </small>
+                </div>
+                <Badge bg={selectedPayroll.status === "PAID" ? "success" : "warning"} className="px-3 py-1.5 fs-7">
+                  {selectedPayroll.status === "PAID" ? "DISBURSED (PAID)" : "PENDING"}
+                </Badge>
               </div>
 
-              <Form.Group className="mb-3">
-                <Form.Label className="fw-semibold">Basic Salary (INR)</Form.Label>
-                <Form.Control
-                  type="number"
-                  step="0.01"
-                  value={editBasic}
-                  onChange={(e) => setEditBasic(e.target.value)}
-                  required
-                />
-              </Form.Group>
+              {selectedPayroll.status === "PAID" && (
+                <Alert variant="warning" className="d-flex align-items-start gap-2 border-warning-subtle py-2 px-3 small mb-3">
+                  <IconAlertTriangle size={20} className="text-warning flex-shrink-0 mt-0.5" />
+                  <div>
+                    <strong className="d-block text-dark">Locked Disbursed Record</strong>
+                    <span className="text-secondary">
+                      This salary was already marked as <strong>PAID</strong> on{" "}
+                      {selectedPayroll.paid_on ? formatDate(selectedPayroll.paid_on) : "record"}. Under accounting compliance, modifying disbursed payroll figures requires a mandatory audit justification.
+                    </span>
+                  </div>
+                </Alert>
+              )}
 
-              <Form.Group className="mb-3">
-                <Form.Label className="fw-semibold">Allowances / Bonuses (INR)</Form.Label>
-                <Form.Control
-                  type="number"
-                  step="0.01"
-                  value={editAllowances}
-                  onChange={(e) => setEditAllowances(e.target.value)}
-                  required
-                />
-              </Form.Group>
+              <div className="row g-3 mb-3">
+                <div className="col-md-4">
+                  <Form.Group>
+                    <Form.Label className="fw-semibold small">Basic Salary (INR)</Form.Label>
+                    <Form.Control
+                      type="number"
+                      step="0.01"
+                      value={editBasic}
+                      onChange={(e) => setEditBasic(e.target.value)}
+                      required
+                    />
+                  </Form.Group>
+                </div>
 
-              <Form.Group className="mb-3">
-                <Form.Label className="fw-semibold">Deductions / Unpaid Offs (INR)</Form.Label>
-                <Form.Control
-                  type="number"
-                  step="0.01"
-                  value={editDeductions}
-                  onChange={(e) => setEditDeductions(e.target.value)}
-                  required
-                />
-              </Form.Group>
+                <div className="col-md-4">
+                  <Form.Group>
+                    <Form.Label className="fw-semibold small">Allowances / Bonuses (INR)</Form.Label>
+                    <Form.Control
+                      type="number"
+                      step="0.01"
+                      value={editAllowances}
+                      onChange={(e) => setEditAllowances(e.target.value)}
+                      required
+                    />
+                  </Form.Group>
+                </div>
 
-              <Form.Group className="mb-3">
-                <Form.Label className="fw-semibold">Payout Status</Form.Label>
-                <Form.Select
-                  value={editStatus}
-                  onChange={(e) => setEditStatus(e.target.value)}
-                >
-                  <option value="PENDING">PENDING</option>
-                  <option value="PAID">PAID</option>
-                </Form.Select>
-              </Form.Group>
+                <div className="col-md-4">
+                  <Form.Group>
+                    <Form.Label className="fw-semibold small">Deductions / LOP (INR)</Form.Label>
+                    <Form.Control
+                      type="number"
+                      step="0.01"
+                      value={editDeductions}
+                      onChange={(e) => setEditDeductions(e.target.value)}
+                      required
+                    />
+                  </Form.Group>
+                </div>
+              </div>
+
+              <div className="row g-3 mb-3">
+                <div className="col-md-6">
+                  <Form.Group>
+                    <Form.Label className="fw-semibold small">Payout Status</Form.Label>
+                    <Form.Select
+                      value={editStatus}
+                      onChange={(e) => setEditStatus(e.target.value)}
+                    >
+                      <option value="PENDING">PENDING</option>
+                      <option value="PAID">PAID</option>
+                    </Form.Select>
+                  </Form.Group>
+                </div>
+                <div className="col-md-6">
+                  <div className="p-2 border rounded bg-light-subtle h-100 d-flex flex-column justify-content-center">
+                    <span className="text-muted small">Estimated Net Salary</span>
+                    <strong className="text-success fs-5">
+                      {formatCurrency(
+                        Math.max(0, Number(editBasic || 0) + Number(editAllowances || 0) - Number(editDeductions || 0))
+                      )}
+                    </strong>
+                  </div>
+                </div>
+              </div>
+
+              {selectedPayroll.status === "PAID" && (
+                <Form.Group className="mb-2">
+                  <Form.Label className="fw-semibold small text-danger d-flex align-items-center gap-1">
+                    Reason for Modification / Audit Remark <span className="text-danger">*</span>
+                  </Form.Label>
+                  <Form.Control
+                    as="textarea"
+                    rows={3}
+                    placeholder="e.g. Retroactive performance bonus addition / Correction of overtime deduction / TDS tax adjustment approved by finance"
+                    value={editReason}
+                    onChange={(e) => {
+                      setEditReason(e.target.value);
+                      if (reasonError) setReasonError("");
+                    }}
+                    isInvalid={!!reasonError}
+                    required
+                  />
+                  {reasonError && (
+                    <div className="text-danger small mt-1">
+                      {reasonError}
+                    </div>
+                  )}
+                  <Form.Text className="text-muted small">
+                    This justification is permanently stored in the audit trail with your administrator ID and timestamp.
+                  </Form.Text>
+                </Form.Group>
+              )}
             </Modal.Body>
           )}
           <Modal.Footer>
             <Button variant="outline-secondary" onClick={() => setShowEditModal(false)} disabled={isUpdating}>
               Cancel
             </Button>
-            <Button variant="primary" type="submit" disabled={isUpdating}>
+            <Button
+              variant={selectedPayroll?.status === "PAID" ? "warning" : "primary"}
+              type="submit"
+              disabled={isUpdating}
+            >
               {isUpdating ? (
                 <>
                   <Spinner as="span" animation="border" size="sm" className="me-2" />
                   Saving...
                 </>
+              ) : selectedPayroll?.status === "PAID" ? (
+                "Save & Log Audit Justification"
               ) : (
                 "Save Changes"
               )}
             </Button>
           </Modal.Footer>
         </Form>
+      </Modal>
+
+      {/* Audit History Modal */}
+      <Modal show={showHistoryModal} onHide={() => setShowHistoryModal(false)} size="lg" centered>
+        <Modal.Header closeButton>
+          <Modal.Title className="fw-bold fs-6 d-flex align-items-center gap-2">
+            <IconHistory size={20} className="text-primary" />
+            Adjustment Audit Trail — {historyPayroll?.employee_details?.full_name} ({historyPayroll?.month_name} {historyPayroll?.year})
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body className="p-4">
+          {historyPayroll?.modification_history && historyPayroll.modification_history.length > 0 ? (
+            <div className="table-responsive">
+              <Table bordered hover className="align-middle small mb-0">
+                <thead className="table-light">
+                  <tr>
+                    <th style={{ width: "22%" }}>Date & Time</th>
+                    <th style={{ width: "23%" }}>Modified By</th>
+                    <th style={{ width: "30%" }}>Audit Justification</th>
+                    <th style={{ width: "25%" }}>Values Altered</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {historyPayroll.modification_history.map((entry: any, index: number) => (
+                    <tr key={index}>
+                      <td className="text-nowrap">{formatDate(entry.modified_at)}</td>
+                      <td>
+                        <div className="fw-semibold text-dark">{entry.modified_by_name || "Administrator"}</div>
+                        <small className="text-muted">{entry.modified_by_email}</small>
+                      </td>
+                      <td>
+                        <div className="p-2 rounded bg-light border text-break">
+                          {entry.reason}
+                        </div>
+                      </td>
+                      <td>
+                        <div className="d-flex flex-column gap-1 small">
+                          {entry.old_values?.basic_salary !== entry.new_values?.basic_salary && (
+                            <div>
+                              <span className="text-muted">Basic: </span>
+                              <del className="text-danger">{formatCurrency(entry.old_values?.basic_salary)}</del>
+                              {" → "}
+                              <strong className="text-success">{formatCurrency(entry.new_values?.basic_salary)}</strong>
+                            </div>
+                          )}
+                          {entry.old_values?.allowances !== entry.new_values?.allowances && (
+                            <div>
+                              <span className="text-muted">Allowances: </span>
+                              <del className="text-danger">{formatCurrency(entry.old_values?.allowances)}</del>
+                              {" → "}
+                              <strong className="text-success">{formatCurrency(entry.new_values?.allowances)}</strong>
+                            </div>
+                          )}
+                          {entry.old_values?.deductions !== entry.new_values?.deductions && (
+                            <div>
+                              <span className="text-muted">Deductions: </span>
+                              <del className="text-danger">{formatCurrency(entry.old_values?.deductions)}</del>
+                              {" → "}
+                              <strong className="text-success">{formatCurrency(entry.new_values?.deductions)}</strong>
+                            </div>
+                          )}
+                          {entry.old_values?.status !== entry.new_values?.status && (
+                            <div>
+                              <span className="text-muted">Status: </span>
+                              <del>{entry.old_values?.status}</del>
+                              {" → "}
+                              <strong>{entry.new_values?.status}</strong>
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+            </div>
+          ) : (
+            <div className="text-center py-5 text-muted">
+              <IconShieldCheck size={36} className="text-muted opacity-50 mb-2" />
+              <p className="mb-0">No post-disbursement modifications have been recorded for this salary.</p>
+            </div>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="outline-secondary" onClick={() => setShowHistoryModal(false)}>
+            Close
+          </Button>
+        </Modal.Footer>
       </Modal>
 
       {/* Printable Payslip Modal */}

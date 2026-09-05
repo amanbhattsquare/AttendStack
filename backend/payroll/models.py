@@ -25,6 +25,16 @@ class Payroll(models.Model):
         default=PayrollStatus.PENDING
     )
     paid_on = models.DateTimeField(null=True, blank=True)
+    modification_reason = models.TextField(blank=True, default="")
+    modified_by = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="modified_payrolls"
+    )
+    is_modified_after_payment = models.BooleanField(default=False)
+    modification_history = models.JSONField(default=list, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

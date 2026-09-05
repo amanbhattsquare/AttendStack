@@ -34,7 +34,7 @@ class WorkspaceAccessMixin:
     """Organization-aware access helpers shared by projects and tasks."""
 
     def _is_admin_or_hr(self, user):
-        return user.role in (UserRole.SUPER_ADMIN, UserRole.HR) or user.is_staff
+        return user.role in (UserRole.SUPER_ADMIN, UserRole.HR, UserRole.SUB_ADMIN) or user.is_staff
 
     def _current_employee(self, required=True):
         employee = Employee.objects.filter(email__iexact=self.request.user.email).first()
@@ -45,14 +45,8 @@ class WorkspaceAccessMixin:
         return employee
 
     def _organization_for_user(self, required=True):
-        employee = self._current_employee(required=False)
-        if employee and employee.organization_id:
-            return employee.organization
-
-        # Company owners and legacy HR accounts may manage a workspace without
-        # having their own employee record. Their owned organization is still
-        # the correct boundary for projects and task assignments.
-        organization = Organization.objects.filter(owner=self.request.user).first()
+        from organizations.services import get_organization_for_user
+        organization = get_organization_for_user(self.request.user)
         if organization is not None:
             return organization
         if not required:
@@ -115,6 +109,7 @@ class WorkspaceAccessMixin:
 class ProjectViewSet(WorkspaceAccessMixin, viewsets.ModelViewSet):
     serializer_class = ProjectSerializer
     permission_classes = [IsAuthenticated]
+    permission_module = "tasks"
     pagination_class = TaskPagination
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["name", "key", "description", "department", "owner__full_name"]
@@ -197,6 +192,7 @@ class ProjectViewSet(WorkspaceAccessMixin, viewsets.ModelViewSet):
 class TaskViewSet(WorkspaceAccessMixin, viewsets.ModelViewSet):
     serializer_class = TaskSerializer
     permission_classes = [IsAuthenticated]
+    permission_module = "tasks"
     parser_classes = (MultiPartParser, FormParser, JSONParser)
     pagination_class = TaskPagination
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]

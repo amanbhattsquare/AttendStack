@@ -11,7 +11,9 @@ import {
   Dropdown,
   Form,
   InputGroup,
+  Modal,
   Row,
+  Spinner,
   Table,
 } from "react-bootstrap";
 import {
@@ -29,10 +31,16 @@ import {
   IconAlertTriangle,
   IconUsers,
   IconBuildingSkyscraper,
-  IconUserPlus,
+  IconLock,
+  IconLockOpen,
+  IconCopy,
+  IconEye,
+  IconEyeOff,
+  IconShieldCheck,
 } from "@tabler/icons-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import Swal from "sweetalert2";
 import apiClient from "app/services/api";
 import DasherBreadcrumb from "components/common/DasherBreadcrumb";
 
@@ -95,6 +103,21 @@ export default function SubAdminsManagementPage() {
   const [notice, setNotice] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
 
+  // Reset Password Modal State
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [selectedForReset, setSelectedForReset] = useState<SubAdminRecord | null>(null);
+  const [resetType, setResetType] = useState<"auto" | "custom">("auto");
+  const [customPassword, setCustomPassword] = useState("");
+  const [showPasswordText, setShowPasswordText] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
+  const [resetError, setResetError] = useState("");
+  const [resetResult, setResetResult] = useState<{
+    email: string;
+    temp_password: string;
+    name: string;
+  } | null>(null);
+  const [copied, setCopied] = useState(false);
+
   const fetchSubAdmins = useCallback(async () => {
     setLoading(true);
     setError("");
@@ -123,51 +146,210 @@ export default function SubAdminsManagementPage() {
     });
   }, [subAdmins, searchQuery]);
 
-  // Reset Password for Sub-Admin
-  const handleResetPassword = async (subAdmin: SubAdminRecord) => {
-    if (!confirm(`Generate a new temporary password for ${subAdmin.email}?`)) return;
+  // Open Reset Password Modal
+  const openResetModal = (subAdmin: SubAdminRecord) => {
+    setSelectedForReset(subAdmin);
+    setResetType("auto");
+    setCustomPassword("");
+    setShowPasswordText(false);
+    setResetError("");
+    setResetResult(null);
+    setCopied(false);
+    setShowResetModal(true);
+  };
 
+  // Submit Reset Password
+  const handlePerformReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedForReset) return;
+
+    if (resetType === "custom" && customPassword.length < 6) {
+      setResetError("Custom password must be at least 6 characters long.");
+      return;
+    }
+
+    setIsResetting(true);
+    setResetError("");
     try {
-      const res = await apiClient.post(`/api/v1/accounts/sub-admins/${subAdmin.id}/reset-password/`);
-      const newPass = res.data.temp_password;
-      alert(`New Temporary Password for ${subAdmin.email}:\n\n${newPass}\n\nPlease share this password with the manager.`);
-    } catch {
-      alert("Failed to reset password. Please try again.");
+      const payload: { password?: string } = {};
+      if (resetType === "custom") {
+        payload.password = customPassword.trim();
+      }
+
+      const res = await apiClient.post(
+        `/api/v1/accounts/sub-admins/${selectedForReset.id}/reset-password/`,
+        payload
+      );
+
+      setResetResult({
+        email: selectedForReset.email,
+        temp_password: res.data.temp_password,
+        name: selectedForReset.full_name || selectedForReset.email,
+      });
+    } catch (err: any) {
+      const msg = err.response?.data?.detail || "Failed to reset password. Please try again.";
+      setResetError(msg);
+    } finally {
+      setIsResetting(false);
     }
   };
 
-  // Delete / Deactivate Sub-Admin
+  // Copy Credentials with multi-layer fallback (Clipboard API + execCommand)
+  const copyToClipboard = async (text: string, label: string = "Password") => {
+    if (!text) return;
+    let success = false;
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+        success = true;
+      } else {
+        throw new Error("Clipboard API not available in this context");
+      }
+    } catch {
+      try {
+        const textArea = document.createElement("textarea");
+        textArea.value = text;
+        textArea.style.position = "fixed";
+        textArea.style.left = "-999999px";
+        textArea.style.top = "-999999px";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        success = document.execCommand("copy");
+        document.body.removeChild(textArea);
+      } catch (fallbackErr) {
+        console.error("Copy fallback error:", fallbackErr);
+      }
+    }
+
+    if (success) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+      const Toast = Swal.mixin({
+        toast: true,
+        position: "top-end",
+        showConfirmButton: false,
+        timer: 2000,
+        timerProgressBar: false,
+      });
+      Toast.fire({
+        icon: "success",
+        title: `${label} copied to clipboard!`,
+      });
+    } else {
+      // Prompt user with prompt dialog
+      prompt("Copy to clipboard: Ctrl+C, Enter", text);
+    }
+  };
+
+  // Lock / Unlock Sub-Admin Access
+  const handleToggleStatus = async (subAdmin: SubAdminRecord) => {
+    const isCurrentlyActive = subAdmin.is_active;
+    const actionWord = isCurrentlyActive ? "Lock & Suspend" : "Unlock & Activate";
+    const result = await Swal.fire({
+      title: `${actionWord} Access?`,
+      html: isCurrentlyActive
+        ? `Are you sure you want to <strong>lock</strong> sub-admin access for <strong>${subAdmin.full_name || subAdmin.email}</strong>? They will be immediately prevented from logging into the dashboard.`
+        : `Are you sure you want to <strong>unlock and reactivate</strong> access for <strong>${subAdmin.full_name || subAdmin.email}</strong>?`,
+      icon: isCurrentlyActive ? "warning" : "question",
+      showCancelButton: true,
+      confirmButtonColor: isCurrentlyActive ? "#dc3545" : "#198754",
+      cancelButtonColor: "#6c757d",
+      confirmButtonText: isCurrentlyActive ? "Yes, Lock Access" : "Yes, Unlock Access",
+      cancelButtonText: "Cancel",
+    });
+
+    if (!result.isConfirmed) return;
+
+    try {
+      const res = await apiClient.post(`/api/v1/accounts/sub-admins/${subAdmin.id}/toggle-status/`, {
+        is_active: !isCurrentlyActive,
+      });
+
+      setSubAdmins((prev) =>
+        prev.map((sa) => (sa.id === subAdmin.id ? { ...sa, is_active: res.data.is_active } : sa))
+      );
+
+      Swal.fire({
+        title: "Status Updated",
+        text: res.data.detail || `Account has been ${!isCurrentlyActive ? "activated" : "locked"}.`,
+        icon: "success",
+        timer: 2000,
+        showConfirmButton: false,
+      });
+    } catch (err: any) {
+      Swal.fire({
+        title: "Action Failed",
+        text: err.response?.data?.detail || "Failed to update sub-admin status.",
+        icon: "error",
+        confirmButtonColor: "#dc3545",
+      });
+    }
+  };
+
+  // Delete Sub-Admin
   const handleDeleteSubAdmin = async (subAdmin: SubAdminRecord) => {
-    if (!confirm(`Are you sure you want to revoke access and remove ${subAdmin.email}?`)) return;
+    const result = await Swal.fire({
+      title: "Delete Sub-Administrator?",
+      html: `
+        <p class="text-secondary mb-2">Are you sure you want to permanently delete <strong>${subAdmin.full_name || subAdmin.email}</strong>?</p>
+        <div class="alert alert-danger p-2 small mb-0 text-start">
+          ⚠️ <strong>Irreversible Action</strong>: All associated role permissions, portal credentials, and administrative delegations will be permanently revoked.
+        </div>
+      `,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#dc3545",
+      cancelButtonColor: "#6c757d",
+      confirmButtonText: "Yes, Delete Account",
+      cancelButtonText: "Cancel",
+    });
+
+    if (!result.isConfirmed) return;
 
     try {
       await apiClient.delete(`/api/v1/accounts/sub-admins/${subAdmin.id}/`);
-      setNotice(`Sub-admin access removed for ${subAdmin.email}.`);
-      fetchSubAdmins();
-    } catch {
-      setError("Failed to remove sub-admin.");
+      setSubAdmins((prev) => prev.filter((sa) => sa.id !== subAdmin.id));
+      Swal.fire({
+        title: "Account Deleted",
+        text: `Sub-admin account for ${subAdmin.email} has been permanently deleted.`,
+        icon: "success",
+        timer: 2000,
+        showConfirmButton: false,
+      });
+    } catch (err: any) {
+      Swal.fire({
+        title: "Deletion Failed",
+        text: err.response?.data?.detail || "Failed to delete sub-admin account.",
+        icon: "error",
+        confirmButtonColor: "#dc3545",
+      });
     }
   };
 
   return (
     <Container fluid className="py-3 px-lg-4 sub-admins-page">
       {/* Breadcrumb */}
-      <DasherBreadcrumb
-        items={[
-          { label: "Roles & Sub-Admins" },
-        ]}
-      />
+      <DasherBreadcrumb items={[{ label: "Roles & Sub-Admins" }]} />
 
       {/* Header */}
       <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4 pb-3 border-bottom">
         <div className="d-flex align-items-start gap-3">
-          <div className="p-2.5 rounded-3 bg-primary-subtle text-primary d-flex align-items-center justify-content-center shadow-xs flex-shrink-0" style={{ width: 44, height: 44 }}>
+          <div
+            className="p-2.5 rounded-3 bg-primary-subtle text-primary d-flex align-items-center justify-content-center shadow-xs flex-shrink-0"
+            style={{ width: 44, height: 44 }}
+          >
             <IconShieldLock size={24} />
           </div>
           <div>
             <div className="d-flex align-items-center gap-2 mb-1 flex-wrap">
               <h2 className="h4 mb-0 fw-bold text-dark">Roles & Sub-Administrators</h2>
-              <Badge bg="primary-subtle" text="primary" className="px-2.5 py-1 rounded-pill fw-semibold" style={{ fontSize: "11px", letterSpacing: "0.02em" }}>
+              <Badge
+                bg="primary-subtle"
+                text="primary"
+                className="px-2.5 py-1 rounded-pill fw-semibold"
+                style={{ fontSize: "11px", letterSpacing: "0.02em" }}
+              >
                 RBAC Access Control
               </Badge>
             </div>
@@ -177,7 +359,13 @@ export default function SubAdminsManagementPage() {
           </div>
         </div>
         <div className="d-flex align-items-center gap-2 flex-shrink-0">
-          <Button variant="outline-secondary" size="sm" onClick={fetchSubAdmins} disabled={loading} className="d-inline-flex align-items-center gap-1.5 px-3 py-2 fw-medium shadow-xs">
+          <Button
+            variant="outline-secondary"
+            size="sm"
+            onClick={fetchSubAdmins}
+            disabled={loading}
+            className="d-inline-flex align-items-center gap-1.5 px-3 py-2 fw-medium shadow-xs"
+          >
             <IconRefresh size={16} className={loading ? "spin" : ""} />
             <span>Refresh</span>
           </Button>
@@ -193,13 +381,23 @@ export default function SubAdminsManagementPage() {
 
       {/* Alerts */}
       {error && (
-        <Alert variant="danger" dismissible onClose={() => setError("")} className="border-0 shadow-sm d-flex align-items-center gap-2 mb-3">
+        <Alert
+          variant="danger"
+          dismissible
+          onClose={() => setError("")}
+          className="border-0 shadow-sm d-flex align-items-center gap-2 mb-3"
+        >
           <IconAlertTriangle size={20} />
           {error}
         </Alert>
       )}
       {notice && (
-        <Alert variant="success" dismissible onClose={() => setNotice("")} className="border-0 shadow-sm d-flex align-items-center gap-2 mb-3">
+        <Alert
+          variant="success"
+          dismissible
+          onClose={() => setNotice("")}
+          className="border-0 shadow-sm d-flex align-items-center gap-2 mb-3"
+        >
           <IconCheck size={20} />
           {notice}
         </Alert>
@@ -293,7 +491,7 @@ export default function SubAdminsManagementPage() {
           </div>
         </Card.Header>
 
-        <Card.Body className="p-0">
+        <Card.Body className="p-0" style={{ minHeight: "300px" }}>
           {loading ? (
             <div className="text-center py-5">
               <div className="spinner-border text-primary spinner-border-sm me-2" role="status" />
@@ -313,111 +511,326 @@ export default function SubAdminsManagementPage() {
               </Link>
             </div>
           ) : (
-            <Table responsive hover className="mb-0 align-middle">
-              <thead className="bg-light small text-secondary">
-                <tr>
-                  <th className="ps-4 py-3">Administrator</th>
-                  <th className="py-3">Contact Email</th>
-                  <th className="py-3">Assigned Role Title</th>
-                  <th className="py-3">Authorized Modules</th>
-                  <th className="py-3">Account Status</th>
-                  <th className="text-end pe-4 py-3">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredSubAdmins.map((subAdmin) => {
-                  const allowedModules = Object.keys(subAdmin.permissions || {}).filter(
-                    (key) => subAdmin.permissions[key]?.view
-                  );
+            <div className="table-responsive pb-5" style={{ minHeight: "260px" }}>
+              <Table hover className="mb-0 align-middle">
+                <thead className="bg-light small text-secondary">
+                  <tr>
+                    <th className="ps-4 py-3">Administrator</th>
+                    <th className="py-3">Contact Email</th>
+                    <th className="py-3">Assigned Role Title</th>
+                    <th className="py-3">Authorized Modules</th>
+                    <th className="py-3">Account Status</th>
+                    <th className="text-end pe-4 py-3">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredSubAdmins.map((subAdmin, index) => {
+                    const allowedModules = Object.keys(subAdmin.permissions || {}).filter(
+                      (key) => subAdmin.permissions[key]?.view
+                    );
 
-                  return (
-                    <tr key={subAdmin.id}>
-                      <td className="ps-4">
-                        <div className="d-flex align-items-center gap-2.5">
-                          <div className="rounded-circle bg-primary-subtle text-primary fw-bold d-flex align-items-center justify-content-center" style={{ width: 38, height: 38 }}>
-                            <IconUser size={20} />
+                    return (
+                      <tr key={subAdmin.id}>
+                        <td className="ps-4">
+                          <div className="d-flex align-items-center gap-2.5">
+                            <div
+                              className={`rounded-circle ${
+                                subAdmin.is_active ? "bg-primary-subtle text-primary" : "bg-danger-subtle text-danger"
+                              } fw-bold d-flex align-items-center justify-content-center`}
+                              style={{ width: 38, height: 38 }}
+                            >
+                              <IconUser size={20} />
+                            </div>
+                            <div>
+                              <strong className="text-dark d-block fs-6">
+                                {subAdmin.full_name || subAdmin.email.split("@")[0]}
+                              </strong>
+                              <span className="text-secondary small">{subAdmin.organization_name}</span>
+                            </div>
                           </div>
-                          <div>
-                            <strong className="text-dark d-block fs-6">{subAdmin.full_name || subAdmin.email.split("@")[0]}</strong>
-                            <span className="text-secondary small">{subAdmin.organization_name}</span>
-                          </div>
-                        </div>
-                      </td>
-                      <td>
-                        <span className="text-dark d-flex align-items-center gap-1.5 small fw-medium">
-                          <IconMail size={14} className="text-secondary" /> {subAdmin.email}
-                        </span>
-                        {subAdmin.phone && (
-                          <span className="text-secondary small d-block font-monospace mt-0.5">
-                            {subAdmin.phone}
+                        </td>
+                        <td>
+                          <span className="text-dark d-flex align-items-center gap-1.5 small fw-medium">
+                            <IconMail size={14} className="text-secondary" /> {subAdmin.email}
                           </span>
-                        )}
-                      </td>
-                      <td>
-                        <Badge bg="primary-subtle" text="primary" className="border border-primary-subtle px-2.5 py-1 font-monospace">
-                          {subAdmin.custom_role_title || "HR Manager"}
-                        </Badge>
-                      </td>
-                      <td>
-                        <div className="d-flex flex-wrap gap-1" style={{ maxWidth: 320 }}>
-                          {allowedModules.length === 0 ? (
-                            <span className="text-muted small italic">No active modules</span>
-                          ) : (
-                            allowedModules.slice(0, 4).map((modKey) => {
-                              const p = subAdmin.permissions[modKey];
-                              const tag = p?.delete ? "V+E+D" : p?.edit ? "V+E" : "View";
-                              return (
-                                <Badge key={modKey} bg="light" text="dark" className="border shadow-xs px-2 py-1 font-monospace small">
-                                  {modKey.toUpperCase()} <span className="text-primary font-monospace fw-bold">({tag})</span>
-                                </Badge>
-                              );
-                            })
+                          {subAdmin.phone && (
+                            <span className="text-secondary small d-block font-monospace mt-0.5">
+                              {subAdmin.phone}
+                            </span>
                           )}
-                          {allowedModules.length > 4 && (
-                            <Badge bg="secondary-subtle" text="secondary" className="px-2 py-1">
-                              +{allowedModules.length - 4} more
+                        </td>
+                        <td>
+                          <Badge bg="primary-subtle" text="primary" className="border border-primary-subtle px-2.5 py-1 font-monospace">
+                            {subAdmin.custom_role_title || "HR Manager"}
+                          </Badge>
+                        </td>
+                        <td>
+                          <div className="d-flex flex-wrap gap-1" style={{ maxWidth: 320 }}>
+                            {allowedModules.length === 0 ? (
+                              <span className="text-muted small italic">No active modules</span>
+                            ) : (
+                              allowedModules.slice(0, 4).map((modKey) => {
+                                const p = subAdmin.permissions[modKey];
+                                const tag = p?.delete ? "V+E+D" : p?.edit ? "V+E" : "View";
+                                return (
+                                  <Badge
+                                    key={modKey}
+                                    bg="light"
+                                    text="dark"
+                                    className="border shadow-xs px-2 py-1 font-monospace small"
+                                  >
+                                    {modKey.toUpperCase()}{" "}
+                                    <span className="text-primary font-monospace fw-bold">({tag})</span>
+                                  </Badge>
+                                );
+                              })
+                            )}
+                            {allowedModules.length > 4 && (
+                              <Badge bg="secondary-subtle" text="secondary" className="px-2 py-1">
+                                +{allowedModules.length - 4} more
+                              </Badge>
+                            )}
+                          </div>
+                        </td>
+                        <td>
+                          {subAdmin.is_active ? (
+                            <Badge bg="success-subtle" text="success" className="border border-success-subtle px-2.5 py-1 d-inline-flex align-items-center gap-1">
+                              <IconCheck size={13} /> Active
+                            </Badge>
+                          ) : (
+                            <Badge bg="danger-subtle" text="danger" className="border border-danger-subtle px-2.5 py-1 d-inline-flex align-items-center gap-1">
+                              <IconLock size={13} /> Locked / Suspended
                             </Badge>
                           )}
-                        </div>
-                      </td>
-                      <td>
-                        {subAdmin.is_active ? (
-                          <Badge bg="success-subtle" text="success" className="border border-success-subtle px-2.5 py-1">
-                            Active
-                          </Badge>
-                        ) : (
-                          <Badge bg="secondary-subtle" text="secondary" className="px-2.5 py-1">
-                            Suspended
-                          </Badge>
-                        )}
-                      </td>
-                      <td className="text-end pe-4">
-                        <Dropdown align="end">
-                          <Dropdown.Toggle as={ActionToggle}>
-                            <IconDotsVertical size={16} />
-                          </Dropdown.Toggle>
-                          <Dropdown.Menu className="shadow border-0">
-                            <Dropdown.Item onClick={() => router.push(`/sub-admins/${subAdmin.id}/edit`)}>
-                              <IconEdit size={15} className="me-2 text-primary" /> Edit Permissions
-                            </Dropdown.Item>
-                            <Dropdown.Item onClick={() => handleResetPassword(subAdmin)}>
-                              <IconKey size={15} className="me-2 text-warning" /> Reset Password
-                            </Dropdown.Item>
-                            <Dropdown.Divider />
-                            <Dropdown.Item onClick={() => handleDeleteSubAdmin(subAdmin)} className="text-danger">
-                              <IconTrash size={15} className="me-2 text-danger" /> Revoke Access
-                            </Dropdown.Item>
-                          </Dropdown.Menu>
-                        </Dropdown>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </Table>
+                        </td>
+                        <td className="text-end pe-4">
+                          <Dropdown align="end">
+                            <Dropdown.Toggle as={ActionToggle}>
+                              <IconDotsVertical size={16} />
+                            </Dropdown.Toggle>
+                            <Dropdown.Menu
+                              popperConfig={{ strategy: "fixed" }}
+                              className="shadow border-0 py-2"
+                              style={{ zIndex: 1060, minWidth: 200 }}
+                            >
+                              <Dropdown.Item onClick={() => router.push(`/sub-admins/${subAdmin.id}/edit`)}>
+                                <IconEdit size={16} className="me-2 text-primary" /> Edit Permissions
+                              </Dropdown.Item>
+                              <Dropdown.Item onClick={() => openResetModal(subAdmin)}>
+                                <IconKey size={16} className="me-2 text-warning" /> Reset Password
+                              </Dropdown.Item>
+                              <Dropdown.Item
+                                onClick={() => handleToggleStatus(subAdmin)}
+                                className={subAdmin.is_active ? "text-danger" : "text-success"}
+                              >
+                                {subAdmin.is_active ? (
+                                  <>
+                                    <IconLock size={16} className="me-2 text-danger" /> Lock & Suspend Access
+                                  </>
+                                ) : (
+                                  <>
+                                    <IconLockOpen size={16} className="me-2 text-success" /> Unlock & Activate Access
+                                  </>
+                                )}
+                              </Dropdown.Item>
+                              <Dropdown.Divider />
+                              <Dropdown.Item onClick={() => handleDeleteSubAdmin(subAdmin)} className="text-danger">
+                                <IconTrash size={16} className="me-2 text-danger" /> Delete Account
+                              </Dropdown.Item>
+                            </Dropdown.Menu>
+                          </Dropdown>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </Table>
+            </div>
           )}
         </Card.Body>
       </Card>
+
+      {/* Reset Password Modal */}
+      <Modal show={showResetModal} onHide={() => setShowResetModal(false)} centered size="lg">
+        <Modal.Header closeButton className="border-bottom">
+          <Modal.Title className="fw-bold fs-6 d-flex align-items-center gap-2">
+            <IconKey size={20} className="text-warning" />
+            {resetResult ? "Password Reset Successful" : "Reset Sub-Administrator Password"}
+          </Modal.Title>
+        </Modal.Header>
+
+        {resetResult ? (
+          <Modal.Body className="p-4">
+            <div className="text-center mb-3">
+              <div className="p-3 bg-success-subtle text-success rounded-circle d-inline-flex mb-2">
+                <IconShieldCheck size={36} />
+              </div>
+              <h5 className="fw-bold text-dark">New Credentials Generated</h5>
+              <p className="text-secondary small mb-0">
+                The password for <strong>{resetResult.name}</strong> has been updated.
+              </p>
+            </div>
+
+            <Card className="border bg-light p-3 mb-3">
+              <div className="mb-2.5 pb-2 border-bottom d-flex justify-content-between align-items-center">
+                <div>
+                  <span className="text-muted small d-block">Login Email</span>
+                  <strong className="text-dark font-monospace">{resetResult.email}</strong>
+                </div>
+                <Button
+                  variant="outline-secondary"
+                  size="sm"
+                  onClick={() => copyToClipboard(resetResult.email, "Email")}
+                  className="d-flex align-items-center gap-1 text-nowrap px-2 py-1 fs-7"
+                  title="Copy Email"
+                >
+                  <IconCopy size={14} /> Copy
+                </Button>
+              </div>
+
+              <div>
+                <span className="text-muted small d-block">New Temporary Password</span>
+                <div className="d-flex align-items-center justify-content-between gap-2 mt-1">
+                  <span
+                    className="fs-5 fw-bold font-monospace text-primary bg-white px-3 py-2 rounded border flex-grow-1 text-center user-select-all cursor-pointer"
+                    onClick={() => copyToClipboard(resetResult.temp_password, "Password")}
+                    title="Click to copy password"
+                    style={{ letterSpacing: "0.05em", cursor: "pointer" }}
+                  >
+                    {resetResult.temp_password}
+                  </span>
+                  <Button
+                    variant={copied ? "success" : "primary"}
+                    size="sm"
+                    onClick={() => copyToClipboard(resetResult.temp_password, "Password")}
+                    className="d-flex align-items-center gap-1 text-nowrap px-3 py-2 fw-semibold"
+                  >
+                    {copied ? <IconCheck size={16} /> : <IconCopy size={16} />}
+                    <span>{copied ? "Copied!" : "Copy"}</span>
+                  </Button>
+                </div>
+              </div>
+
+              <div className="mt-3 pt-2 border-top">
+                <Button
+                  variant="outline-dark"
+                  size="sm"
+                  onClick={() =>
+                    copyToClipboard(
+                      `AttendStack Sub-Admin Credentials:\nEmail: ${resetResult.email}\nPassword: ${resetResult.temp_password}\nPortal URL: ${typeof window !== "undefined" ? window.location.origin : ""}/admin/sign-in`,
+                      "Full credentials"
+                    )
+                  }
+                  className="w-100 d-flex align-items-center justify-content-center gap-1.5 py-1.5 font-monospace"
+                >
+                  <IconCopy size={15} /> Copy Full Credentials (Email & Password)
+                </Button>
+              </div>
+            </Card>
+
+            <Alert variant="info" className="small border-0 shadow-xs mb-0 py-2">
+              ℹ️ Share these credentials with the manager securely. They can change their password anytime after signing in.
+            </Alert>
+          </Modal.Body>
+        ) : (
+          <Form onSubmit={handlePerformReset}>
+            <Modal.Body className="p-4">
+              <div className="mb-3 border-bottom pb-3">
+                <strong className="d-block text-dark fs-6">{selectedForReset?.full_name || selectedForReset?.email}</strong>
+                <span className="text-secondary small">{selectedForReset?.email} • {selectedForReset?.custom_role_title}</span>
+              </div>
+
+              {resetError && (
+                <Alert variant="danger" className="py-2 small mb-3">
+                  {resetError}
+                </Alert>
+              )}
+
+              <Form.Group className="mb-3">
+                <Form.Label className="fw-semibold small">Password Generation Mode</Form.Label>
+                <div className="d-flex flex-column gap-2 mt-1">
+                  <Form.Check
+                    type="radio"
+                    id="reset-mode-auto"
+                    name="resetType"
+                    label={
+                      <div>
+                        <strong>Auto-generate strong password</strong>
+                        <span className="text-muted small d-block">System generates a secure 10-character temporary password.</span>
+                      </div>
+                    }
+                    checked={resetType === "auto"}
+                    onChange={() => setResetType("auto")}
+                  />
+                  <Form.Check
+                    type="radio"
+                    id="reset-mode-custom"
+                    name="resetType"
+                    label={
+                      <div>
+                        <strong>Set specific custom password</strong>
+                        <span className="text-muted small d-block">Manually type a new password for this manager.</span>
+                      </div>
+                    }
+                    checked={resetType === "custom"}
+                    onChange={() => setResetType("custom")}
+                  />
+                </div>
+              </Form.Group>
+
+              {resetType === "custom" && (
+                <Form.Group className="mb-2">
+                  <Form.Label className="fw-semibold small">New Custom Password</Form.Label>
+                  <InputGroup>
+                    <Form.Control
+                      type={showPasswordText ? "text" : "password"}
+                      placeholder="Enter minimum 6 characters..."
+                      value={customPassword}
+                      onChange={(e) => {
+                        setCustomPassword(e.target.value);
+                        if (resetError) setResetError("");
+                      }}
+                      required={resetType === "custom"}
+                    />
+                    <Button
+                      variant="outline-secondary"
+                      onClick={() => setShowPasswordText(!showPasswordText)}
+                    >
+                      {showPasswordText ? <IconEyeOff size={18} /> : <IconEye size={18} />}
+                    </Button>
+                  </InputGroup>
+                </Form.Group>
+              )}
+            </Modal.Body>
+            <Modal.Footer>
+              <Button variant="outline-secondary" onClick={() => setShowResetModal(false)} disabled={isResetting}>
+                Cancel
+              </Button>
+              <Button variant="warning" type="submit" disabled={isResetting} className="d-inline-flex align-items-center gap-1.5 fw-semibold">
+                {isResetting ? (
+                  <>
+                    <Spinner size="sm" animation="border" />
+                    <span>Resetting...</span>
+                  </>
+                ) : (
+                  <>
+                    <IconKey size={16} />
+                    <span>Confirm Password Reset</span>
+                  </>
+                )}
+              </Button>
+            </Modal.Footer>
+          </Form>
+        )}
+
+        {resetResult && (
+          <Modal.Footer>
+            <Button variant="primary" onClick={() => setShowResetModal(false)}>
+              Done
+            </Button>
+          </Modal.Footer>
+        )}
+      </Modal>
     </Container>
   );
 }

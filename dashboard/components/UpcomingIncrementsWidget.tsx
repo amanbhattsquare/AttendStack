@@ -57,7 +57,11 @@ export interface IncrementSummary {
   approved_this_year: number;
 }
 
-const UpcomingIncrementsWidget: React.FC = () => {
+interface UpcomingIncrementsWidgetProps {
+  canEdit?: boolean;
+}
+
+const UpcomingIncrementsWidget: React.FC<UpcomingIncrementsWidgetProps> = ({ canEdit = true }) => {
   const [increments, setIncrements] = useState<EmployeeIncrementItem[]>([]);
   const [summary, setSummary] = useState<IncrementSummary>({
     pending_count: 0,
@@ -652,51 +656,57 @@ const UpcomingIncrementsWidget: React.FC = () => {
 
                         <td className="text-end pe-3 py-2 text-nowrap">
                           {isPending ? (
-                            <div className="d-flex justify-content-end align-items-center gap-1">
-                              <Button
-                                variant="outline-primary"
-                                size="sm"
-                                className="p-0 d-inline-flex align-items-center justify-content-center rounded-2"
-                                style={{ width: "26px", height: "26px" }}
-                                onClick={() => openEditHikeModal(inc)}
-                                title="Edit Salary Hike Amount / %"
-                              >
-                                <IconEdit size={14} />
-                              </Button>
+                            canEdit ? (
+                              <div className="d-flex justify-content-end align-items-center gap-1">
+                                <Button
+                                  variant="outline-primary"
+                                  size="sm"
+                                  className="p-0 d-inline-flex align-items-center justify-content-center rounded-2"
+                                  style={{ width: "26px", height: "26px" }}
+                                  onClick={() => openEditHikeModal(inc)}
+                                  title="Edit Salary Hike Amount / %"
+                                >
+                                  <IconEdit size={14} />
+                                </Button>
 
-                              <Button
-                                variant="success"
-                                size="sm"
-                                className="p-0 d-inline-flex align-items-center justify-content-center rounded-2"
-                                style={{ width: "26px", height: "26px" }}
-                                onClick={() => handleApprove(inc)}
-                                title="Accept & Apply Increment"
-                              >
-                                <IconCheck size={14} />
-                              </Button>
+                                <Button
+                                  variant="success"
+                                  size="sm"
+                                  className="p-0 d-inline-flex align-items-center justify-content-center rounded-2"
+                                  style={{ width: "26px", height: "26px" }}
+                                  onClick={() => handleApprove(inc)}
+                                  title="Accept & Apply Increment"
+                                >
+                                  <IconCheck size={14} />
+                                </Button>
 
-                              <Button
-                                variant="outline-warning"
-                                size="sm"
-                                className="p-0 d-inline-flex align-items-center justify-content-center rounded-2"
-                                style={{ width: "26px", height: "26px" }}
-                                onClick={() => openRescheduleModal(inc)}
-                                title="Reschedule Due Date"
-                              >
-                                <IconCalendarTime size={14} />
-                              </Button>
+                                <Button
+                                  variant="outline-warning"
+                                  size="sm"
+                                  className="p-0 d-inline-flex align-items-center justify-content-center rounded-2"
+                                  style={{ width: "26px", height: "26px" }}
+                                  onClick={() => openRescheduleModal(inc)}
+                                  title="Reschedule Due Date"
+                                >
+                                  <IconCalendarTime size={14} />
+                                </Button>
 
-                              <Button
-                                variant="outline-danger"
-                                size="sm"
-                                className="p-0 d-inline-flex align-items-center justify-content-center rounded-2"
-                                style={{ width: "26px", height: "26px" }}
-                                onClick={() => openRejectModal(inc)}
-                                title="Reject Increment"
-                              >
-                                <IconX size={14} />
-                              </Button>
-                            </div>
+                                <Button
+                                  variant="outline-danger"
+                                  size="sm"
+                                  className="p-0 d-inline-flex align-items-center justify-content-center rounded-2"
+                                  style={{ width: "26px", height: "26px" }}
+                                  onClick={() => openRejectModal(inc)}
+                                  title="Reject Increment"
+                                >
+                                  <IconX size={14} />
+                                </Button>
+                              </div>
+                            ) : (
+                              <span className="badge bg-secondary-subtle text-secondary border border-secondary-subtle rounded-pill py-1 px-2" style={{ fontSize: "10.5px" }}>
+                                Read Only
+                              </span>
+                            )
                           ) : (
                             <small className="text-muted text-nowrap" style={{ fontSize: "11px" }}>
                               {inc.notes ? `Note: ${inc.notes}` : "Completed"}

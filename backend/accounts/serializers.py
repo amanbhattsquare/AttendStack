@@ -28,7 +28,7 @@ def _split_full_name(full_name):
 # JWT – enriched token payload
 # ──────────────────────────────────────────────────────────────────────────────
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
-    """Inject role, name, and employee_id into the JWT payload."""
+    """Inject role, name, and employee_id into the JWT payload and return full profile."""
 
     @classmethod
     def get_token(cls, user):
@@ -41,33 +41,14 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 
     def validate(self, attrs):
         data = super().validate(attrs)
-        # Append user meta to the response body as well
-        data["user"] = {
-            "id":          str(self.user.id),
-            "email":       self.user.email,
-            "full_name":   self.user.get_full_name(),
-            "role":        self.user.role,
-            "employee_id": self.user.employee_id,
-            "avatar":      self.user.avatar.url if self.user.avatar else None,
-        }
+        # Append full user profile with granular RBAC permissions to the response body
+        user_profile = UserProfileSerializer(self.user, context=self.context).data
+        data["user"] = user_profile
 
         # Resolve and append organization meta
         try:
-            from organizations.models import Organization
-            from employees.models import Employee
-
-            org = Organization.objects.filter(owner=self.user).first()
-            if not org and hasattr(self.user, "employee_profile") and self.user.employee_profile and self.user.employee_profile.organization:
-                org = self.user.employee_profile.organization
-            if not org:
-                emp = Employee.objects.filter(email__iexact=self.user.email, organization__isnull=False).select_related('organization').first()
-                if emp and emp.organization:
-                    org = emp.organization
-            if not org:
-                org = Organization.objects.filter(employees__email__iexact=self.user.email).first()
-            if not org and (self.user.is_superuser or getattr(self.user, 'role', '') == 'SUPER_ADMIN'):
-                org = Organization.objects.order_by("created_at").first()
-
+            from organizations.services import get_organization_for_user
+            org = get_organization_for_user(self.user)
             if org:
                 data["organization"] = {
                     "id": org.id,
@@ -126,6 +107,9 @@ class UserProfileSerializer(serializers.ModelSerializer):
             return "Company Administrator (HR)"
         if obj.role == UserRole.SUB_ADMIN:
             sub = getattr(obj, "subadmin_profile", None)
+            if not sub:
+                from accounts.models import SubAdminPermission
+                sub = SubAdminPermission.objects.filter(user=obj).first()
             return sub.custom_role_title if sub else "HR Sub-Admin"
         return "Employee"
 
@@ -136,6 +120,9 @@ class UserProfileSerializer(serializers.ModelSerializer):
             return {mod: {"view": True, "edit": True, "delete": True} for mod in all_modules}
         if obj.role == UserRole.SUB_ADMIN:
             sub = getattr(obj, "subadmin_profile", None)
+            if not sub:
+                from accounts.models import SubAdminPermission
+                sub = SubAdminPermission.objects.filter(user=obj).first()
             if sub and sub.permissions:
                 return sub.permissions
             from accounts.models import SubAdminPermission
@@ -144,23 +131,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
     def get_organization(self, obj):
         try:
-            from organizations.models import Organization
-            from employees.models import Employee
-
-            org = Organization.objects.filter(owner=obj).first()
-            if not org and hasattr(obj, "subadmin_profile") and obj.subadmin_profile:
-                org = obj.subadmin_profile.organization
-            if not org and hasattr(obj, "employee_profile") and obj.employee_profile and obj.employee_profile.organization:
-                org = obj.employee_profile.organization
-            if not org:
-                emp = Employee.objects.filter(email__iexact=obj.email, organization__isnull=False).select_related('organization').first()
-                if emp and emp.organization:
-                    org = emp.organization
-            if not org:
-                org = Organization.objects.filter(employees__email__iexact=obj.email).first()
-            if not org and (obj.is_superuser or getattr(obj, 'role', '') == 'SUPER_ADMIN'):
-                org = Organization.objects.order_by("created_at").first()
-
+            from organizations.services import get_organization_for_user
+            org = get_organization_for_user(obj)
             if org:
                 return {
                     "id": org.id,

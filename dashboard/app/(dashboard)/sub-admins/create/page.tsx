@@ -32,9 +32,11 @@ import {
   IconUserPlus,
   IconAdjustmentsHorizontal,
   IconInfoCircle,
+  IconTrendingUp,
 } from "@tabler/icons-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import Swal from "sweetalert2";
 import apiClient from "app/services/api";
 import DasherBreadcrumb from "components/common/DasherBreadcrumb";
 
@@ -54,7 +56,8 @@ const MODULE_DEFINITIONS = [
   { key: "attendance", label: "Attendance & Shifts", icon: <IconCalendarEvent size={20} className="text-success" />, desc: "Track daily check-ins, logs, and override attendance" },
   { key: "leaves", label: "Leave Requests", icon: <IconCalendarTime size={20} className="text-warning" />, desc: "Review, approve, or reject employee leave applications" },
   { key: "holidays", label: "Holidays Calendar", icon: <IconBeach size={20} className="text-secondary" />, desc: "Configure company public and regional holidays" },
-  { key: "payroll", label: "Salary & Payroll", icon: <IconCoin size={20} className="text-danger" />, desc: "View payroll summaries and generate monthly salary slips" },
+  { key: "payroll", label: "Monthly Salary & Payroll", icon: <IconCoin size={20} className="text-danger" />, desc: "View monthly payroll payouts, calculations, and generate PDF payslips" },
+  { key: "increments", label: "Employee Salary Increments", icon: <IconTrendingUp size={20} className="text-success" />, desc: "Track upcoming salary raises, edit hike % / flat amounts, and approve appraisals" },
   { key: "tasks", label: "Projects & Tasks", icon: <IconListDetails size={20} className="text-purple" />, desc: "Assign and oversee department tasks and milestones" },
   { key: "chat", label: "Chat & Announcements", icon: <IconMessage size={20} className="text-teal" />, desc: "Broadcast company announcements and manager group chats" },
   { key: "settings", label: "Company Settings", icon: <IconSettings size={20} className="text-dark" />, desc: "Adjust work shifts, geofence, and organization policy" },
@@ -83,6 +86,7 @@ const PRESET_TEMPLATES: { [presetKey: string]: { label: string; roleOption: stri
       leaves: { view: true, edit: true, delete: false },
       holidays: { view: true, edit: true, delete: false },
       payroll: { view: false, edit: false, delete: false },
+      increments: { view: true, edit: true, delete: false },
       tasks: { view: true, edit: true, delete: false },
       chat: { view: true, edit: true, delete: false },
       settings: { view: false, edit: false, delete: false },
@@ -99,6 +103,7 @@ const PRESET_TEMPLATES: { [presetKey: string]: { label: string; roleOption: stri
       leaves: { view: true, edit: true, delete: false },
       holidays: { view: true, edit: false, delete: false },
       payroll: { view: false, edit: false, delete: false },
+      increments: { view: false, edit: false, delete: false },
       tasks: { view: false, edit: false, delete: false },
       chat: { view: true, edit: false, delete: false },
       settings: { view: false, edit: false, delete: false },
@@ -107,7 +112,7 @@ const PRESET_TEMPLATES: { [presetKey: string]: { label: string; roleOption: stri
   payroll_specialist: {
     label: "Payroll & Compensation Officer",
     roleOption: "Payroll & Compensation Officer",
-    desc: "Process salaries, verify payout records, and view employee profiles.",
+    desc: "Process salaries, verify payout records, and manage salary increments.",
     permissions: {
       dashboard: { view: true, edit: false, delete: false },
       employees: { view: true, edit: false, delete: false },
@@ -115,6 +120,7 @@ const PRESET_TEMPLATES: { [presetKey: string]: { label: string; roleOption: stri
       leaves: { view: true, edit: false, delete: false },
       holidays: { view: true, edit: false, delete: false },
       payroll: { view: true, edit: true, delete: false },
+      increments: { view: true, edit: true, delete: false },
       tasks: { view: false, edit: false, delete: false },
       chat: { view: false, edit: false, delete: false },
       settings: { view: false, edit: false, delete: false },
@@ -131,6 +137,7 @@ const PRESET_TEMPLATES: { [presetKey: string]: { label: string; roleOption: stri
       leaves: { view: true, edit: true, delete: true },
       holidays: { view: true, edit: true, delete: true },
       payroll: { view: true, edit: true, delete: true },
+      increments: { view: true, edit: true, delete: true },
       tasks: { view: true, edit: true, delete: true },
       chat: { view: true, edit: true, delete: true },
       settings: { view: true, edit: true, delete: true },
@@ -147,6 +154,7 @@ const PRESET_TEMPLATES: { [presetKey: string]: { label: string; roleOption: stri
       leaves: { view: true, edit: false, delete: false },
       holidays: { view: true, edit: false, delete: false },
       payroll: { view: true, edit: false, delete: false },
+      increments: { view: true, edit: false, delete: false },
       tasks: { view: true, edit: false, delete: false },
       chat: { view: true, edit: false, delete: false },
       settings: { view: false, edit: false, delete: false },
@@ -254,12 +262,26 @@ export default function OnboardSubAdminPage() {
         tempPassword: tempPass,
         roleTitle: resolvedRoleTitle,
       });
+
+      Swal.fire({
+        title: "Sub-Admin Onboarded!",
+        text: `Account for ${form.email.trim()} has been created successfully.`,
+        icon: "success",
+        timer: 2000,
+        showConfirmButton: false,
+      });
     } catch (err: any) {
-      setError(
+      const errorMsg =
         err.response?.data?.detail ||
         err.response?.data?.email?.[0] ||
-        "Failed to onboard sub-admin. Please verify the input."
-      );
+        "Failed to onboard sub-admin. Please verify the input.";
+      setError(errorMsg);
+      Swal.fire({
+        title: "Onboarding Failed",
+        text: errorMsg,
+        icon: "error",
+        confirmButtonColor: "#dc3545",
+      });
     } finally {
       setSubmitting(false);
     }

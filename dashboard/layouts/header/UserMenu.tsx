@@ -82,7 +82,10 @@ const UserMenu = () => {
 
   const isEmployee = user?.role === "EMPLOYEE";
   const isSuperAdmin = user?.role === "SUPER_ADMIN";
-  const isCompanyUser = user?.role === "HR" || user?.role === "ADMIN" || isSuperAdmin;
+  const isHR = user?.role === "HR";
+  const isSubAdmin = user?.role === "SUB_ADMIN";
+  const isCompanyUser = isHR || user?.role === "ADMIN" || isSuperAdmin;
+  const userPermissions = (user as any)?.permissions || {};
 
   const dynamicMenuItems = isEmployee 
     ? [
@@ -118,24 +121,36 @@ const UserMenu = () => {
           link: isSuperAdmin ? "/super-admin/dashboard" : "/dashboard",
           icon: <IconHome2 size={18} strokeWidth={1.5} className="text-secondary" />,
         },
-        {
-          id: "admin-employees",
-          title: "Manage Employees",
-          link: "/employees",
-          icon: <IconUser size={18} strokeWidth={1.5} className="text-secondary" />,
-        },
-        {
-          id: "admin-subadmins",
-          title: "Roles & Sub-Admins",
-          link: "/sub-admins",
-          icon: <IconShieldLock size={18} strokeWidth={1.5} className="text-secondary" />,
-        },
-        {
-          id: "admin-payroll",
-          title: "Salary & Payroll",
-          link: "/salary",
-          icon: <IconActivity size={18} strokeWidth={1.5} className="text-secondary" />,
-        },
+        ...(isSuperAdmin || isHR || Boolean(userPermissions.employees?.view)
+          ? [
+              {
+                id: "admin-employees",
+                title: "Manage Employees",
+                link: "/employees",
+                icon: <IconUser size={18} strokeWidth={1.5} className="text-secondary" />,
+              },
+            ]
+          : []),
+        ...(isSuperAdmin || isHR
+          ? [
+              {
+                id: "admin-subadmins",
+                title: "Roles & Sub-Admins",
+                link: "/sub-admins",
+                icon: <IconShieldLock size={18} strokeWidth={1.5} className="text-secondary" />,
+              },
+            ]
+          : []),
+        ...(isSuperAdmin || isHR || Boolean(userPermissions.payroll?.view)
+          ? [
+              {
+                id: "admin-payroll",
+                title: "Salary & Payroll",
+                link: "/salary",
+                icon: <IconActivity size={18} strokeWidth={1.5} className="text-secondary" />,
+              },
+            ]
+          : []),
       ];
 
   const activePhoto = profilePhoto || (isCompanyUser ? companyLogo : null);

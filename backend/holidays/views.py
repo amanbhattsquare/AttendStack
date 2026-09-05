@@ -17,6 +17,7 @@ class HolidayViewSet(viewsets.ModelViewSet):
     queryset = Holiday.objects.all()
     serializer_class = HolidaySerializer
     permission_classes = [IsAdminOrReadOnly]
+    permission_module = "holidays"
     pagination_class = HolidayPagination
 
     def create(self, request, *args, **kwargs):

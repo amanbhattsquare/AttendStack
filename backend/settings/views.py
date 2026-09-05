@@ -20,6 +20,7 @@ class SystemSettingsView(generics.RetrieveUpdateAPIView):
     """
     serializer_class = SystemSettingsSerializer
     permission_classes = [permissions.IsAuthenticated]
+    permission_module = "settings"
     parser_classes = [JSONParser, MultiPartParser, FormParser]
     
     def get_object(self):

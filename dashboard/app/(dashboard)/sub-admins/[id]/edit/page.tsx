@@ -30,9 +30,11 @@ import {
   IconLayoutDashboard,
   IconEdit,
   IconInfoCircle,
+  IconTrendingUp,
 } from "@tabler/icons-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import Swal from "sweetalert2";
 import apiClient from "app/services/api";
 import DasherBreadcrumb from "components/common/DasherBreadcrumb";
 
@@ -52,7 +54,8 @@ const MODULE_DEFINITIONS = [
   { key: "attendance", label: "Attendance & Shifts", icon: <IconCalendarEvent size={20} className="text-success" />, desc: "Track daily check-ins, logs, and override attendance" },
   { key: "leaves", label: "Leave Requests", icon: <IconCalendarTime size={20} className="text-warning" />, desc: "Review, approve, or reject employee leave applications" },
   { key: "holidays", label: "Holidays Calendar", icon: <IconBeach size={20} className="text-secondary" />, desc: "Configure company public and regional holidays" },
-  { key: "payroll", label: "Salary & Payroll", icon: <IconCoin size={20} className="text-danger" />, desc: "View payroll summaries and generate monthly salary slips" },
+  { key: "payroll", label: "Monthly Salary & Payroll", icon: <IconCoin size={20} className="text-danger" />, desc: "View monthly payroll payouts, calculations, and generate PDF payslips" },
+  { key: "increments", label: "Employee Salary Increments", icon: <IconTrendingUp size={20} className="text-success" />, desc: "Track upcoming salary raises, edit hike % / flat amounts, and approve appraisals" },
   { key: "tasks", label: "Projects & Tasks", icon: <IconListDetails size={20} className="text-purple" />, desc: "Assign and oversee department tasks and milestones" },
   { key: "chat", label: "Chat & Announcements", icon: <IconMessage size={20} className="text-teal" />, desc: "Broadcast company announcements and manager group chats" },
   { key: "settings", label: "Company Settings", icon: <IconSettings size={20} className="text-dark" />, desc: "Adjust work shifts, geofence, and organization policy" },
@@ -184,11 +187,26 @@ export default function EditSubAdminPage() {
       });
 
       setNotice("Access permissions updated successfully!");
+      Swal.fire({
+        title: "Access Permissions Updated!",
+        text: `Permissions for ${form.email} have been saved successfully.`,
+        icon: "success",
+        timer: 1800,
+        showConfirmButton: false,
+      });
+
       setTimeout(() => {
         router.push("/sub-admins");
-      }, 1200);
+      }, 1500);
     } catch (err: any) {
-      setError(err.response?.data?.detail || "Failed to update sub-admin access rights.");
+      const errorMsg = err.response?.data?.detail || "Failed to update sub-admin access rights.";
+      setError(errorMsg);
+      Swal.fire({
+        title: "Update Failed",
+        text: errorMsg,
+        icon: "error",
+        confirmButtonColor: "#dc3545",
+      });
     } finally {
       setSubmitting(false);
     }
@@ -196,14 +214,46 @@ export default function EditSubAdminPage() {
 
   const handleResetPassword = async () => {
     if (!form) return;
-    if (!confirm(`Generate a new temporary password for ${form.email}?`)) return;
+
+    const confirmResult = await Swal.fire({
+      title: "Reset Password?",
+      text: `Generate a new secure temporary password for ${form.email}?`,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#0d6efd",
+      cancelButtonColor: "#6c757d",
+      confirmButtonText: "Yes, Reset Password",
+      cancelButtonText: "Cancel",
+    });
+
+    if (!confirmResult.isConfirmed) return;
 
     try {
       const res = await apiClient.post(`/api/v1/accounts/sub-admins/${form.id}/reset-password/`);
       const newPass = res.data.temp_password;
-      alert(`New Temporary Password for ${form.email}:\n\n${newPass}\n\nPlease share this password with the manager.`);
+
+      Swal.fire({
+        title: "Password Reset Successfully!",
+        html: `
+          <div class="text-start">
+            <p class="text-secondary small mb-2">Share this temporary password with <strong>${form.email}</strong>:</p>
+            <div class="p-3 bg-light rounded border font-monospace text-center fs-5 text-danger fw-bold user-select-all mb-2">
+              ${newPass}
+            </div>
+            <p class="text-muted small mb-0">The sub-admin will be prompted to set a new password upon login.</p>
+          </div>
+        `,
+        icon: "success",
+        confirmButtonText: "Done",
+        confirmButtonColor: "#198754",
+      });
     } catch {
-      alert("Failed to reset password. Please try again.");
+      Swal.fire({
+        title: "Reset Failed",
+        text: "Failed to reset password. Please try again.",
+        icon: "error",
+        confirmButtonColor: "#dc3545",
+      });
     }
   };
 

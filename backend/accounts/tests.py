@@ -283,3 +283,80 @@ class PublicOnboardingTests(APITestCase):
         self.assertTrue(employee.aadhaar_document.name.startswith("employees/aadhaar/aadhaar"))
         self.assertTrue(employee.pan_card_document.name.startswith("employees/pan/pan-card"))
         self.assertTrue(employee.cv_document.name.startswith("employees/cv/resume"))
+
+
+from accounts.models import SubAdminPermission, UserRole
+
+
+class SubAdminManagementAPITests(APITestCase):
+    def setUp(self):
+        self.owner = get_user_model().objects.create_hr(
+            email="org_owner@example.com",
+            password="StrongPass123!",
+            first_name="Owner",
+            last_name="Admin",
+        )
+        self.organization = Organization.objects.create(name="Apex Enterprise", owner=self.owner)
+        self.sub_admin_user = get_user_model().objects.create_sub_admin(
+            email="subadmin.test@example.com",
+            password="InitialPass123!",
+            first_name="Lead",
+            last_name="Manager",
+        )
+        self.sub_admin_perm = SubAdminPermission.objects.create(
+            user=self.sub_admin_user,
+            organization=self.organization,
+            custom_role_title="Operations Lead",
+        )
+        self.client.force_authenticate(self.owner)
+
+    def test_reset_password_auto_generates_temp_password(self):
+        response = self.client.post(
+            f"/api/v1/accounts/sub-admins/{self.sub_admin_perm.id}/reset-password/"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertIn("temp_password", response.data)
+        self.assertTrue(len(response.data["temp_password"]) >= 8)
+
+    def test_reset_password_with_custom_password(self):
+        response = self.client.post(
+            f"/api/v1/accounts/sub-admins/{self.sub_admin_perm.id}/reset-password/",
+            {"password": "NewSecretPass789!"},
+            format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(response.data["temp_password"], "NewSecretPass789!")
+        self.sub_admin_user.refresh_from_db()
+        self.assertTrue(self.sub_admin_user.check_password("NewSecretPass789!"))
+
+    def test_toggle_status_locks_and_unlocks_account(self):
+        # Lock account
+        response = self.client.post(
+            f"/api/v1/accounts/sub-admins/{self.sub_admin_perm.id}/toggle-status/",
+            {"is_active": False},
+            format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertFalse(response.data["is_active"])
+        self.sub_admin_user.refresh_from_db()
+        self.assertFalse(self.sub_admin_user.is_active)
+
+        # Unlock account
+        response = self.client.post(
+            f"/api/v1/accounts/sub-admins/{self.sub_admin_perm.id}/toggle-status/",
+            {"is_active": True},
+            format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertTrue(response.data["is_active"])
+        self.sub_admin_user.refresh_from_db()
+        self.assertTrue(self.sub_admin_user.is_active)
+
+    def test_delete_sub_admin_permanently_removes_user_and_permission(self):
+        response = self.client.delete(
+            f"/api/v1/accounts/sub-admins/{self.sub_admin_perm.id}/"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertFalse(SubAdminPermission.objects.filter(id=self.sub_admin_perm.id).exists())
+        self.assertFalse(get_user_model().objects.filter(id=self.sub_admin_user.id).exists())
+

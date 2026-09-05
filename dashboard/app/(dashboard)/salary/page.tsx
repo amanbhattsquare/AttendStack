@@ -22,6 +22,7 @@ import { downloadPayslipPdf } from "components/payroll/payslipPdf";
 import { useBranding } from "context/BrandingContext";
 import UpcomingIncrementsWidget from "components/UpcomingIncrementsWidget";
 import PlanFeatureLockedPaywall from "components/PlanFeatureLockedPaywall";
+import ModuleAccessDenied from "components/ModuleAccessDeniedPaywall";
 import DasherBreadcrumb from "components/common/DasherBreadcrumb";
 
 const BASE_URL = `${process.env.NEXT_PUBLIC_API_ENDPOINT}/api/v1/payroll/`;
@@ -129,6 +130,17 @@ const SalaryPage = () => {
 
   // Fetch Payroll records
   const fetchPayrolls = async () => {
+    const userData = typeof window !== "undefined" ? localStorage.getItem("user") : null;
+    if (userData) {
+      try {
+        const u = JSON.parse(userData);
+        if (u.role === "SUB_ADMIN" && u.permissions?.payroll?.view === false) {
+          setIsLoading(false);
+          return;
+        }
+      } catch {}
+    }
+
     setIsLoading(true);
     setError("");
     try {
@@ -346,12 +358,15 @@ const SalaryPage = () => {
 
   const [organization, setOrganization] = useState<any>(null);
 
+  const [currentUser, setCurrentUser] = useState<any>(null);
+
   // Parse User Credentials & Organization
   useEffect(() => {
     const userData = localStorage.getItem("user");
     if (userData) {
       try {
         const parsed = JSON.parse(userData);
+        setCurrentUser(parsed);
         setIsAdmin(parsed.role === "SUPER_ADMIN" || parsed.role === "HR");
       } catch (err) {
         console.error("Failed to parse user data.", err);
@@ -372,6 +387,46 @@ const SalaryPage = () => {
     if (!payslipData) return;
     await downloadPayslipPdf(payslipData, branding);
   };
+
+  const isSubAdmin = currentUser?.role === "SUB_ADMIN";
+  const userPermissions = currentUser?.permissions || {};
+  const payrollPerm = userPermissions.payroll;
+  const incrementsPerm = userPermissions.increments;
+
+  const hasPayrollPermission = !isSubAdmin || (
+    typeof payrollPerm === "object" && payrollPerm !== null
+      ? Boolean(payrollPerm.view)
+      : Boolean(payrollPerm)
+  );
+
+  const hasIncrementsPermission = !isSubAdmin || (
+    typeof incrementsPerm === "object" && incrementsPerm !== null
+      ? Boolean(incrementsPerm.view)
+      : Boolean(incrementsPerm)
+  );
+
+  const canEditPayroll = !isSubAdmin || Boolean(payrollPerm?.edit);
+  const canEditIncrements = !isSubAdmin || Boolean(incrementsPerm?.edit);
+
+  // Auto-switch to allowed tab if one is restricted
+  useEffect(() => {
+    if (isSubAdmin) {
+      if (!hasPayrollPermission && hasIncrementsPermission) {
+        setActiveTab("increments");
+      } else if (hasPayrollPermission && !hasIncrementsPermission) {
+        setActiveTab("payroll");
+      }
+    }
+  }, [isSubAdmin, hasPayrollPermission, hasIncrementsPermission]);
+
+  if (isSubAdmin && !hasPayrollPermission && !hasIncrementsPermission) {
+    return (
+      <ModuleAccessDenied
+        moduleTitle="Salary & Increments"
+        description="You do not have permission to view or manage Salary Payouts or Employee Increments. Please contact your organization administrator to grant you access."
+      />
+    );
+  }
 
   if (isFeatureLocked) {
     return (
@@ -397,7 +452,7 @@ const SalaryPage = () => {
           <h2 className="mb-0 fw-bold">Salary Management</h2>
           <p className="text-secondary mb-0">Manage employee monthly salaries, generate payslips, and review upcoming salary increments.</p>
         </div>
-        {isAdmin && activeTab === "payroll" && (
+        {isAdmin && canEditPayroll && activeTab === "payroll" && (
           <button
             className="btn btn-primary d-flex align-items-center gap-2 shadow-sm"
             onClick={() => setShowGenerateModal(true)}
@@ -407,35 +462,37 @@ const SalaryPage = () => {
         )}
       </div>
 
-      {/* Two Main Section Tabs */}
-      <div className="card border-0 shadow-sm mb-4">
-        <div className="card-body p-2">
-          <Nav variant="pills" className="nav-custom-pills gap-2">
-            <Nav.Item>
-              <Nav.Link
-                as="button"
-                active={activeTab === "payroll"}
-                onClick={() => setActiveTab("payroll")}
-                className="fw-semibold px-4 py-2 cursor-pointer d-flex align-items-center gap-2 border-0"
-              >
-                <IconCurrencyRupee size={18} />
-                Salary & Payroll
-              </Nav.Link>
-            </Nav.Item>
-            <Nav.Item>
-              <Nav.Link
-                as="button"
-                active={activeTab === "increments"}
-                onClick={() => setActiveTab("increments")}
-                className="fw-semibold px-4 py-2 cursor-pointer d-flex align-items-center gap-2 border-0"
-              >
-                <IconTrendingUp size={18} />
-                Employee Salary Increment Management
-              </Nav.Link>
-            </Nav.Item>
-          </Nav>
+      {/* Two Main Section Tabs (shown if both available, or appropriate tab) */}
+      {(hasPayrollPermission && hasIncrementsPermission) ? (
+        <div className="card border-0 shadow-sm mb-4">
+          <div className="card-body p-2">
+            <Nav variant="pills" className="nav-custom-pills gap-2">
+              <Nav.Item>
+                <Nav.Link
+                  as="button"
+                  active={activeTab === "payroll"}
+                  onClick={() => setActiveTab("payroll")}
+                  className="fw-semibold px-4 py-2 cursor-pointer d-flex align-items-center gap-2 border-0"
+                >
+                  <IconCurrencyRupee size={18} />
+                  Salary & Payroll
+                </Nav.Link>
+              </Nav.Item>
+              <Nav.Item>
+                <Nav.Link
+                  as="button"
+                  active={activeTab === "increments"}
+                  onClick={() => setActiveTab("increments")}
+                  className="fw-semibold px-4 py-2 cursor-pointer d-flex align-items-center gap-2 border-0"
+                >
+                  <IconTrendingUp size={18} />
+                  Employee Salary Increment Management
+                </Nav.Link>
+              </Nav.Item>
+            </Nav>
+          </div>
         </div>
-      </div>
+      ) : null}
 
       {error && <Alert variant="danger">{error}</Alert>}
 
@@ -652,7 +709,7 @@ const SalaryPage = () => {
       )}
 
       {activeTab === "increments" && (
-        <UpcomingIncrementsWidget />
+        <UpcomingIncrementsWidget canEdit={canEditIncrements} />
       )}
 
       {/* Generate Payroll Modal */}

@@ -20,7 +20,7 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView
 
 from .models import UserRole, SubAdminPermission
-from .permissions import IsSuperAdmin, IsAdminOrHR
+from .permissions import IsSuperAdmin, IsAdminOrHR, IsHR
 from .serializers import (
     ChangePasswordSerializer,
     CreateHRSerializer,
@@ -213,16 +213,6 @@ class OrganizationCodeLookupView(APIView):
                 is_active=True,
             ).first()
         if organization is None:
-            organization = Organization.objects.filter(
-                external_company_id__iexact=code,
-                is_active=True,
-            ).first()
-        if organization is None:
-            organization = Organization.objects.filter(
-                invite_code__iexact=code,
-            ).first()
-
-        if organization is None:
             return Response(
                 {
                     "valid": False,
@@ -234,11 +224,7 @@ class OrganizationCodeLookupView(APIView):
             )
 
         return Response({
-            "valid": True,
-            "code": organization.invite_code,
-            "organization_id": organization.id,
             "organization_name": organization.name,
-            "is_active": organization.is_active,
         })
 
 
@@ -579,11 +565,11 @@ from accounts.utils import generate_temp_password
 class SubAdminViewSet(viewsets.ModelViewSet):
     """
     CRUD endpoint for Sub-Admins and their Granular RBAC Permissions.
-    Accessible by Super Admins and Company Admins (HR).
+    Accessible exclusively by Super Admins and Company Admins (HR).
     """
     queryset = SubAdminPermission.objects.all()
     serializer_class = SubAdminPermissionSerializer
-    permission_classes = [permissions.IsAuthenticated, IsAdminOrHR]
+    permission_classes = [permissions.IsAuthenticated, IsHR]
 
     def get_queryset(self):
         user = self.request.user
@@ -681,21 +667,49 @@ class SubAdminViewSet(viewsets.ModelViewSet):
     def destroy(self, request, *args, **kwargs):
         sub_perm = self.get_object()
         user = sub_perm.user
-        # Deactivate or delete
-        user.is_active = False
-        user.save(update_fields=["is_active"])
+        email = user.email
+        # Delete both permission and user record
         sub_perm.delete()
-        return Response({"detail": "Sub-admin access removed successfully."}, status=status.HTTP_204_NO_CONTENT)
+        user.delete()
+        return Response({"detail": f"Sub-admin account for {email} has been permanently deleted."}, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=["post"], url_path="reset-password")
     def reset_password(self, request, pk=None):
         sub_perm = self.get_object()
         user = sub_perm.user
-        new_password = generate_temp_password()
+        custom_password = str(request.data.get("password", "")).strip()
+        if custom_password:
+            if len(custom_password) < 6:
+                return Response(
+                    {"detail": "Password must be at least 6 characters."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            new_password = custom_password
+        else:
+            new_password = generate_temp_password()
+
         user.set_password(new_password)
         user.save(update_fields=["password"])
         return Response({
-            "detail": f"New temporary password generated for {user.email}.",
+            "detail": f"Password for {user.email} reset successfully.",
             "temp_password": new_password,
+            "email": user.email,
+        }, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["post", "patch"], url_path="toggle-status")
+    def toggle_status(self, request, pk=None):
+        sub_perm = self.get_object()
+        user = sub_perm.user
+        desired_active = request.data.get("is_active")
+        if desired_active is None:
+            user.is_active = not user.is_active
+        else:
+            user.is_active = bool(desired_active)
+        user.save(update_fields=["is_active"])
+        state_label = "activated" if user.is_active else "locked / suspended"
+        return Response({
+            "detail": f"Sub-admin access for {user.email} has been {state_label}.",
+            "is_active": user.is_active,
+            "sub_admin": SubAdminPermissionSerializer(sub_perm).data,
         }, status=status.HTTP_200_OK)
 

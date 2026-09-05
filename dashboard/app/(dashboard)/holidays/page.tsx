@@ -44,7 +44,7 @@ const HolidaysPage = () => {
     setIsAdmin(role === "ADMIN" || role === "SUPERADMIN" || role === "HR");
   }, []);
 
-  const { table } = useHolidays(holidays, pagination, setPagination, totalHolidaysCount);
+  const { table } = useHolidays(holidays, isAdmin, Math.ceil(totalHolidaysCount / (pagination.pageSize || 10)) || 1);
 
   // Fetch holidays from Django API
   const fetchHolidays = async (page = 0, size = 10) => {

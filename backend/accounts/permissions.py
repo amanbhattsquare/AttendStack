@@ -16,6 +16,9 @@ def check_user_module_permission(user, module: str, action: str = "view") -> boo
         return True
     if user.role == UserRole.SUB_ADMIN:
         subadmin_profile = getattr(user, "subadmin_profile", None)
+        if not subadmin_profile:
+            from accounts.models import SubAdminPermission
+            subadmin_profile = SubAdminPermission.objects.filter(user=user).first()
         if subadmin_profile:
             return subadmin_profile.has_permission(module, action)
     return False

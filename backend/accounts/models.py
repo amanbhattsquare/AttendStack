@@ -159,6 +159,7 @@ class SubAdminPermission(models.Model):
             "leaves": {"view": True, "edit": True, "delete": False},
             "holidays": {"view": True, "edit": True, "delete": False},
             "payroll": {"view": False, "edit": False, "delete": False},
+            "increments": {"view": False, "edit": False, "delete": False},
             "tasks": {"view": True, "edit": True, "delete": False},
             "chat": {"view": True, "edit": True, "delete": False},
             "settings": {"view": False, "edit": False, "delete": False},

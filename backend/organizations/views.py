@@ -271,27 +271,8 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         return super().get_authenticators()
 
     def _find_user_organization(self, user):
-        if not user or not user.is_authenticated:
-            return None
-        # 1. Direct ownership
-        org = Organization.objects.filter(owner=user).first()
-        if org:
-            return org
-        # 2. Employee profile link
-        if hasattr(user, "employee_profile") and user.employee_profile and user.employee_profile.organization:
-            return user.employee_profile.organization
-        # 3. Employee record by email
-        emp = Employee.objects.filter(email__iexact=user.email, organization__isnull=False).select_related('organization').first()
-        if emp and emp.organization:
-            return emp.organization
-        # 4. Reverse relation on Organization
-        org = Organization.objects.filter(employees__email__iexact=user.email).first()
-        if org:
-            return org
-        # 5. Super Admin only fallback
-        if user.is_superuser or getattr(user, "role", "") == UserRole.SUPER_ADMIN:
-            return Organization.objects.order_by("created_at").first()
-        return None
+        from organizations.services import get_organization_for_user
+        return get_organization_for_user(user)
 
     def get_queryset(self):
         user = self.request.user
@@ -310,10 +291,11 @@ class OrganizationViewSet(viewsets.ModelViewSet):
         if user.is_superuser or user_role == UserRole.SUPER_ADMIN:
             return Organization.objects.all().order_by("-created_at")
 
-        # Multi-tenant isolation: HR / Owner / Staff only see their own organization(s)
+        # Multi-tenant isolation: HR / Owner / Staff / Sub-Admins see their organization(s)
         user_orgs = (
             Organization.objects.filter(owner=user)
             | Organization.objects.filter(employees__email__iexact=user.email)
+            | Organization.objects.filter(subadmin_permissions__user=user)
         ).distinct()
 
         return user_orgs.order_by("-created_at")

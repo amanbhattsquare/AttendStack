@@ -260,13 +260,19 @@ const SalaryPage = () => {
         }),
       });
       if (!res.ok) {
-        const errData = await res.json();
-        const errorMsg =
-          typeof errData.modification_reason === "string"
-            ? errData.modification_reason
-            : Array.isArray(errData.modification_reason)
-            ? errData.modification_reason[0]
-            : errData.detail || "Failed to update payroll details.";
+        const errorText = await res.text();
+        let errorMsg = "Failed to update payroll details.";
+        try {
+          const errData = JSON.parse(errorText);
+          errorMsg =
+            typeof errData.modification_reason === "string"
+              ? errData.modification_reason
+              : Array.isArray(errData.modification_reason)
+              ? errData.modification_reason[0]
+              : errData.detail || errorMsg;
+        } catch {
+          errorMsg = errorText || `Server error (${res.status})`;
+        }
         throw new Error(errorMsg);
       }
       setShowEditModal(false);

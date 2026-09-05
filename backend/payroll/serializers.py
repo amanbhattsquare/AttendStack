@@ -147,26 +147,29 @@ class PayrollSerializer(serializers.ModelSerializer):
             if has_changed:
                 request = self.context.get("request")
                 user = request.user if request and getattr(request.user, "is_authenticated", False) else None
+                user_id_str = str(user.id) if user and getattr(user, "id", None) else None
+                user_name_str = (user.get_full_name() or user.username or "Administrator") if user else "System Administrator"
+                user_email_str = str(user.email) if user and getattr(user, "email", None) else ""
                 reason = validated_data.get("modification_reason") or instance.modification_reason
 
                 history_entry = {
                     "modified_at": timezone.now().isoformat(),
-                    "modified_by_id": user.id if user else None,
-                    "modified_by_name": user.get_full_name() or user.username or "Administrator" if user else "System Administrator",
-                    "modified_by_email": user.email if user else "",
-                    "reason": reason,
+                    "modified_by_id": user_id_str,
+                    "modified_by_name": user_name_str,
+                    "modified_by_email": user_email_str,
+                    "reason": str(reason),
                     "old_values": {
                         "basic_salary": str(instance.basic_salary),
                         "allowances": str(instance.allowances),
                         "deductions": str(instance.deductions),
                         "net_salary": str(instance.net_salary),
-                        "status": instance.status,
+                        "status": str(instance.status),
                     },
                     "new_values": {
                         "basic_salary": str(new_basic),
                         "allowances": str(new_allowances),
                         "deductions": str(new_deductions),
-                        "status": new_status,
+                        "status": str(new_status),
                     }
                 }
                 history = list(instance.modification_history or [])

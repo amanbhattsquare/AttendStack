@@ -184,6 +184,41 @@ class PaidPayrollModificationTests(TestCase):
         self.assertEqual(updated.modification_history[0]["old_values"]["basic_salary"], "10000.00")
         self.assertEqual(updated.modification_history[0]["new_values"]["basic_salary"], "11000.00")
 
+    def test_modifying_paid_payroll_with_uuid_user_context_serializes_cleanly(self):
+        from accounts.models import User
+        admin_user = User.objects.create(
+            email="admin_audit@example.com",
+            first_name="Audit",
+            last_name="Officer",
+            role="HR"
+        )
+        from unittest.mock import MagicMock
+        mock_request = MagicMock()
+        mock_request.user = admin_user
+
+        serializer = PayrollSerializer(
+            instance=self.paid_payroll,
+            data={
+                "basic_salary": "12000.00",
+                "allowances": "3000.00",
+                "deductions": "1000.00",
+                "status": "PAID",
+                "modification_reason": "Executive board approved salary revision",
+            },
+            context={"request": mock_request},
+            partial=True
+        )
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        updated = serializer.save()
+        
+        # Reload from DB to confirm database JSONField serialization and deserialization
+        self.paid_payroll.refresh_from_db()
+        self.assertEqual(self.paid_payroll.basic_salary, Decimal("12000.00"))
+        self.assertTrue(self.paid_payroll.is_modified_after_payment)
+        self.assertEqual(len(self.paid_payroll.modification_history), 1)
+        self.assertEqual(self.paid_payroll.modification_history[0]["modified_by_id"], str(admin_user.id))
+        self.assertEqual(self.paid_payroll.modification_history[0]["modified_by_email"], "admin_audit@example.com")
+
     def test_modifying_pending_payroll_does_not_require_reason(self):
         pending_payroll = Payroll.objects.create(
             employee=self.employee,

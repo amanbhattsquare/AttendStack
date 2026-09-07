@@ -108,12 +108,9 @@ class SyncSimplyJobSettingsView(generics.GenericAPIView):
         synced_fields = []
         company_data = {}
 
-        # 1. Find connected organization
-        org = None
-        if hasattr(request.user, "owned_organizations"):
-            org = request.user.owned_organizations.filter(is_active=True).first()
-        if not org:
-            org = Organization.objects.filter(is_active=True).first()
+        # 1. Find connected organization strictly for this user
+        from organizations.services import get_organization_for_user
+        org = get_organization_for_user(request.user)
 
         # 2. Extract from SimplyJob DB if configured
         db_url = getattr(settings, "SIMPLYJOB_DATABASE_URL", "").strip()

@@ -65,6 +65,16 @@ class SystemSettingsView(generics.RetrieveUpdateAPIView):
                 change.field_name in paid_leave_policy_fields for change in changes
             )
 
+            increment_policy_fields = {
+                "increment_enabled",
+                "default_increment_months",
+                "default_increment_type",
+                "default_increment_value",
+            }
+            should_sync_increments = any(
+                change.field_name in increment_policy_fields for change in changes
+            )
+
             # Bulk create change logs
             if changes:
                 SettingsChangeLog.objects.bulk_create(changes)
@@ -77,6 +87,11 @@ class SystemSettingsView(generics.RetrieveUpdateAPIView):
                 from attendance.services import rebalance_paid_leave_attendance
 
                 rebalance_paid_leave_attendance()
+
+            if should_sync_increments:
+                from payroll.increment_service import sync_employee_increments
+
+                sync_employee_increments()
             
         return Response(serializer.data)
 

@@ -46,6 +46,7 @@ export interface EmployeeIncrementItem {
   notes?: string;
   cycle_months?: number;
   cycle_display?: string;
+  is_custom?: boolean;
 }
 
 export interface IncrementSummary {
@@ -385,6 +386,40 @@ const UpcomingIncrementsWidget: React.FC<UpcomingIncrementsWidgetProps> = ({ can
     }
   };
 
+  const handleResetToCompanyPolicy = async () => {
+    if (!selectedIncrement) return;
+    setSubmittingAction(true);
+    try {
+      const res = await fetch(`${BASE_URL}/payroll/increments/${selectedIncrement.id}/edit-hike/`, {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({
+          reset_to_company_policy: true,
+          notes: "Reset back to company default policy",
+        }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.detail || "Failed to reset increment.");
+      }
+
+      setShowEditHikeModal(false);
+      Swal.fire({
+        icon: "success",
+        title: "Reverted to Company Policy",
+        text: `Salary increment for ${selectedIncrement.employee_details?.full_name} has been reset to the company default policy.`,
+        timer: 2500,
+        showConfirmButton: false,
+      });
+      fetchIncrements();
+    } catch (err) {
+      Swal.fire("Error", err instanceof Error ? err.message : "Failed to reset increment.", "error");
+    } finally {
+      setSubmittingAction(false);
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "APPROVED":
@@ -633,6 +668,16 @@ const UpcomingIncrementsWidget: React.FC<UpcomingIncrementsWidgetProps> = ({ can
                                 ? `+₹${monthlyRaiseAmount.toLocaleString("en-IN")}/mo`
                                 : `+${parseFloat(effectivePct)}% raise`}
                             </span>
+                            {inc.is_custom && (
+                              <Badge
+                                bg="warning-subtle"
+                                className="text-warning border border-warning-subtle rounded-pill fw-semibold"
+                                style={{ fontSize: "9.5px", padding: "1px 5px" }}
+                                title="Custom increment override active for this employee"
+                              >
+                                Custom
+                              </Badge>
+                            )}
                           </div>
                         </td>
 
@@ -895,17 +940,31 @@ const UpcomingIncrementsWidget: React.FC<UpcomingIncrementsWidgetProps> = ({ can
             />
           </Form.Group>
         </Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowEditHikeModal(false)} disabled={submittingAction}>
-            Cancel
-          </Button>
-          <Button
-            variant="primary"
-            onClick={handleConfirmEditHike}
-            disabled={submittingAction || !editHikeValue || parseFloat(editHikeValue) <= 0}
-          >
-            {submittingAction ? <Spinner size="sm" /> : "Save & Update Hike"}
-          </Button>
+        <Modal.Footer className="d-flex justify-content-between align-items-center">
+          <div>
+            {selectedIncrement?.is_custom && (
+              <Button
+                variant="outline-secondary"
+                size="sm"
+                onClick={handleResetToCompanyPolicy}
+                disabled={submittingAction}
+              >
+                Reset to Company Policy
+              </Button>
+            )}
+          </div>
+          <div className="d-flex gap-2">
+            <Button variant="secondary" onClick={() => setShowEditHikeModal(false)} disabled={submittingAction}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleConfirmEditHike}
+              disabled={submittingAction || !editHikeValue || parseFloat(editHikeValue) <= 0}
+            >
+              {submittingAction ? <Spinner size="sm" /> : "Save & Update Hike"}
+            </Button>
+          </div>
         </Modal.Footer>
       </Modal>
 

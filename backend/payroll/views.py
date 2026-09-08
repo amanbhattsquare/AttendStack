@@ -436,10 +436,11 @@ class EmployeeIncrementViewSet(viewsets.ModelViewSet):
         try:
             updated_item = update_increment_hike(
                 increment=increment,
-                increment_type=serializer.validated_data["increment_type"],
-                increment_value=serializer.validated_data["increment_value"],
+                increment_type=serializer.validated_data.get("increment_type", "PERCENTAGE"),
+                increment_value=serializer.validated_data.get("increment_value", Decimal("0.00")),
                 notes=serializer.validated_data.get("notes", ""),
                 update_employee_policy=serializer.validated_data.get("update_employee_policy", False),
+                reset_to_company_policy=serializer.validated_data.get("reset_to_company_policy", False),
                 user=request.user,
             )
             return Response(

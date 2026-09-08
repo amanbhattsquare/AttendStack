@@ -247,6 +247,7 @@ class EmployeeIncrementSerializer(serializers.ModelSerializer):
     action_by_name = serializers.CharField(source="action_by.get_full_name", read_only=True)
     cycle_months = serializers.SerializerMethodField()
     cycle_display = serializers.SerializerMethodField()
+    is_custom = serializers.SerializerMethodField()
 
     class Meta:
         model = EmployeeIncrement
@@ -270,6 +271,7 @@ class EmployeeIncrementSerializer(serializers.ModelSerializer):
             "notes",
             "cycle_months",
             "cycle_display",
+            "is_custom",
             "created_at",
             "updated_at",
         ]
@@ -281,9 +283,13 @@ class EmployeeIncrementSerializer(serializers.ModelSerializer):
             "action_by",
             "cycle_months",
             "cycle_display",
+            "is_custom",
             "created_at",
             "updated_at",
         ]
+
+    def get_is_custom(self, obj):
+        return bool(obj.employee.override_increment_policy or getattr(obj, "is_custom", False))
 
     def get_cycle_months(self, obj):
         if obj.employee.override_increment_policy and obj.employee.custom_increment_months:
@@ -318,9 +324,10 @@ class ProcessIncrementActionSerializer(serializers.Serializer):
 
 
 class EditIncrementHikeSerializer(serializers.Serializer):
-    increment_type = serializers.ChoiceField(choices=["PERCENTAGE", "FLAT_AMOUNT"], required=True)
-    increment_value = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=Decimal("0.01"), required=True)
+    increment_type = serializers.ChoiceField(choices=["PERCENTAGE", "FLAT_AMOUNT"], required=False, default="PERCENTAGE")
+    increment_value = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=Decimal("0.00"), required=False, default=Decimal("0.00"))
     notes = serializers.CharField(required=False, allow_blank=True, default="")
     update_employee_policy = serializers.BooleanField(required=False, default=False)
+    reset_to_company_policy = serializers.BooleanField(required=False, default=False)
 
 

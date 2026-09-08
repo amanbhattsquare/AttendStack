@@ -366,8 +366,14 @@ const UpcomingIncrementsWidget: React.FC<UpcomingIncrementsWidgetProps> = ({ can
       });
 
       if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.detail || "Failed to update salary hike.");
+        let errorMsg = "Failed to update salary hike.";
+        try {
+          const errData = await res.json();
+          errorMsg = errData.detail || errorMsg;
+        } catch {
+          errorMsg = `Server error (${res.status}): Please check backend logs.`;
+        }
+        throw new Error(errorMsg);
       }
 
       setShowEditHikeModal(false);
@@ -400,8 +406,14 @@ const UpcomingIncrementsWidget: React.FC<UpcomingIncrementsWidgetProps> = ({ can
       });
 
       if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.detail || "Failed to reset increment.");
+        let errorMsg = "Failed to reset increment.";
+        try {
+          const errData = await res.json();
+          errorMsg = errData.detail || errorMsg;
+        } catch {
+          errorMsg = `Server error (${res.status}): Please check backend logs.`;
+        }
+        throw new Error(errorMsg);
       }
 
       setShowEditHikeModal(false);

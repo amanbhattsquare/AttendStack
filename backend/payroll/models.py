@@ -103,6 +103,10 @@ class EmployeeIncrement(models.Model):
         related_name="processed_increments"
     )
     notes = models.TextField(blank=True, default="")
+    is_custom = models.BooleanField(
+        default=False,
+        help_text="True if this increment has custom raise amount/type overridden from company default."
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

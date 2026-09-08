@@ -15,6 +15,7 @@ from django.utils import timezone
 from organizations.models import Organization
 from .models import Employee, EmployeeStatus
 from .serializers import (
+    EmployeeDirectorySerializer,
     EmployeeListSerializer,
     EmployeeProfileSerializer,
     EmployeeSerializer,
@@ -44,6 +45,22 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         if self.action in ("list", "me"):
             return [IsAuthenticated()]
         return super().get_permissions()
+
+    def get_serializer_class(self):
+        user = self.request.user
+        is_admin_or_hr = (
+            user.is_authenticated
+            and (
+                user.is_superuser
+                or getattr(user, "role", "") in (UserRole.SUPER_ADMIN, UserRole.HR, UserRole.SUB_ADMIN)
+                or user.is_staff
+            )
+        )
+        if self.action == "list":
+            return EmployeeListSerializer if is_admin_or_hr else EmployeeDirectorySerializer
+        if self.action == "me":
+            return EmployeeProfileSerializer
+        return EmployeeSerializer
 
     def _organization_for_user(self):
         user = self.request.user

@@ -66,18 +66,15 @@ class VerifyRegistrationTokenView(APIView):
         secret = (
             getattr(settings, "SIMPLYJOB_ONBOARDING_SECRET", "")
             or getattr(settings, "ATTENDSTACK_ONBOARDING_SECRET", "")
-            or "simplyjob_attendstack_secret_key_2026"
         ).strip()
+        if not secret:
+            return None, "Integration secret is not configured."
 
         try:
             payload_bytes = base64.urlsafe_b64decode(payload_b64.encode("utf-8"))
             expected_sig = hmac.new(secret.encode("utf-8"), payload_bytes, hashlib.sha256).hexdigest()
-            # Also try secondary fallback if secret didn't match
             if not hmac.compare_digest(signature, expected_sig):
-                fallback_secret = "91ec6cfae00e9301ba57a1d2db2ad0aff280dc8efe2fc44affc76c66d64373a0"
-                expected_fallback = hmac.new(fallback_secret.encode("utf-8"), payload_bytes, hashlib.sha256).hexdigest()
-                if not hmac.compare_digest(signature, expected_fallback):
-                    return None, "Invalid signature."
+                return None, "Invalid signature."
 
             payload_data = json.loads(payload_bytes.decode("utf-8"))
         except Exception as exc:
@@ -396,7 +393,6 @@ class SimplyJobEmployeeOnboardingView(APIView):
         secret = (
             getattr(settings, "SIMPLYJOB_ONBOARDING_SECRET", "")
             or getattr(settings, "ATTENDSTACK_ONBOARDING_SECRET", "")
-            or "simplyjob_attendstack_secret_key_2026"
         ).strip()
         if not secret:
             raise AuthenticationFailed("Onboarding secret is not configured.")
@@ -469,8 +465,9 @@ class SSOLoginView(APIView):
         secret = (
             getattr(settings, "SIMPLYJOB_ONBOARDING_SECRET", "")
             or getattr(settings, "ATTENDSTACK_ONBOARDING_SECRET", "")
-            or "simplyjob_attendstack_secret_key_2026"
         ).strip()
+        if not secret:
+            return Response({"detail": "SSO secret is not configured on this server."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         try:
             payload_bytes = base64.urlsafe_b64decode(payload_b64.encode("utf-8"))

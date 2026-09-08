@@ -152,6 +152,33 @@ class EmployeeListSerializer(serializers.ModelSerializer):
             return str(latest.effective_date)
         return str(obj.joining_date) if obj.joining_date else None
 
+class EmployeeDirectorySerializer(serializers.ModelSerializer):
+    """Safe employee directory serializer for non-admin/regular employee views (zero salary or private PII)."""
+    profile_photo_url = serializers.SerializerMethodField()
+    status_label = serializers.CharField(source="get_status_display", read_only=True)
+
+    class Meta:
+        model = Employee
+        fields = [
+            "id",
+            "employee_id",
+            "full_name",
+            "email",
+            "department",
+            "designation",
+            "joining_date",
+            "profile_photo_url",
+            "status",
+            "status_label",
+        ]
+
+    def get_profile_photo_url(self, obj):
+        if not obj.profile_photo:
+            return None
+        request = self.context.get("request")
+        url = obj.profile_photo.url
+        return request.build_absolute_uri(url) if request else url
+
 
 class EmployeeStatusUpdateSerializer(serializers.Serializer):
     status = serializers.ChoiceField(choices=EmployeeStatus.choices)

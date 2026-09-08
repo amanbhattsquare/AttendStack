@@ -365,6 +365,14 @@ class OrganizationRegistrationSerializer(serializers.Serializer):
     def validate(self, attrs):
         if attrs["password"] != attrs["confirm_password"]:
             raise serializers.ValidationError({"confirm_password": "Passwords do not match."})
+        source_company_id = attrs.get("source_company_id")
+        if source_company_id:
+            from organizations.models import Organization
+            existing = Organization.objects.filter(external_company_id=source_company_id, is_active=True).first()
+            if existing and existing.owner is not None:
+                raise serializers.ValidationError({
+                    "organization_name": "An active organization is already registered for this company. Please log in directly."
+                })
         return attrs
 
     def create(self, validated_data):
@@ -391,7 +399,7 @@ class OrganizationRegistrationSerializer(serializers.Serializer):
             organization = None
             if source_company_id:
                 organization = Organization.objects.filter(external_company_id=source_company_id).first()
-                if organization:
+                if organization and organization.owner is None:
                     organization.name = validated_data["organization_name"]
                     organization.owner = owner
                     organization.external_source = "SIMPLYJOB"
@@ -408,6 +416,9 @@ class OrganizationRegistrationSerializer(serializers.Serializer):
                     if plan_name:
                         organization.plan_name = plan_name
                     organization.save()
+                elif organization and organization.owner is not None:
+                    # Never overwrite an existing active owner
+                    organization = None
 
             if organization is None:
                 organization = Organization.objects.create(

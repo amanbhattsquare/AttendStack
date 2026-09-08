@@ -176,13 +176,20 @@ class OrganizationEmployeesSyncStatusView(APIView):
         code = str(request.query_params.get("code") or request.data.get("code") or "").strip().upper()
         external_company_id = str(request.query_params.get("external_company_id") or request.data.get("external_company_id") or "").strip()
 
+        if not raw_key and not code:
+            return Response(
+                {"ok": False, "error": "API key or organization code is required."},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
         org = None
         if raw_key:
             org = Organization.objects.filter(api_key=raw_key, is_active=True).first()
         if not org and code:
-            org = Organization.objects.filter(invite_code__iexact=code, is_active=True).first()
-        if not org and external_company_id:
-            org = Organization.objects.filter(external_company_id=external_company_id, is_active=True).first()
+            if external_company_id:
+                org = Organization.objects.filter(invite_code__iexact=code, external_company_id=external_company_id, is_active=True).first()
+            if not org:
+                org = Organization.objects.filter(invite_code__iexact=code, is_active=True).first()
 
         if not org:
             return Response(

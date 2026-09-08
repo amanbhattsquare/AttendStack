@@ -15,17 +15,16 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = config("SECRET_KEY", default="unsafe-secret-key")
 SIMPLYJOB_ONBOARDING_SECRET = config("SIMPLYJOB_ONBOARDING_SECRET", default="")
 ATTENDSTACK_APP_URL = config("ATTENDSTACK_APP_URL", default="http://localhost:3000")
-# Some deployment platforms use environment labels such as ``release`` for
-# DEBUG.  python-decouple's strict bool cast raises ValueError for those values
-# and prevents Django/Gunicorn from starting, which surfaces as a 502 from the
-# reverse proxy.  Only explicit truthy values should enable debug mode; all
-# deployment labels and other values safely keep it disabled.
 DEBUG = str(config("DEBUG", default="true")).strip().lower() in {
     "1",
     "true",
     "yes",
     "on",
 }
+if not DEBUG and SECRET_KEY == "unsafe-secret-key":
+    from django.core.exceptions import ImproperlyConfigured
+    raise ImproperlyConfigured("Set SECRET_KEY before running in production.")
+
 ALLOWED_HOSTS = [h.strip() for h in config("ALLOWED_HOSTS", default="localhost,127.0.0.1").split(",") if h.strip()]
 
 # Honor the 'X-Forwarded-Proto' header for request.is_secure() behind reverse proxies (Nginx/Cloudflare)
@@ -224,7 +223,7 @@ REST_FRAMEWORK = {
 # SIMPLE JWT
 # ──────────────────────────────────────────────────────────────────────────────
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(days=7),
+    "ACCESS_TOKEN_LIFETIME": timedelta(hours=2),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
     "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": True,
@@ -336,9 +335,9 @@ MEDIA_ROOT = BASE_DIR / "media"
 # ──────────────────────────────────────────────────────────────────────────────
 # SIMPLYJOB INTEGRATION
 # ──────────────────────────────────────────────────────────────────────────────
-SIMPLYJOB_ONBOARDING_SECRET = config("SIMPLYJOB_ONBOARDING_SECRET", default="91ec6cfae00e9301ba57a1d2db2ad0aff280dc8efe2fc44affc76c66d64373a0")
+SIMPLYJOB_ONBOARDING_SECRET = config("SIMPLYJOB_ONBOARDING_SECRET", default="")
 SIMPLYJOB_WEBHOOK_URL = config("SIMPLYJOB_WEBHOOK_URL", default="https://simplyjob.in/api/companies/webhooks/attendstack/sync-invite-code/")
-SIMPLYJOB_DATABASE_URL = config("SIMPLYJOB_DATABASE_URL", default="postgresql://postgres.igwdszfzqxnrbkyivxzz:h95LA8x1mAIkCzuC@aws-1-ap-northeast-2.pooler.supabase.com:6543/postgres")
+SIMPLYJOB_DATABASE_URL = config("SIMPLYJOB_DATABASE_URL", default="")
 
 
 

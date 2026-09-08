@@ -56,7 +56,9 @@ def _send_password_reset_email(user, otp, requested_ip=None):
 def request_password_reset_otp(email, requested_ip=None):
     user = User.objects.filter(email__iexact=email.strip(), is_active=True).first()
     if user is None:
-        raise ValidationError({"email": [ACCOUNT_NOT_FOUND_MESSAGE]})
+        # Perform dummy work to mitigate timing attack user enumeration
+        make_password(_generate_otp())
+        return RESET_CODE_SENT_MESSAGE
 
     now = timezone.now()
     resend_after = now - timedelta(seconds=settings.PASSWORD_RESET_OTP_RESEND_SECONDS)
